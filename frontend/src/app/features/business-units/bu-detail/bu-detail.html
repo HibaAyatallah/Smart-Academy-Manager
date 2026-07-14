@@ -1,0 +1,13 @@
+<app-page-header title="Detail de la Business Unit" subtitle="Informations verifiees depuis le backend" />
+<div class="state" *ngIf="isLoading"><mat-spinner diameter="36" /></div>
+<p class="state error" *ngIf="!isLoading && errorMessage">{{ errorMessage }}</p>
+<mat-card *ngIf="!isLoading && businessUnit as bu">
+  <mat-card-header><mat-card-title>{{ bu.name }}</mat-card-title><mat-card-subtitle>{{ bu.code }}</mat-card-subtitle></mat-card-header>
+  <mat-card-content class="details">
+    <p><strong>Manager</strong><span>{{ bu.manager_name }} ({{ bu.manager_email }})</span></p>
+    <p><strong>Statut</strong><span>{{ bu.is_active ? 'Active' : 'Inactive' }}</span></p>
+    <p><strong>Description</strong><span>{{ bu.description || 'Aucune description.' }}</span></p>
+    <p><strong>Mise a jour</strong><span>{{ bu.updated_at | date:'dd/MM/yyyy HH:mm' }}</span></p>
+  </mat-card-content>
+  <mat-card-actions><a mat-button routerLink="/business-units">Retour a la liste</a></mat-card-actions>
+</mat-card>

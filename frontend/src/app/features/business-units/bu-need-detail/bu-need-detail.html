@@ -1,0 +1,17 @@
+<app-page-header title="Detail du besoin" subtitle="Besoin de Business Unit" />
+<div class="state" *ngIf="isLoading"><mat-spinner diameter="36" /></div>
+<p class="state error" *ngIf="!isLoading && errorMessage">{{ errorMessage }}</p>
+<mat-card *ngIf="!isLoading && need as item">
+  <mat-card-header><mat-card-title>{{ item.title }}</mat-card-title><mat-card-subtitle>{{ item.business_unit_name }}</mat-card-subtitle></mat-card-header>
+  <mat-card-content class="details">
+    <p><strong>Statut</strong><span>{{ item.status_label }}</span></p>
+    <p><strong>Type</strong><span>{{ item.need_type_label }}</span></p>
+    <p><strong>Priorite</strong><span>{{ item.priority_label }}</span></p>
+    <p><strong>Niveau</strong><span>{{ item.required_level_label }}</span></p>
+    <p><strong>Profils</strong><span>{{ item.number_of_profiles }}</span></p>
+    <p><strong>Date attendue</strong><span>{{ item.expected_date ? (item.expected_date | date:'dd/MM/yyyy') : 'Non definie' }}</span></p>
+    <p><strong>Competences</strong><span>{{ item.required_skills || 'Non precisees' }}</span></p>
+    <p><strong>Description</strong><span>{{ item.description }}</span></p>
+  </mat-card-content>
+  <mat-card-actions><a mat-button routerLink="/business-units/needs">Retour aux besoins</a></mat-card-actions>
+</mat-card>

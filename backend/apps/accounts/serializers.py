@@ -4,6 +4,7 @@ from rest_framework import serializers
 from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
 
 from .choices import UserRole
+from .roles import is_administrative_user
 
 User = get_user_model()
 
@@ -41,13 +42,8 @@ class UserSerializer(serializers.ModelSerializer):
     def validate_role(self, value):
         request = self.context.get("request")
         request_user = getattr(request, "user", None)
-        is_super_admin = bool(
-            request_user
-            and request_user.is_authenticated
-            and (request_user.is_superuser or request_user.role == UserRole.SUPER_ADMIN)
-        )
-        if value == UserRole.SUPER_ADMIN and not is_super_admin:
-            raise serializers.ValidationError("Only a super administrator can assign this role.")
+        if value == UserRole.SUPER_ADMIN and not is_administrative_user(request_user):
+            raise serializers.ValidationError("Only HR or a super administrator can assign this role.")
         return value
 
 
@@ -75,13 +71,8 @@ class UserCreateSerializer(serializers.ModelSerializer):
     def validate_role(self, value):
         request = self.context.get("request")
         request_user = getattr(request, "user", None)
-        is_super_admin = bool(
-            request_user
-            and request_user.is_authenticated
-            and (request_user.is_superuser or request_user.role == UserRole.SUPER_ADMIN)
-        )
-        if value == UserRole.SUPER_ADMIN and not is_super_admin:
-            raise serializers.ValidationError("Only a super administrator can assign this role.")
+        if value == UserRole.SUPER_ADMIN and not is_administrative_user(request_user):
+            raise serializers.ValidationError("Only HR or a super administrator can assign this role.")
         return value
 
 

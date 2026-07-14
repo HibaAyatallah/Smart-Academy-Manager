@@ -1,0 +1,131 @@
+.app-shell {
+  min-height: 100vh;
+}
+
+.app-sidebar {
+  width: 260px;
+  border-right: 1px solid #d8dee9;
+  background: #ffffff;
+}
+
+.brand {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 72px;
+  padding: 0 20px;
+  border-bottom: 1px solid #e4e8f0;
+  font-weight: 700;
+}
+
+.brand-mark {
+  display: inline-grid;
+  width: 40px;
+  height: 40px;
+  place-items: center;
+  border-radius: 8px;
+  background: #1f6feb;
+  color: #ffffff;
+  font-size: 14px;
+}
+
+.nav-list {
+  display: grid;
+  gap: 6px;
+  padding: 16px 12px;
+}
+
+.nav-list a {
+  justify-content: flex-start;
+  border-radius: 6px;
+}
+
+.nav-list a.active {
+  background: #eaf1ff;
+  color: #174ea6;
+}
+
+.topbar {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  gap: 16px;
+  border-bottom: 1px solid #d8dee9;
+  background: #ffffff;
+  color: #172033;
+}
+
+.topbar-title {
+  font-weight: 700;
+}
+
+.spacer {
+  flex: 1 1 auto;
+}
+
+.user-name {
+  max-width: 240px;
+  overflow: hidden;
+  color: #4b5565;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.menu-button {
+  min-width: 44px;
+  padding: 0;
+}
+
+.menu-lines,
+.menu-lines::before,
+.menu-lines::after {
+  display: block;
+  width: 20px;
+  height: 2px;
+  border-radius: 2px;
+  background: currentColor;
+}
+
+.menu-lines {
+  position: relative;
+  margin: 0 auto;
+}
+
+.menu-lines::before,
+.menu-lines::after {
+  position: absolute;
+  left: 0;
+  content: '';
+}
+
+.menu-lines::before {
+  top: -6px;
+}
+
+.menu-lines::after {
+  top: 6px;
+}
+
+.content {
+  min-height: calc(100vh - 64px);
+  padding: 28px;
+}
+
+@media (max-width: 900px) {
+  .topbar {
+    gap: 10px;
+  }
+
+  .topbar-title {
+    display: none;
+  }
+
+  .user-name {
+    max-width: 140px;
+  }
+
+  .content {
+    padding: 18px;
+  }
+}
+

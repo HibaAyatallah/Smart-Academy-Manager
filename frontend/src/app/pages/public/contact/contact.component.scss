@@ -1,0 +1,100 @@
+.page-header {
+  padding-top: 140px;
+  padding-bottom: 80px;
+  background: var(--bg-light);
+
+  h1 {
+    font-size: clamp(2.5rem, 4vw, 3.5rem);
+    color: var(--finatech-night);
+    margin-bottom: var(--spacing-sm);
+  }
+
+  .subtitle {
+    font-size: 1.25rem;
+    color: var(--text-secondary);
+    max-width: 800px;
+    margin-left: auto;
+    margin-right: auto;
+  }
+}
+
+.contact-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: var(--spacing-xl);
+  align-items: start;
+
+  @media (min-width: 992px) {
+    grid-template-columns: 1fr 1.5fr;
+  }
+}
+
+.info-card {
+  display: flex;
+  gap: var(--spacing-md);
+  margin-bottom: var(--spacing-lg);
+
+  mat-icon {
+    color: var(--finatech-blue);
+    background: rgba(22, 137, 199, 0.1);
+    width: 48px;
+    height: 48px;
+    font-size: 24px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: var(--radius-full);
+  }
+
+  h3 {
+    color: var(--finatech-night);
+    font-size: 1.125rem;
+    margin-bottom: 4px;
+  }
+
+  p {
+    color: var(--text-secondary);
+    margin: 0;
+    line-height: 1.6;
+  }
+
+  a {
+    color: var(--text-secondary);
+    transition: color var(--transition-fast);
+    
+    &:hover {
+      color: var(--finatech-blue);
+    }
+  }
+}
+
+.contact-image {
+  img {
+    width: 100%;
+    border-radius: var(--radius-lg);
+    box-shadow: var(--shadow-md);
+  }
+}
+
+.contact-form-container {
+  padding: var(--spacing-xl);
+  
+  h2 {
+    color: var(--finatech-night);
+    margin-bottom: var(--spacing-xs);
+  }
+}
+
+.full-width {
+  width: 100%;
+}
+
+.contact-form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-sm);
+}
+
+::ng-deep .mat-mdc-form-field-hint {
+  color: var(--text-secondary);
+}

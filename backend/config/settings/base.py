@@ -12,6 +12,9 @@ env = environ.Env(
     DJANGO_CORS_ALLOWED_ORIGINS=(list, ["http://localhost:4200"]),
     ACCESS_TOKEN_LIFETIME_MINUTES=(int, 15),
     REFRESH_TOKEN_LIFETIME_DAYS=(int, 7),
+    RECRUITMENT_RETENTION_DAYS=(int, 730),
+    RECRUITMENT_MAX_UPLOAD_SIZE_MB=(int, 5),
+    RECRUITMENT_PHOTO_MAX_UPLOAD_SIZE_MB=(int, 3),
 )
 env.read_env(BASE_DIR / ".env")
 
@@ -27,11 +30,14 @@ INSTALLED_APPS = [
     "django.contrib.messages",
     "django.contrib.staticfiles",
     "corsheaders",
+    "django_filters",
     "rest_framework",
     "rest_framework_simplejwt",
     "drf_spectacular",
     "apps.core",
     "apps.accounts",
+    "apps.recruitment",
+    "apps.business_units",
 ]
 
 MIDDLEWARE = [
@@ -98,6 +104,10 @@ STATIC_URL = "static/"
 STATIC_ROOT = BASE_DIR / "staticfiles"
 MEDIA_URL = "media/"
 MEDIA_ROOT = BASE_DIR / "media"
+DEFAULT_FROM_EMAIL = env(
+    "DEFAULT_FROM_EMAIL",
+    default="noreply@smart-academy.local",
+)
 
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 AUTH_USER_MODEL = "accounts.User"
@@ -130,3 +140,6 @@ SPECTACULAR_SETTINGS = {
     "SERVE_INCLUDE_SCHEMA": False,
 }
 
+RECRUITMENT_RETENTION_DAYS = env("RECRUITMENT_RETENTION_DAYS")
+RECRUITMENT_MAX_UPLOAD_SIZE_MB = env("RECRUITMENT_MAX_UPLOAD_SIZE_MB")
+RECRUITMENT_PHOTO_MAX_UPLOAD_SIZE_MB = env("RECRUITMENT_PHOTO_MAX_UPLOAD_SIZE_MB")

@@ -10,7 +10,8 @@ Cette premiere etape met en place uniquement la fondation technique :
 - authentification JWT ;
 - permissions de base ;
 - documentation OpenAPI/Swagger ;
-- depot Git local initialise.
+- depot Git local initialise ;
+- module de gestion des candidatures.
 
 ## Architecture cible
 
@@ -23,12 +24,18 @@ Smart_Academy_Manager/
     config/
       settings/
     requirements/
+  frontend/
+    src/
+      app/
+        core/
+        features/
+        layouts/
+        shared/
   docs/
 ```
 
-Le frontend Angular sera ajoute dans une etape separee, apres validation du backend.
+Le frontend Angular contient maintenant l'authentification, les dashboards et le module candidatures.
 
 ## Prochaine etape
 
 Suis le guide [backend/README.md](backend/README.md) pour creer l'environnement Python, installer les dependances, creer la base PostgreSQL et lancer les migrations.
-

@@ -1,0 +1,161 @@
+.page-header {
+  padding-top: 140px;
+  padding-bottom: 80px;
+  background: var(--bg-light);
+  border-bottom: 1px solid var(--border-color);
+
+  h1 {
+    font-size: clamp(2rem, 4vw, 3rem);
+    color: var(--finatech-night);
+    margin-bottom: var(--spacing-sm);
+  }
+
+  .subtitle {
+    font-size: 1.25rem;
+    color: var(--text-secondary);
+  }
+}
+
+.form-wrapper {
+  margin-top: -40px;
+  margin-bottom: var(--spacing-xxl);
+  position: relative;
+  z-index: 10;
+}
+
+.application-stepper {
+  background: var(--bg-white);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-md);
+  padding: var(--spacing-lg);
+}
+
+.step-content {
+  padding: var(--spacing-lg) 0;
+}
+
+.form-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: var(--spacing-md);
+
+  @media (min-width: 768px) {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+
+.full-width {
+  grid-column: 1 / -1;
+}
+
+.stepper-actions {
+  display: flex;
+  gap: var(--spacing-md);
+  margin-top: var(--spacing-xl);
+  
+  &.justify-center {
+    justify-content: center;
+  }
+}
+
+.documents-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: var(--spacing-lg);
+
+  @media (min-width: 768px) {
+    grid-template-columns: repeat(3, 1fr);
+  }
+}
+
+.document-card {
+  background: var(--bg-light);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  padding: var(--spacing-md);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  transition: all var(--transition-fast);
+
+  &.has-error {
+    border-color: var(--error-color);
+    background: rgba(217, 45, 32, 0.05);
+  }
+
+  .doc-icon {
+    width: 48px;
+    height: 48px;
+    background: var(--bg-white);
+    border-radius: var(--radius-full);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin-bottom: var(--spacing-sm);
+    box-shadow: var(--shadow-sm);
+
+    mat-icon {
+      color: var(--finatech-blue);
+    }
+  }
+
+  h4 {
+    color: var(--finatech-night);
+    margin-bottom: 4px;
+    font-size: 1rem;
+    
+    .required {
+      color: var(--error-color);
+    }
+  }
+
+  .formats {
+    font-size: 0.85rem;
+    color: var(--text-secondary);
+    margin-bottom: var(--spacing-md);
+  }
+}
+
+.hidden-input {
+  display: none;
+}
+
+.file-selected {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: var(--bg-white);
+  padding: 4px 8px 4px 12px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border-color);
+  width: 100%;
+  box-sizing: border-box;
+
+  .filename {
+    font-size: 0.9rem;
+    color: var(--finatech-night);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 150px;
+  }
+}
+
+.file-error {
+  color: var(--error-color);
+  font-size: 0.85rem;
+  margin-top: var(--spacing-sm);
+}
+
+.success-icon {
+  font-size: 64px;
+  width: 64px;
+  height: 64px;
+  color: var(--success-color, #10b981);
+}
+
+.py-xl {
+  padding-top: var(--spacing-xl);
+  padding-bottom: var(--spacing-xl);
+}

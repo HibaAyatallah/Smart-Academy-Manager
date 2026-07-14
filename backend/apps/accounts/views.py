@@ -4,8 +4,8 @@ from rest_framework.generics import RetrieveUpdateAPIView
 from rest_framework.permissions import IsAuthenticated
 from rest_framework_simplejwt.views import TokenObtainPairView
 
-from .choices import UserRole
 from .permissions import CanManageUsers
+from .roles import is_administrative_user
 from .serializers import (
     MeSerializer,
     SmartAcademyTokenObtainPairSerializer,
@@ -34,13 +34,9 @@ class UserViewSet(viewsets.ModelViewSet):
     http_method_names = ["get", "post", "patch", "delete", "head", "options"]
 
     def get_queryset(self):
-        queryset = super().get_queryset()
-        user = self.request.user
-        if user.is_superuser or user.role == UserRole.SUPER_ADMIN:
-            return queryset
-        if user.role == UserRole.HR:
-            return queryset.exclude(role=UserRole.SUPER_ADMIN).exclude(is_superuser=True)
-        return queryset.none()
+        if is_administrative_user(self.request.user):
+            return super().get_queryset()
+        return super().get_queryset().none()
 
     def get_serializer_class(self):
         if self.action == "create":

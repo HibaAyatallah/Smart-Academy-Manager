@@ -1,0 +1,142 @@
+.loading {
+  display: grid;
+  min-height: 180px;
+  place-items: center;
+}
+
+.applications-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+  gap: 18px;
+}
+
+.application-card {
+  border-radius: 8px;
+}
+
+.candidate-photo {
+  object-fit: cover;
+}
+
+.identity-grid,
+.optional-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+  margin-top: 18px;
+}
+
+.optional-grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.identity-grid p,
+.optional-grid p {
+  min-height: 72px;
+  margin: 0;
+  padding: 12px;
+  border: 1px solid #d8dee9;
+  border-radius: 8px;
+  background: #ffffff;
+}
+
+.identity-grid strong,
+.identity-grid span,
+.optional-grid strong,
+.optional-grid span,
+.optional-grid a {
+  display: block;
+  overflow-wrap: anywhere;
+}
+
+.identity-grid strong,
+.optional-grid strong {
+  margin-bottom: 6px;
+  color: #667085;
+  font-size: 12px;
+}
+
+.optional-grid a {
+  color: #1f6feb;
+}
+
+.document-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 18px;
+}
+
+.timeline {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+  margin: 22px 0;
+}
+
+.step {
+  min-height: 88px;
+  padding: 14px;
+  border: 1px solid #d8dee9;
+  border-radius: 8px;
+  background: #ffffff;
+}
+
+.step strong,
+.step span,
+.step small {
+  display: block;
+}
+
+.step strong {
+  margin-bottom: 8px;
+}
+
+.step.done {
+  border-color: #15803d;
+  background: #f0fdf4;
+}
+
+.step.active {
+  border-color: #1f6feb;
+  background: #eaf1ff;
+}
+
+.step.rejected {
+  border-color: #be123c;
+  background: #fff1f2;
+}
+
+.step.pending {
+  color: #667085;
+}
+
+.details {
+  color: #4b5565;
+}
+
+.error-state,
+.empty-state {
+  padding: 28px;
+  border: 1px solid #d8dee9;
+  border-radius: 8px;
+  background: #ffffff;
+  color: #667085;
+}
+
+.error-state {
+  border-color: #fecdd3;
+  background: #fff1f2;
+  color: #be123c;
+}
+
+@media (max-width: 760px) {
+  .identity-grid,
+  .optional-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .timeline {
+    grid-template-columns: 1fr;
+  }
+}

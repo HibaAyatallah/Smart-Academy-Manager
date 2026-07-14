@@ -1,0 +1,168 @@
+<a mat-button routerLink="/applications">Retour a la liste</a>
+
+<div class="loading" *ngIf="isLoading">
+  <mat-spinner diameter="36"></mat-spinner>
+</div>
+
+<p class="error-state" *ngIf="!isLoading && errorMessage">
+  {{ errorMessage }}
+</p>
+
+<ng-container *ngIf="!isLoading && !errorMessage">
+  <section *ngIf="application" class="detail">
+    <app-page-header
+      [title]="application.candidate_profile.full_name"
+      [subtitle]="typeLabel(application.application_type)"
+    />
+
+    <mat-card class="status-card">
+      <mat-card-content>
+        <mat-chip-set>
+          <mat-chip>{{ statusLabel(application.status) }}</mat-chip>
+        </mat-chip-set>
+
+        <div class="actions">
+          <button
+            mat-stroked-button
+            type="button"
+            *ngIf="canMarkUnderReview(application.status)"
+            (click)="markUnderReview()"
+            [disabled]="isActionRunning"
+          >
+            En revue
+          </button>
+          <button
+            mat-stroked-button
+            type="button"
+            *ngIf="canPreselect(application.status)"
+            (click)="preselect()"
+            [disabled]="isActionRunning"
+          >
+            Preselectionner
+          </button>
+          <button
+            mat-stroked-button
+            type="button"
+            *ngIf="canSchedule(application.status)"
+            (click)="scheduleInterview()"
+            [disabled]="isActionRunning"
+          >
+            Planifier entretien
+          </button>
+          <button
+            mat-stroked-button
+            type="button"
+            *ngIf="canCompleteInterview(application.status)"
+            (click)="completeInterview()"
+            [disabled]="isActionRunning"
+          >
+            Entretien realise
+          </button>
+          <button
+            mat-flat-button
+            color="primary"
+            type="button"
+            *ngIf="canAccept(application.status)"
+            (click)="accept()"
+            [disabled]="isActionRunning"
+          >
+            Accepter
+          </button>
+          <button
+            mat-flat-button
+            color="warn"
+            type="button"
+            *ngIf="canReject(application.status)"
+            (click)="reject()"
+            [disabled]="isActionRunning"
+          >
+            Refuser
+          </button>
+        </div>
+      </mat-card-content>
+    </mat-card>
+
+    <div class="detail-grid">
+      <mat-card>
+        <mat-card-header>
+          <mat-card-title>Profil candidat</mat-card-title>
+        </mat-card-header>
+        <mat-card-content>
+          <p><strong>Nom :</strong> {{ application.candidate_profile.last_name }}</p>
+          <p><strong>Prénom :</strong> {{ application.candidate_profile.first_name }}</p>
+          <p><strong>Email :</strong> {{ application.candidate_profile.email }}</p>
+          <p><strong>Téléphone :</strong> {{ application.candidate_profile.phone_number || '-' }}</p>
+          <p><strong>École / Université :</strong> {{ application.candidate_profile.current_school || '-' }}</p>
+          <p><strong>Niveau d’études :</strong> {{ studyLevelLabel(application) }}</p>
+          <p><strong>Filière / Domaine :</strong> {{ application.candidate_profile.study_field || '-' }}</p>
+          <p><strong>Adresse :</strong> {{ application.candidate_profile.address || '-' }}</p>
+          <p *ngIf="application.candidate_profile.linkedin_url">
+            <strong>LinkedIn :</strong> <a [href]="application.candidate_profile.linkedin_url" target="_blank">{{ application.candidate_profile.linkedin_url }}</a>
+          </p>
+          <p *ngIf="application.candidate_profile.portfolio_url">
+            <strong>Site web / GitHub :</strong> <a [href]="application.candidate_profile.portfolio_url" target="_blank">{{ application.candidate_profile.portfolio_url }}</a>
+          </p>
+        </mat-card-content>
+      </mat-card>
+
+      <mat-card>
+        <mat-card-header>
+          <mat-card-title>Candidature</mat-card-title>
+        </mat-card-header>
+        <mat-card-content>
+          <p><strong>Référence :</strong> #{{ application.id }}</p>
+          <p><strong>Type de stage :</strong> {{ typeLabel(application.application_type) }}</p>
+          <p><strong>Statut :</strong> {{ statusLabel(application.status) }}</p>
+          <p><strong>Depot :</strong> {{ application.submitted_at | date:'dd/MM/yyyy HH:mm' }}</p>
+          <p><strong>Derniere mise a jour :</strong> {{ application.updated_at | date:'dd/MM/yyyy HH:mm' }}</p>
+          <p><strong>Message / Motivation :</strong> {{ application.motivation_message || '-' }}</p>
+          <p *ngIf="application.rejection_reason"><strong>Motif refus :</strong> {{ application.rejection_reason }}</p>
+        </mat-card-content>
+      </mat-card>
+    </div>
+
+  <mat-card>
+    <mat-card-header>
+      <mat-card-title>Documents</mat-card-title>
+    </mat-card-header>
+    <mat-card-content>
+      <mat-list>
+        <mat-list-item *ngFor="let document of application.documents">
+          <button mat-stroked-button type="button" (click)="openDocument(document)">
+            {{ documentTypeLabel(document) }} - {{ document.original_name }}
+          </button>
+        </mat-list-item>
+      </mat-list>
+    </mat-card-content>
+  </mat-card>
+
+  <mat-card>
+    <mat-card-header>
+      <mat-card-title>Entretiens</mat-card-title>
+    </mat-card-header>
+    <mat-card-content>
+      <p *ngIf="!application.interviews.length">Aucun entretien planifie.</p>
+      <mat-list *ngIf="application.interviews.length">
+        <mat-list-item *ngFor="let interview of application.interviews">
+          {{ interview.scheduled_at | date:'dd/MM/yyyy HH:mm' }}
+          <span>{{ interview.location || interview.meeting_link || '-' }}</span>
+        </mat-list-item>
+      </mat-list>
+    </mat-card-content>
+  </mat-card>
+
+  <mat-card>
+    <mat-card-header>
+      <mat-card-title>Historique</mat-card-title>
+    </mat-card-header>
+    <mat-card-content>
+      <mat-list>
+        <mat-list-item *ngFor="let history of application.status_history">
+          {{ history.created_at | date:'dd/MM/yyyy HH:mm' }}
+          <span>{{ history.from_status || 'Creation' }} -> {{ history.to_status }}</span>
+        </mat-list-item>
+      </mat-list>
+    </mat-card-content>
+  </mat-card>
+  </section>
+</ng-container>

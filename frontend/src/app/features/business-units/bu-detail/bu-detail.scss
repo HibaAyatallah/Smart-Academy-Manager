@@ -1,0 +1,5 @@
+.state { display: flex; justify-content: center; padding: 2rem; }
+.error { color: #b3261e; }
+.details { display: grid; gap: 1rem; padding-top: 1rem; }
+.details p { display: grid; gap: .25rem; margin: 0; }
+.details span { overflow-wrap: anywhere; }

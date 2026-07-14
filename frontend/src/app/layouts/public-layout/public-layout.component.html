@@ -1,0 +1,98 @@
+<div class="public-layout">
+  <header class="header" [class.header-scrolled]="isScrolled">
+    <div class="header-container">
+      <a routerLink="/" class="logo-wrapper" aria-label="Accueil Finatech Connect">
+        <img src="/images/logos/logo_finatech.png" alt="Finatech Connect Logo" class="logo-img">
+        <div class="logo-text">
+          <span class="brand-name">Finatech Connect</span>
+          <span class="brand-subtitle">Portail digital</span>
+        </div>
+      </a>
+
+      <!-- Desktop Nav -->
+      <nav class="desktop-nav">
+        <a routerLink="/" routerLinkActive="active" [routerLinkActiveOptions]="{exact: true}">Accueil</a>
+        <a routerLink="/groupe" routerLinkActive="active">Le Groupe</a>
+        <a routerLink="/expertises" routerLinkActive="active">Nos expertises</a>
+        <a routerLink="/contact" routerLinkActive="active">Contact</a>
+      </nav>
+
+      <!-- Desktop Actions -->
+      <div class="header-actions">
+        <a routerLink="/candidature" class="btn btn-outline">Postuler</a>
+        <a routerLink="/connexion" class="btn btn-primary">Espace personnel</a>
+      </div>
+
+      <!-- Mobile Menu Toggle -->
+      <button class="mobile-toggle" (click)="toggleMobileMenu()" aria-label="Ouvrir le menu" [attr.aria-expanded]="isMobileMenuOpen">
+        <span class="hamburger" [class.open]="isMobileMenuOpen"></span>
+      </button>
+    </div>
+
+    <!-- Mobile Nav -->
+    <nav class="mobile-nav" [class.open]="isMobileMenuOpen">
+      <a routerLink="/" routerLinkActive="active" [routerLinkActiveOptions]="{exact: true}" (click)="closeMobileMenu()">Accueil</a>
+      <a routerLink="/groupe" routerLinkActive="active" (click)="closeMobileMenu()">Le Groupe</a>
+      <a routerLink="/expertises" routerLinkActive="active" (click)="closeMobileMenu()">Nos expertises</a>
+      <a routerLink="/contact" routerLinkActive="active" (click)="closeMobileMenu()">Contact</a>
+      <div class="mobile-actions">
+        <a routerLink="/candidature" class="btn btn-outline full-width" (click)="closeMobileMenu()">Postuler</a>
+        <a routerLink="/connexion" class="btn btn-primary full-width" (click)="closeMobileMenu()">Espace personnel</a>
+      </div>
+    </nav>
+  </header>
+
+  <!-- Main Content -->
+  <main class="main-content">
+    <router-outlet></router-outlet>
+  </main>
+
+  <!-- Footer -->
+  <footer class="footer">
+    <div class="container footer-container">
+      <div class="footer-col">
+        <div class="footer-logo-capsule">
+          <img src="/images/logos/logo_finatech.png" alt="Finatech Connect" class="footer-logo">
+        </div>
+        <h3 class="footer-brand">Finatech Connect</h3>
+        <p>Portail digital dédié aux talents, aux formations et à la collaboration.</p>
+      </div>
+
+      <div class="footer-col">
+        <h3>Découvrir</h3>
+        <a routerLink="/">Accueil</a>
+        <a routerLink="/groupe">Le Groupe</a>
+        <a routerLink="/expertises">Nos expertises</a>
+        <a routerLink="/contact">Contact</a>
+      </div>
+
+      <div class="footer-col">
+        <h3>Accès rapides</h3>
+        <a routerLink="/candidature">Déposer une candidature</a>
+        <a routerLink="/connexion">Suivre ma candidature</a>
+        <a routerLink="/connexion">Espace collaborateur</a>
+        <a routerLink="/connexion">Espace formateur</a>
+        <a routerLink="/connexion">Espace client</a>
+      </div>
+
+      <div class="footer-col">
+        <h3>Contact</h3>
+        <address>
+          Casanearshore, Sidi Maarouf<br>
+          Shore 10, Parc Technologique<br>
+          Casablanca 20100<br>
+          <a href="tel:+212520377000">+212 520 377 000</a><br>
+          <a href="mailto:contact@finatech.com">contact@finatech.com</a>
+        </address>
+      </div>
+    </div>
+    <div class="footer-bottom container">
+      <p>&copy; 2026 Finatech Group &mdash; Finatech Connect</p>
+      <div class="footer-links">
+        <a routerLink="/politique-confidentialite">Confidentialité</a>
+        <a routerLink="/mentions-legales">Protection des données</a>
+        <a routerLink="/mentions-legales">Mentions légales</a>
+      </div>
+    </div>
+  </footer>
+</div>

@@ -1,0 +1,167 @@
+.dashboard {
+  max-width: 980px;
+}
+
+.identity-panel {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 14px;
+  margin-bottom: 24px;
+}
+
+.identity-panel > div {
+  min-height: 92px;
+  padding: 18px;
+  border: 1px solid #d8dee9;
+  border-radius: 8px;
+  background: #ffffff;
+}
+
+span {
+  display: block;
+  margin-bottom: 10px;
+  color: #667085;
+  font-size: 13px;
+}
+
+strong {
+  display: block;
+  overflow-wrap: anywhere;
+  color: #172033;
+  font-size: 16px;
+  font-weight: 700;
+}
+
+.candidate-space {
+  display: grid;
+  gap: 18px;
+  margin-bottom: 24px;
+}
+
+.loading {
+  display: grid;
+  min-height: 160px;
+  place-items: center;
+}
+
+.candidate-application-card {
+  border-radius: 8px;
+}
+
+.candidate-photo {
+  object-fit: cover;
+}
+
+.application-grid,
+.optional-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+  margin-top: 18px;
+}
+
+.optional-grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.application-grid p,
+.optional-grid p {
+  min-height: 72px;
+  margin: 0;
+  padding: 12px;
+  border: 1px solid #d8dee9;
+  border-radius: 8px;
+  background: #ffffff;
+}
+
+.application-grid a,
+.application-grid span,
+.optional-grid a,
+.optional-grid span,
+.details a {
+  display: block;
+  overflow-wrap: anywhere;
+}
+
+.optional-grid a,
+.details a {
+  color: #1f6feb;
+}
+
+.document-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 18px;
+}
+
+.timeline {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+  margin: 22px 0;
+}
+
+.step {
+  min-height: 88px;
+  padding: 14px;
+  border: 1px solid #d8dee9;
+  border-radius: 8px;
+  background: #ffffff;
+}
+
+.step strong,
+.step span,
+.step small {
+  display: block;
+}
+
+.step.done {
+  border-color: #15803d;
+  background: #f0fdf4;
+}
+
+.step.active {
+  border-color: #1f6feb;
+  background: #eaf1ff;
+}
+
+.step.rejected {
+  border-color: #be123c;
+  background: #fff1f2;
+}
+
+.step.pending {
+  color: #667085;
+}
+
+.details {
+  color: #4b5565;
+}
+
+.error-state,
+.empty-state {
+  padding: 28px;
+  border: 1px solid #d8dee9;
+  border-radius: 8px;
+  background: #ffffff;
+  color: #667085;
+}
+
+.error-state {
+  border-color: #fecdd3;
+  background: #fff1f2;
+  color: #be123c;
+}
+
+@media (max-width: 820px) {
+  .identity-panel {
+    grid-template-columns: 1fr;
+  }
+
+  .application-grid,
+  .optional-grid,
+  .timeline {
+    grid-template-columns: 1fr;
+  }
+}

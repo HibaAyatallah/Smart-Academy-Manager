@@ -1,0 +1,92 @@
+<mat-sidenav-container class="app-shell">
+  <mat-sidenav
+    #drawer
+    class="app-sidebar"
+    [mode]="(isCompact$ | async) ? 'over' : 'side'"
+    [opened]="(isCompact$ | async) === false"
+  >
+    <div class="brand">
+      <span class="brand-mark">SA</span>
+      <span>Smart Academy</span>
+    </div>
+
+    <nav class="nav-list" aria-label="Navigation principale">
+      <a
+        mat-button
+        [routerLink]="dashboardLink()"
+        routerLinkActive="active"
+        [routerLinkActiveOptions]="{ exact: false }"
+      >
+        Dashboard
+      </a>
+
+      <ng-container *ngIf="user$ | async as user">
+        <a
+          mat-button
+          *ngIf="canManageApplications(user)"
+          routerLink="/applications"
+          routerLinkActive="active"
+        >
+          Candidatures
+        </a>
+
+        <a
+          mat-button
+          *ngIf="canManageBusinessUnits(user)"
+          routerLink="/business-units"
+          routerLinkActive="active"
+          [routerLinkActiveOptions]="{ exact: true }"
+        >
+          Business Units
+        </a>
+
+        <a
+          mat-button
+          *ngIf="canManageBusinessUnits(user)"
+          routerLink="/business-units/needs"
+          routerLinkActive="active"
+        >
+          Besoins (BUs)
+        </a>
+
+        <a
+          mat-button
+          *ngIf="canViewOwnApplications(user)"
+          routerLink="/applications/my"
+          routerLinkActive="active"
+        >
+          Mes candidatures
+        </a>
+      </ng-container>
+    </nav>
+  </mat-sidenav>
+
+  <mat-sidenav-content>
+    <mat-toolbar class="topbar">
+      <button
+        mat-button
+        class="menu-button"
+        type="button"
+        aria-label="Ouvrir le menu"
+        (click)="drawer.toggle()"
+      >
+        <span class="menu-lines" aria-hidden="true"></span>
+      </button>
+
+      <span class="topbar-title">Smart Academy Manager</span>
+      <span class="spacer"></span>
+
+      <ng-container *ngIf="user$ | async as user">
+        <span class="user-name">{{ user.full_name }}</span>
+      </ng-container>
+
+      <button mat-flat-button color="primary" type="button" (click)="logout()">
+        Deconnexion
+      </button>
+    </mat-toolbar>
+
+    <main class="content">
+      <router-outlet />
+    </main>
+  </mat-sidenav-content>
+</mat-sidenav-container>

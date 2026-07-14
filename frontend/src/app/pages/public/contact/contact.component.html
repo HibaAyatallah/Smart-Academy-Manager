@@ -1,0 +1,97 @@
+<div class="page-header" appAnimateOnScroll>
+  <div class="container text-center">
+    <h1>Restons en contact</h1>
+    <p class="subtitle mt-md">Une question sur votre candidature, votre espace ou les services Finatech Connect ?</p>
+  </div>
+</div>
+
+<section class="section">
+  <div class="container">
+    <div class="contact-grid">
+      
+      <!-- Infos section -->
+      <div class="contact-info">
+        <div class="info-card" appAnimateOnScroll>
+          <mat-icon>location_on</mat-icon>
+          <div>
+            <h3>Adresse</h3>
+            <p>Casanearshore, Sidi Maarouf<br>Shore 10, Parc Technologique<br>Casablanca 20100</p>
+          </div>
+        </div>
+
+        <div class="info-card" appAnimateOnScroll>
+          <mat-icon>phone</mat-icon>
+          <div>
+            <h3>Téléphone</h3>
+            <p><a href="tel:+212520377000">+212 520 377 000</a></p>
+          </div>
+        </div>
+
+        <div class="info-card" appAnimateOnScroll>
+          <mat-icon>email</mat-icon>
+          <div>
+            <h3>Email</h3>
+            <p><a href="mailto:contact@finatech.com">contact@finatech.com</a></p>
+          </div>
+        </div>
+
+        <div class="contact-image mt-lg" appAnimateOnScroll>
+          <img src="/images/contact/photo_contact.svg" alt="Contact Finatech">
+        </div>
+      </div>
+
+      <!-- Form section -->
+      <div class="contact-form-container card" appAnimateOnScroll>
+        <h2>Envoyez-nous un message</h2>
+        <p class="mb-lg text-secondary">Remplissez le formulaire ci-dessous et notre équipe vous répondra dans les plus brefs délais.</p>
+
+        <form [formGroup]="contactForm" (ngSubmit)="submit()" class="contact-form">
+          
+          <mat-form-field appearance="outline" class="full-width">
+            <mat-label>Nom complet</mat-label>
+            <input matInput formControlName="fullName" placeholder="Ex: Ahmed Benjelloun">
+            <mat-error *ngIf="contactForm.controls.fullName.hasError('required')">Le nom est requis</mat-error>
+          </mat-form-field>
+
+          <mat-form-field appearance="outline" class="full-width">
+            <mat-label>Adresse email</mat-label>
+            <input matInput type="email" formControlName="email" placeholder="Ex: ahmed@example.com">
+            <mat-error *ngIf="contactForm.controls.email.hasError('required')">L'email est requis</mat-error>
+            <mat-error *ngIf="contactForm.controls.email.hasError('email')">Format d'email invalide</mat-error>
+          </mat-form-field>
+
+          <mat-form-field appearance="outline" class="full-width">
+            <mat-label>Type de demande</mat-label>
+            <mat-select formControlName="requestType">
+              <mat-option *ngFor="let type of requestTypes" [value]="type">{{type}}</mat-option>
+            </mat-select>
+            <mat-error *ngIf="contactForm.controls.requestType.hasError('required')">Veuillez sélectionner un type de demande</mat-error>
+          </mat-form-field>
+
+          <mat-form-field appearance="outline" class="full-width">
+            <mat-label>Sujet</mat-label>
+            <input matInput formControlName="subject" placeholder="Objet de votre message">
+            <mat-error *ngIf="contactForm.controls.subject.hasError('required')">Le sujet est requis</mat-error>
+          </mat-form-field>
+
+          <mat-form-field appearance="outline" class="full-width">
+            <mat-label>Message</mat-label>
+            <textarea matInput formControlName="message" rows="6" placeholder="Comment pouvons-nous vous aider ?"></textarea>
+            <mat-hint align="end">{{messageLength}} / 1000</mat-hint>
+            <mat-error *ngIf="contactForm.controls.message.hasError('required')">Le message est requis</mat-error>
+            <mat-error *ngIf="contactForm.controls.message.hasError('maxlength')">Le message ne doit pas dépasser 1000 caractères</mat-error>
+          </mat-form-field>
+
+          <div class="form-actions mt-md">
+            <button mat-flat-button color="primary" type="submit" [disabled]="isSubmitting" class="btn btn-primary full-width">
+              <mat-icon *ngIf="isSubmitting">hourglass_empty</mat-icon>
+              {{ isSubmitting ? 'Envoi en cours...' : 'Envoyer le message' }}
+            </button>
+          </div>
+
+        </form>
+      </div>
+
+    </div>
+  </div>
+</section>

@@ -80,7 +80,8 @@ notepad .env
 Modifie au minimum :
 
 ```text
-DJANGO_SECRET_KEY=une-cle-secrete-longue
+DJANGO_SECRET_KEY=une-cle-secrete-aleatoire-d-au-moins-32-caracteres
+DJANGO_CORS_ALLOWED_ORIGINS=http://localhost:4200,http://127.0.0.1:4200
 DATABASE_URL=postgres://smart_academy_user:change_this_password@localhost:5432/smart_academy_db
 ```
 
@@ -106,4 +107,3 @@ Verification dans le navigateur :
 - API root : http://127.0.0.1:8000/api/
 - Swagger : http://127.0.0.1:8000/api/docs/
 - Schema OpenAPI : http://127.0.0.1:8000/api/schema/
-

@@ -1,0 +1,46 @@
+<div class="login-page">
+  <div class="form-wrapper">
+    <div class="form-container">
+      
+      <div class="form-header">
+        <h2>Accéder à mon espace</h2>
+        <p>Connectez-vous avec les identifiants associés à votre profil.</p>
+      </div>
+
+      <div *ngIf="errorMessage" class="alert alert-error mb-md">
+        <mat-icon>error_outline</mat-icon>
+        <span>{{ errorMessage }}</span>
+      </div>
+
+      <form [formGroup]="loginForm" (ngSubmit)="submit()" class="login-form">
+        <mat-form-field appearance="outline" class="full-width">
+          <mat-label>Email</mat-label>
+          <input matInput type="email" formControlName="email" placeholder="votre.email@exemple.com">
+          <mat-icon matPrefix>email</mat-icon>
+          <mat-error *ngIf="loginForm.controls.email.hasError('required')">L'email est requis</mat-error>
+          <mat-error *ngIf="loginForm.controls.email.hasError('email')">Format invalide</mat-error>
+        </mat-form-field>
+
+        <mat-form-field appearance="outline" class="full-width">
+          <mat-label>Mot de passe</mat-label>
+          <input matInput [type]="hidePassword ? 'password' : 'text'" formControlName="password" placeholder="Votre mot de passe">
+          <mat-icon matPrefix>lock</mat-icon>
+          <button mat-icon-button matSuffix type="button" (click)="hidePassword = !hidePassword" [attr.aria-label]="'Afficher/Masquer le mot de passe'" [attr.aria-pressed]="!hidePassword">
+            <mat-icon>{{hidePassword ? 'visibility_off' : 'visibility'}}</mat-icon>
+          </button>
+          <mat-error *ngIf="loginForm.controls.password.hasError('required')">Le mot de passe est requis</mat-error>
+        </mat-form-field>
+
+        <button mat-flat-button color="primary" type="submit" [disabled]="isSubmitting" class="btn btn-primary full-width mt-md">
+          <mat-icon *ngIf="isSubmitting">hourglass_empty</mat-icon>
+          {{ isSubmitting ? 'Connexion en cours...' : 'Se connecter' }}
+        </button>
+      </form>
+
+      <div class="form-footer">
+        <p>Vous souhaitez rejoindre Finatech ? <br> <a routerLink="/candidature">Déposer une candidature</a></p>
+      </div>
+
+    </div>
+  </div>
+</div>

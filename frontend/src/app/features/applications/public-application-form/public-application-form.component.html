@@ -1,0 +1,274 @@
+<div class="page-header">
+  <div class="container text-center">
+    <h1>Rejoindre Finatech Connect</h1>
+    <p class="subtitle mt-md">Soumettez votre candidature et participez à nos projets d'envergure.</p>
+  </div>
+</div>
+
+<div class="container form-wrapper">
+  
+  <div *ngIf="generalError" class="alert alert-error mb-lg">
+    <mat-icon>error_outline</mat-icon>
+    <span>{{ generalError }}</span>
+  </div>
+
+  <mat-stepper [linear]="true" #stepper class="application-stepper">
+    
+    <!-- ÉTAPE 1 : Informations personnelles -->
+    <mat-step [stepControl]="form.controls.personal">
+      <ng-template matStepLabel>Informations personnelles</ng-template>
+      <form [formGroup]="form.controls.personal" class="step-content">
+        
+        <div class="form-grid">
+          <mat-form-field appearance="outline">
+            <mat-label>Prénom</mat-label>
+            <input matInput formControlName="first_name" placeholder="Votre prénom">
+            <mat-error *ngIf="fieldHasError('personal', 'first_name')">Le prénom est requis.</mat-error>
+            <mat-error *ngIf="apiError('first_name')">{{ apiError('first_name') }}</mat-error>
+          </mat-form-field>
+
+          <mat-form-field appearance="outline">
+            <mat-label>Nom de famille</mat-label>
+            <input matInput formControlName="last_name" placeholder="Votre nom">
+            <mat-error *ngIf="fieldHasError('personal', 'last_name')">Le nom est requis.</mat-error>
+            <mat-error *ngIf="apiError('last_name')">{{ apiError('last_name') }}</mat-error>
+          </mat-form-field>
+
+          <mat-form-field appearance="outline">
+            <mat-label>Email</mat-label>
+            <input matInput type="email" formControlName="email" placeholder="votre.email@exemple.com">
+            <mat-error *ngIf="fieldHasError('personal', 'email')">Un email valide est requis.</mat-error>
+            <mat-error *ngIf="apiError('email')">{{ apiError('email') }}</mat-error>
+          </mat-form-field>
+
+          <mat-form-field appearance="outline">
+            <mat-label>Téléphone</mat-label>
+            <input matInput formControlName="phone_number" placeholder="Ex: +212 600 000 000">
+            <mat-error *ngIf="fieldHasError('personal', 'phone_number')">Le téléphone est requis.</mat-error>
+            <mat-error *ngIf="apiError('phone_number')">{{ apiError('phone_number') }}</mat-error>
+          </mat-form-field>
+
+          <mat-form-field appearance="outline" class="full-width">
+            <mat-label>Adresse (Optionnelle)</mat-label>
+            <input matInput formControlName="address" placeholder="Votre adresse">
+            <mat-error *ngIf="apiError('address')">{{ apiError('address') }}</mat-error>
+          </mat-form-field>
+
+          <mat-form-field appearance="outline" class="full-width">
+            <mat-label>Mot de passe</mat-label>
+            <input matInput type="password" formControlName="password" placeholder="Minimum 8 caractères">
+            <mat-error *ngIf="fieldHasError('personal', 'password')">Un mot de passe (min 8 car.) est requis.</mat-error>
+            <mat-error *ngIf="apiError('password')">{{ apiError('password') }}</mat-error>
+          </mat-form-field>
+        </div>
+
+        <div class="stepper-actions">
+          <button mat-button type="button" matStepperNext class="btn btn-primary">Suivant</button>
+        </div>
+      </form>
+    </mat-step>
+
+    <!-- ÉTAPE 2 : Parcours académique -->
+    <mat-step [stepControl]="form.controls.academic">
+      <ng-template matStepLabel>Parcours académique</ng-template>
+      <form [formGroup]="form.controls.academic" class="step-content">
+        
+        <div class="form-grid">
+          <mat-form-field appearance="outline">
+            <mat-label>Niveau d'études</mat-label>
+            <mat-select formControlName="study_level">
+              <mat-option *ngFor="let level of educationLevels" [value]="level.value">
+                {{ level.label }}
+              </mat-option>
+            </mat-select>
+            <mat-error *ngIf="fieldHasError('academic', 'study_level')">Le niveau d'études est requis.</mat-error>
+            <mat-error *ngIf="apiError('study_level')">{{ apiError('study_level') }}</mat-error>
+          </mat-form-field>
+
+          <mat-form-field appearance="outline" *ngIf="form.controls.academic.controls.study_level.value === 'OTHER'">
+            <mat-label>Précisez votre niveau</mat-label>
+            <input matInput formControlName="study_level_other">
+            <mat-error *ngIf="fieldHasError('academic', 'study_level_other')">Ce champ est requis.</mat-error>
+            <mat-error *ngIf="apiError('study_level_other')">{{ apiError('study_level_other') }}</mat-error>
+          </mat-form-field>
+
+          <mat-form-field appearance="outline">
+            <mat-label>Filière / Domaine</mat-label>
+            <input matInput formControlName="study_field" placeholder="Ex: Informatique, Gestion...">
+            <mat-error *ngIf="fieldHasError('academic', 'study_field')">La filière est requise.</mat-error>
+            <mat-error *ngIf="apiError('study_field')">{{ apiError('study_field') }}</mat-error>
+          </mat-form-field>
+
+          <mat-form-field appearance="outline" class="full-width">
+            <mat-label>École / Université actuelle</mat-label>
+            <input matInput formControlName="current_school" placeholder="Nom de votre établissement">
+            <mat-error *ngIf="fieldHasError('academic', 'current_school')">L'établissement est requis.</mat-error>
+            <mat-error *ngIf="apiError('current_school')">{{ apiError('current_school') }}</mat-error>
+          </mat-form-field>
+        </div>
+
+        <div class="stepper-actions">
+          <button mat-button type="button" matStepperPrevious class="btn btn-outline">Retour</button>
+          <button mat-button type="button" matStepperNext class="btn btn-primary">Suivant</button>
+        </div>
+      </form>
+    </mat-step>
+
+    <!-- ÉTAPE 3 : Projet professionnel -->
+    <mat-step [stepControl]="form.controls.professional">
+      <ng-template matStepLabel>Projet professionnel</ng-template>
+      <form [formGroup]="form.controls.professional" class="step-content">
+        
+        <div class="form-grid">
+          <mat-form-field appearance="outline" class="full-width">
+            <mat-label>Type de candidature</mat-label>
+            <mat-select formControlName="application_type">
+              <mat-option *ngFor="let type of applicationTypes" [value]="type.value">
+                {{ type.label }}
+              </mat-option>
+            </mat-select>
+            <mat-error *ngIf="fieldHasError('professional', 'application_type')">Le type est requis.</mat-error>
+            <mat-error *ngIf="apiError('application_type')">{{ apiError('application_type') }}</mat-error>
+          </mat-form-field>
+
+          <mat-form-field appearance="outline">
+            <mat-label>URL LinkedIn (Optionnel)</mat-label>
+            <input matInput formControlName="linkedin_url" placeholder="https://linkedin.com/in/vous">
+            <mat-error *ngIf="apiError('linkedin_url')">{{ apiError('linkedin_url') }}</mat-error>
+          </mat-form-field>
+
+          <mat-form-field appearance="outline">
+            <mat-label>URL Portfolio / GitHub (Optionnel)</mat-label>
+            <input matInput formControlName="portfolio_url" placeholder="https://votre-site.com">
+            <mat-error *ngIf="apiError('portfolio_url')">{{ apiError('portfolio_url') }}</mat-error>
+          </mat-form-field>
+
+          <mat-form-field appearance="outline" class="full-width">
+            <mat-label>Message de motivation (Optionnel)</mat-label>
+            <textarea matInput formControlName="motivation_message" rows="4" placeholder="Pourquoi souhaitez-vous nous rejoindre ?"></textarea>
+            <mat-error *ngIf="apiError('motivation_message')">{{ apiError('motivation_message') }}</mat-error>
+          </mat-form-field>
+        </div>
+
+        <div class="stepper-actions">
+          <button mat-button type="button" matStepperPrevious class="btn btn-outline">Retour</button>
+          <button mat-button type="button" matStepperNext class="btn btn-primary">Suivant</button>
+        </div>
+      </form>
+    </mat-step>
+
+    <!-- ÉTAPE 4 : Documents -->
+    <mat-step>
+      <ng-template matStepLabel>Documents</ng-template>
+      <div class="step-content">
+        <p class="mb-lg">Veuillez télécharger les documents requis. Formats acceptés : PDF, DOC, DOCX pour les documents. JPG, PNG pour la photo.</p>
+        
+        <div class="documents-grid">
+          
+          <!-- CV -->
+          <div class="document-card" [class.has-error]="fileErrors.cv">
+            <div class="doc-icon"><mat-icon>description</mat-icon></div>
+            <div class="doc-info">
+              <h4>{{ fileRules.cv.label }} <span class="required">*</span></h4>
+              <p class="formats">PDF, DOC, DOCX (Max {{ fileRules.cv.maxSizeMb }}Mo)</p>
+              
+              <input type="file" #cvInput class="hidden-input" accept=".pdf,.doc,.docx,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document" (change)="onFileSelected($event, 'cv')">
+              
+              <div *ngIf="!cvFile" class="upload-action">
+                <button mat-stroked-button color="primary" type="button" (click)="cvInput.click()">
+                  <mat-icon>upload</mat-icon> Choisir un fichier
+                </button>
+              </div>
+
+              <div *ngIf="cvFile" class="file-selected">
+                <span class="filename" [title]="cvFile.name">{{ cvFile.name }}</span>
+                <button mat-icon-button color="warn" type="button" (click)="removeFile('cv', cvInput)">
+                  <mat-icon>close</mat-icon>
+                </button>
+              </div>
+              
+              <div *ngIf="fileErrors.cv" class="file-error">{{ fileErrors.cv }}</div>
+            </div>
+          </div>
+
+          <!-- Lettre -->
+          <div class="document-card" [class.has-error]="fileErrors.cover">
+            <div class="doc-icon"><mat-icon>mail</mat-icon></div>
+            <div class="doc-info">
+              <h4>{{ fileRules.cover.label }} <span class="required">*</span></h4>
+              <p class="formats">PDF, DOC, DOCX (Max {{ fileRules.cover.maxSizeMb }}Mo)</p>
+              
+              <input type="file" #coverInput class="hidden-input" accept=".pdf,.doc,.docx,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document" (change)="onFileSelected($event, 'cover')">
+              
+              <div *ngIf="!coverLetterFile" class="upload-action">
+                <button mat-stroked-button color="primary" type="button" (click)="coverInput.click()">
+                  <mat-icon>upload</mat-icon> Choisir un fichier
+                </button>
+              </div>
+
+              <div *ngIf="coverLetterFile" class="file-selected">
+                <span class="filename" [title]="coverLetterFile.name">{{ coverLetterFile.name }}</span>
+                <button mat-icon-button color="warn" type="button" (click)="removeFile('cover', coverInput)">
+                  <mat-icon>close</mat-icon>
+                </button>
+              </div>
+              
+              <div *ngIf="fileErrors.cover" class="file-error">{{ fileErrors.cover }}</div>
+            </div>
+          </div>
+
+          <!-- Photo -->
+          <div class="document-card" [class.has-error]="fileErrors.photo">
+            <div class="doc-icon"><mat-icon>account_circle</mat-icon></div>
+            <div class="doc-info">
+              <h4>{{ fileRules.photo.label }} <span class="required">*</span></h4>
+              <p class="formats">JPG, JPEG, PNG (Max {{ fileRules.photo.maxSizeMb }}Mo)</p>
+              
+              <input type="file" #photoInput class="hidden-input" accept=".jpg,.jpeg,.png,image/jpeg,image/png" (change)="onFileSelected($event, 'photo')">
+              
+              <div *ngIf="!personalPhotoFile" class="upload-action">
+                <button mat-stroked-button color="primary" type="button" (click)="photoInput.click()">
+                  <mat-icon>upload</mat-icon> Choisir une image
+                </button>
+              </div>
+
+              <div *ngIf="personalPhotoFile" class="file-selected">
+                <span class="filename" [title]="personalPhotoFile.name">{{ personalPhotoFile.name }}</span>
+                <button mat-icon-button color="warn" type="button" (click)="removeFile('photo', photoInput)">
+                  <mat-icon>close</mat-icon>
+                </button>
+              </div>
+              
+              <div *ngIf="fileErrors.photo" class="file-error">{{ fileErrors.photo }}</div>
+            </div>
+          </div>
+
+        </div>
+
+        <div class="stepper-actions mt-lg">
+          <button mat-button type="button" matStepperPrevious class="btn btn-outline">Retour</button>
+          <button mat-button type="button" matStepperNext class="btn btn-primary">Suivant</button>
+        </div>
+      </div>
+    </mat-step>
+
+    <!-- ÉTAPE 5 : Validation -->
+    <mat-step>
+      <ng-template matStepLabel>Validation</ng-template>
+      <div class="step-content text-center py-xl">
+        <mat-icon class="success-icon mb-md">task_alt</mat-icon>
+        <h2>Prêt à soumettre votre candidature</h2>
+        <p class="mb-lg">Veuillez vérifier vos informations avant de confirmer l'envoi.</p>
+        
+        <div class="stepper-actions justify-center mt-lg">
+          <button mat-button type="button" matStepperPrevious class="btn btn-outline">Vérifier mes infos</button>
+          <button mat-flat-button color="primary" type="button" (click)="submit()" [disabled]="isSubmitting" class="btn btn-primary submit-btn">
+            <mat-icon *ngIf="isSubmitting">hourglass_empty</mat-icon>
+            {{ isSubmitting ? 'Envoi en cours...' : 'Confirmer la candidature' }}
+          </button>
+        </div>
+      </div>
+    </mat-step>
+
+  </mat-stepper>
+</div>

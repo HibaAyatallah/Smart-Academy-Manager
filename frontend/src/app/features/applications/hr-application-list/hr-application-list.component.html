@@ -1,0 +1,109 @@
+<app-page-header
+  title="Candidatures"
+  subtitle="Recherche, filtres et traitement RH"
+/>
+
+<mat-card class="filters-card">
+  <form [formGroup]="filtersForm" class="filters" (ngSubmit)="applyFilters()">
+    <mat-form-field appearance="outline">
+      <mat-label>Recherche</mat-label>
+      <input matInput formControlName="search" placeholder="Nom ou email">
+    </mat-form-field>
+
+    <mat-form-field appearance="outline">
+      <mat-label>Type</mat-label>
+      <mat-select formControlName="application_type">
+        <mat-option value="">Tous</mat-option>
+        <mat-option *ngFor="let type of applicationTypes" [value]="type.value">
+          {{ type.label }}
+        </mat-option>
+      </mat-select>
+    </mat-form-field>
+
+    <mat-form-field appearance="outline">
+      <mat-label>Statut</mat-label>
+      <mat-select formControlName="status">
+        <mat-option value="">Tous</mat-option>
+        <mat-option *ngFor="let status of statuses" [value]="status.value">
+          {{ status.label }}
+        </mat-option>
+      </mat-select>
+    </mat-form-field>
+
+    <div class="filter-actions">
+      <button mat-stroked-button type="button" (click)="resetFilters()">Reinitialiser</button>
+      <button mat-flat-button color="primary" type="submit">Filtrer</button>
+    </div>
+  </form>
+</mat-card>
+
+<div class="loading" *ngIf="isLoading">
+  <mat-spinner diameter="36"></mat-spinner>
+</div>
+
+<p class="error-state" *ngIf="!isLoading && errorMessage">
+  {{ errorMessage }}
+</p>
+
+<mat-card class="table-card" *ngIf="!isLoading && !errorMessage">
+  <div class="table-header">
+    <strong>{{ total }} candidature(s)</strong>
+  </div>
+
+  <p class="empty-state" *ngIf="!applications.length">
+    Aucune candidature trouvée.
+  </p>
+
+  <div class="table-wrapper" *ngIf="applications.length">
+    <table mat-table [dataSource]="applications">
+      <ng-container matColumnDef="candidate">
+        <th mat-header-cell *matHeaderCellDef>Candidat</th>
+        <td mat-cell *matCellDef="let application">
+          <strong>{{ application.candidate_profile.full_name }}</strong>
+          <span>{{ application.candidate_profile.email }}</span>
+        </td>
+      </ng-container>
+
+      <ng-container matColumnDef="type">
+        <th mat-header-cell *matHeaderCellDef>Type</th>
+        <td mat-cell *matCellDef="let application">
+          {{ typeLabel(application.application_type) }}
+        </td>
+      </ng-container>
+
+      <ng-container matColumnDef="status">
+        <th mat-header-cell *matHeaderCellDef>Statut</th>
+        <td mat-cell *matCellDef="let application">
+          {{ statusLabel(application.status) }}
+        </td>
+      </ng-container>
+
+      <ng-container matColumnDef="submitted_at">
+        <th mat-header-cell *matHeaderCellDef>Depot</th>
+        <td mat-cell *matCellDef="let application">
+          {{ application.submitted_at | date:'dd/MM/yyyy HH:mm' }}
+        </td>
+      </ng-container>
+
+      <ng-container matColumnDef="actions">
+        <th mat-header-cell *matHeaderCellDef></th>
+        <td mat-cell *matCellDef="let application">
+          <a mat-button [routerLink]="['/applications', application.id]">Ouvrir</a>
+        </td>
+      </ng-container>
+
+      <tr mat-header-row *matHeaderRowDef="displayedColumns"></tr>
+      <tr mat-row *matRowDef="let row; columns: displayedColumns;"></tr>
+    </table>
+  </div>
+
+  <mat-paginator
+    *ngIf="total > pageSize"
+    [length]="total"
+    [pageIndex]="pageIndex"
+    [pageSize]="pageSize"
+    [pageSizeOptions]="[pageSize]"
+    aria-label="Pagination des candidatures"
+    (page)="onPageChange($event)"
+  />
+</mat-card>

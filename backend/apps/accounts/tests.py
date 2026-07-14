@@ -89,26 +89,30 @@ class UserPermissionTests(APITestCase):
 
         self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
 
-    def test_hr_list_excludes_super_admins(self):
+    def test_hr_and_super_admin_receive_equivalent_user_lists(self):
         self.client.force_authenticate(user=self.hr)
+        hr_response = self.client.get(reverse("user-list"))
+        self.client.force_authenticate(user=self.super_admin)
+        admin_response = self.client.get(reverse("user-list"))
 
-        response = self.client.get(reverse("user-list"))
-
-        self.assertEqual(response.status_code, status.HTTP_200_OK)
-        emails = {user["email"] for user in response.data["results"]}
+        self.assertEqual(hr_response.status_code, status.HTTP_200_OK)
+        self.assertEqual(admin_response.status_code, status.HTTP_200_OK)
+        emails = {user["email"] for user in hr_response.data["results"]}
         self.assertIn(self.employee.email, emails)
-        self.assertNotIn(self.super_admin.email, emails)
+        self.assertIn(self.super_admin.email, emails)
+        self.assertEqual(hr_response.data["count"], admin_response.data["count"])
 
-    def test_hr_cannot_retrieve_super_admin_profile(self):
+    def test_hr_can_retrieve_super_admin_profile(self):
         self.client.force_authenticate(user=self.hr)
 
         response = self.client.get(
             reverse("user-detail", kwargs={"pk": self.super_admin.pk})
         )
 
-        self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data["id"], self.super_admin.id)
 
-    def test_hr_cannot_create_super_admin(self):
+    def test_hr_can_create_super_admin_role(self):
         self.client.force_authenticate(user=self.hr)
 
         response = self.client.post(
@@ -121,7 +125,8 @@ class UserPermissionTests(APITestCase):
             format="json",
         )
 
-        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(response.data["role"], UserRole.SUPER_ADMIN)
 
     def test_super_admin_can_create_user(self):
         self.client.force_authenticate(user=self.super_admin)
@@ -138,4 +143,3 @@ class UserPermissionTests(APITestCase):
 
         self.assertEqual(response.status_code, status.HTTP_201_CREATED)
         self.assertTrue(User.objects.filter(email="candidate@example.com").exists())
-

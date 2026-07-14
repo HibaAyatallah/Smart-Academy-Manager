@@ -1,0 +1,246 @@
+@import '@angular/material/prebuilt-themes/azure-blue.css';
+
+:root {
+  /* Colors */
+  --finatech-night: #0B1F33;
+  --finatech-blue: #1689C7;
+  --finatech-light: #55B6E7;
+  --bg-main: #F7F9FC;
+  --bg-white: #FFFFFF;
+  --text-main: #101828;
+  --text-secondary: #667085;
+  --border-color: #E4E7EC;
+  --color-success: #12A36D;
+  --color-warning: #F59E0B;
+  --color-error: #D92D20;
+
+  /* Typography */
+  --font-family: 'Roboto', Arial, sans-serif;
+  --title-h1: 2.5rem;
+  --title-h2: 2rem;
+  --title-h3: 1.5rem;
+  
+  /* Layout */
+  --container-max-width: 1200px;
+  --spacing-xs: 0.5rem;
+  --spacing-sm: 1rem;
+  --spacing-md: 1.5rem;
+  --spacing-lg: 2rem;
+  --spacing-xl: 3rem;
+
+  /* Borders & Shadows */
+  --radius-sm: 4px;
+  --radius-md: 8px;
+  --radius-lg: 12px;
+  --shadow-sm: 0 1px 2px rgba(16, 24, 40, 0.05);
+  --shadow-md: 0 4px 6px -1px rgba(16, 24, 40, 0.1), 0 2px 4px -1px rgba(16, 24, 40, 0.06);
+  --shadow-lg: 0 10px 15px -3px rgba(16, 24, 40, 0.1), 0 4px 6px -2px rgba(16, 24, 40, 0.05);
+
+  /* Transitions */
+  --transition-fast: 0.2s ease-in-out;
+}
+
+/* Global Icons Fix */
+.material-symbols-rounded, mat-icon {
+  font-family: 'Material Symbols Rounded', sans-serif !important;
+  font-weight: normal;
+  font-style: normal;
+  font-size: 24px;
+  line-height: 1;
+  letter-spacing: normal;
+  text-transform: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  white-space: nowrap;
+  word-wrap: normal;
+  direction: ltr;
+  font-feature-settings: 'liga';
+  -webkit-font-feature-settings: 'liga';
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Section Spacing */
+.section {
+  padding: var(--spacing-xl) 0;
+  
+  @media (min-width: 768px) {
+    padding: 5rem 0;
+  }
+}
+
+.section-header {
+  margin-bottom: var(--spacing-xl);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html, body {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  background: var(--bg-main);
+  color: var(--text-main);
+  font-family: var(--font-family);
+  -webkit-font-smoothing: antialiased;
+}
+
+h1, h2, h3, h4, h5, h6 {
+  color: var(--finatech-night);
+  margin-top: 0;
+}
+
+a {
+  color: inherit;
+  text-decoration: none;
+  transition: color var(--transition-fast);
+}
+
+a:hover {
+  color: var(--finatech-blue);
+}
+
+button, input {
+  font: inherit;
+}
+
+.full-width {
+  width: 100%;
+}
+
+/* Base Classes for Design System */
+.container {
+  max-width: var(--container-max-width);
+  margin: 0 auto;
+  padding: 0 var(--spacing-md);
+}
+
+.card {
+  background: var(--bg-white);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-sm);
+  padding: var(--spacing-lg);
+  border: 1px solid var(--border-color);
+  transition: box-shadow var(--transition-fast);
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+
+  &:hover {
+    box-shadow: var(--shadow-md);
+  }
+}
+
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0.75rem 1.5rem;
+  border-radius: var(--radius-sm);
+  font-weight: 500;
+  cursor: pointer;
+  transition: all var(--transition-fast), transform var(--transition-fast);
+  border: none;
+  text-decoration: none;
+
+  &:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 10px rgba(0, 0, 0, 0.1);
+  }
+
+  &-primary {
+    background: var(--finatech-blue);
+    color: var(--bg-white);
+    
+    &:hover {
+      background: var(--finatech-night);
+      color: var(--bg-white);
+    }
+  }
+
+  &-outline {
+    background: transparent;
+    color: var(--finatech-night);
+    border: 1px solid var(--border-color);
+    
+    &:hover {
+      background: var(--bg-main);
+      border-color: var(--finatech-blue);
+    }
+  }
+}
+
+.badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.25rem 0.75rem;
+  border-radius: 9999px;
+  font-size: 0.875rem;
+  font-weight: 500;
+
+  &-success { background: #ECFDF3; color: var(--color-success); }
+  &-warning { background: #FFFAEB; color: var(--color-warning); }
+  &-error { background: #FEF3F2; color: var(--color-error); }
+  &-info { background: #F0F9FF; color: var(--finatech-blue); }
+}
+
+/* Animations */
+@keyframes fadeInUp {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.animate-on-scroll {
+  opacity: 0;
+  transform: translateY(20px);
+  transition: opacity 0.5s ease-out, transform 0.5s ease-out;
+  will-change: opacity, transform;
+}
+
+.animate-on-scroll.is-visible {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+/* Base Loader */
+.global-loader {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 3px;
+  background: var(--finatech-blue);
+  animation: loadLine 1.5s ease-in-out infinite;
+  transform-origin: left;
+  z-index: 9999;
+}
+
+@keyframes loadLine {
+  0% { transform: scaleX(0); opacity: 1; }
+  50% { transform: scaleX(0.5); opacity: 1; }
+  100% { transform: scaleX(1); opacity: 0; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, ::before, ::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+  .animate-on-scroll {
+    opacity: 1 !important;
+    transform: none !important;
+    transition: none !important;
+  }
+}

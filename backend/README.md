@@ -56,3 +56,22 @@ psql -U postgres -c "ALTER USER smart_academy_user CREATEDB;"
 ```
 
 Ce droit est utile pour le developpement et les tests locaux. Il n'est pas destine a un utilisateur applicatif de production.
+
+## Candidatures
+
+Le module de candidatures ajoute :
+
+- depot public de candidature ;
+- gestion RH des statuts ;
+- documents de candidature ;
+- entretiens ;
+- historique des statuts ;
+- transformation d'un candidat accepte en stagiaire ou collaborateur ;
+- refus avec desactivation du compte ;
+- anonymisation des candidatures expirees.
+
+Commande d'anonymisation :
+
+```powershell
+python manage.py anonymize_expired_applications
+```
