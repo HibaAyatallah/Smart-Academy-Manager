@@ -7,7 +7,7 @@ from .models import BusinessUnit, BusinessUnitMembership, BusinessUnitNeed
 from .serializers import (
     BusinessUnitSerializer,
     BusinessUnitMembershipSerializer,
-    BusinessUnitNeedSerializer,
+    BusinessUnitNeedWorkflowSerializer,
 )
 from .permissions import (
     CanViewBUData,
@@ -84,7 +84,7 @@ class BusinessUnitMembershipViewSet(viewsets.ModelViewSet):
 
 
 class BusinessUnitNeedViewSet(viewsets.ModelViewSet):
-    serializer_class = BusinessUnitNeedSerializer
+    serializer_class = BusinessUnitNeedWorkflowSerializer
     permission_classes = [CanViewBUData]
     filter_backends = [DjangoFilterBackend, SearchFilter, OrderingFilter]
     filterset_fields = ["business_unit", "status", "priority", "need_type", "required_level"]
@@ -94,14 +94,23 @@ class BusinessUnitNeedViewSet(viewsets.ModelViewSet):
 
     def get_queryset(self):
         user = self.request.user
-        queryset = BusinessUnitNeed.objects.select_related("business_unit", "created_by").all()
+        queryset = BusinessUnitNeed.objects.select_related(
+            "business_unit", "created_by", "requester", "trainer"
+        ).prefetch_related("training_recipients").all()
 
         if is_hr_or_superadmin(user):
             return queryset
         if is_bu_manager(user):
             return queryset.filter(business_unit__manager=user)
         if is_collaborator(user):
-            return queryset.filter(business_unit__memberships__user=user, business_unit__memberships__is_active=True).distinct()
+            return queryset.filter(
+                business_unit__memberships__user=user,
+                business_unit__memberships__is_active=True,
+                need_type="TRAINING",
+                status="CONFIRMED",
+            ).filter(
+                Q(training_audience="ALL") | Q(training_recipients=user)
+            ).distinct()
 
         return queryset.none()
 

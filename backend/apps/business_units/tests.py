@@ -241,6 +241,154 @@ class BusinessUnitTests(APITestCase):
         self.bu1.refresh_from_db()
         self.assertEqual(self.bu1.description, "Nouvelle description")
 
+    def test_manager_can_create_training_request_for_own_member(self):
+        self.client.force_authenticate(user=self.manager1)
+        response = self.client.post(
+            reverse("business-unit-need-list"),
+            {
+                "business_unit": self.bu1.id,
+                "title": "Formation Angular",
+                "description": "Perfectionnement",
+                "need_type": NeedType.TRAINING,
+                "requester": self.employee1.id,
+                "priority": NeedPriority.HIGH,
+                "expected_date": "2026-09-01",
+            },
+        )
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(response.data["status"], NeedStatus.SUBMITTED)
+
+    def test_manager_cannot_select_collaborator_from_another_bu(self):
+        outsider = User.objects.create_user(
+            email="outsider@test.com", password="pwd", role=UserRole.EMPLOYEE
+        )
+        BusinessUnitMembership.objects.create(business_unit=self.bu2, user=outsider)
+        self.client.force_authenticate(user=self.manager1)
+        response = self.client.post(
+            reverse("business-unit-need-list"),
+            {
+                "business_unit": self.bu1.id,
+                "title": "Formation",
+                "description": "Test",
+                "need_type": NeedType.TRAINING,
+                "requester": outsider.id,
+            },
+        )
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+
+    def test_manager_cannot_complete_training_organization(self):
+        self.client.force_authenticate(user=self.manager1)
+        response = self.client.patch(
+            reverse("business-unit-need-detail", args=[self.need1.id]),
+            {"status": NeedStatus.CONFIRMED, "training_link": "https://example.com"},
+        )
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+
+    def test_hr_can_complete_and_validate_training(self):
+        trainer = User.objects.create_user(
+            email="trainer@test.com", password="pwd", role=UserRole.TRAINER_TUTOR
+        )
+        training = BusinessUnitNeed.objects.create(
+            business_unit=self.bu1,
+            title="Formation Python",
+            description="Demande manager",
+            need_type=NeedType.TRAINING,
+            created_by=self.manager1,
+        )
+        self.client.force_authenticate(user=self.superadmin)
+        response = self.client.patch(
+            reverse("business-unit-need-detail", args=[training.id]),
+            {
+                "training_start_date": "2026-09-10",
+                "training_end_date": "2026-09-12",
+                "training_link": "https://example.com/training",
+                "trainer": trainer.id,
+                "status": NeedStatus.CONFIRMED,
+                "decision_comment": "Formation approuvée.",
+            },
+        )
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data["trainer"], trainer.id)
+        self.assertEqual(response.data["status"], NeedStatus.CONFIRMED)
+
+    def test_employee_sees_only_validated_training_from_own_bu(self):
+        visible = BusinessUnitNeed.objects.create(
+            business_unit=self.bu1,
+            title="Formation validée",
+            description="Visible",
+            need_type=NeedType.TRAINING,
+            status=NeedStatus.CONFIRMED,
+            created_by=self.hr,
+        )
+        BusinessUnitNeed.objects.create(
+            business_unit=self.bu1,
+            title="Formation brouillon",
+            description="Masquée",
+            need_type=NeedType.TRAINING,
+            status=NeedStatus.SUBMITTED,
+            created_by=self.hr,
+        )
+        self.client.force_authenticate(user=self.employee1)
+        response = self.client.get(reverse("business-unit-need-list"))
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual([item["id"] for item in response.data["results"]], [visible.id])
+
+    def test_manager_cannot_write_memberships(self):
+        self.client.force_authenticate(user=self.manager1)
+        response = self.client.post(
+            reverse("business-unit-membership-list"),
+            {"business_unit": self.bu1.id, "user": self.candidate.id},
+        )
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+
+    def test_specific_training_is_visible_only_to_selected_members(self):
+        employee2 = User.objects.create_user(
+            email="emp2-visible@test.com", password="pwd", role=UserRole.EMPLOYEE
+        )
+        BusinessUnitMembership.objects.create(business_unit=self.bu1, user=employee2)
+        training = BusinessUnitNeed.objects.create(
+            business_unit=self.bu1,
+            title="Formation ciblée",
+            description="Ciblée",
+            need_type=NeedType.TRAINING,
+            training_audience="SPECIFIC",
+            status=NeedStatus.CONFIRMED,
+            created_by=self.superadmin,
+        )
+        training.training_recipients.add(self.employee1)
+
+        self.client.force_authenticate(user=self.employee1)
+        selected_response = self.client.get(reverse("business-unit-need-list"))
+        self.assertIn(training.id, [item["id"] for item in selected_response.data["results"]])
+
+        self.client.force_authenticate(user=employee2)
+        other_response = self.client.get(reverse("business-unit-need-list"))
+        self.assertNotIn(training.id, [item["id"] for item in other_response.data["results"]])
+
+    def test_specific_training_rejects_email_outside_business_unit(self):
+        self.client.force_authenticate(user=self.manager1)
+        response = self.client.post(
+            reverse("business-unit-need-list"),
+            {
+                "business_unit": self.bu1.id,
+                "title": "Formation ciblée",
+                "description": "Test",
+                "need_type": NeedType.TRAINING,
+                "training_audience": "SPECIFIC",
+                "specific_recipient_emails": ["outsider@example.com"],
+            },
+            format="json",
+        )
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+
+    def test_superadmin_refusal_requires_comment(self):
+        self.client.force_authenticate(user=self.superadmin)
+        response = self.client.patch(
+            reverse("business-unit-need-detail", args=[self.need1.id]),
+            {"status": NeedStatus.REFUSED, "decision_comment": ""},
+        )
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+
 
 class BusinessUnitMembershipTests(APITestCase):
     """Tests for membership history constraint changes"""

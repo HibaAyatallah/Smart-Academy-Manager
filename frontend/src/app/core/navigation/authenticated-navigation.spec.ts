@@ -15,8 +15,9 @@ describe('authenticated navigation', () => {
 
   it('gives BU Managers only the implemented BU destinations', () => {
     expect(labelsFor('BU_MANAGER')).toEqual([
-      'Tableau de bord', 'Business Units', 'Besoins des BU',
+      'Tableau de bord', 'Besoins de ma BU', 'Membres de ma BU',
     ]);
+    expect(labelsFor('BU_MANAGER')).not.toContain('Business Units');
   });
 
   it('hides empty sections for roles with dashboard-only access', () => {

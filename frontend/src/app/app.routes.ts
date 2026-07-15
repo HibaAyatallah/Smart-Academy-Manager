@@ -85,6 +85,12 @@ export const routes: Routes = [
       dashboardRoute('dashboard/intern', 'INTERN', 'Dashboard stagiaire'),
       dashboardRoute('dashboard/candidate', 'CANDIDATE', 'Dashboard candidat'),
       dashboardRoute('dashboard/client', 'CLIENT', 'Dashboard client'),
+      {
+        path: 'my-business-unit/trainings',
+        canActivate: [roleGuard],
+        data: { roles: ['EMPLOYEE'], title: 'Formations de ma Business Unit' },
+        loadComponent: () => import('./features/business-units/employee-trainings/employee-trainings').then(m => m.EmployeeTrainings),
+      },
       // Business Units Routes
       {
         path: 'business-units',
@@ -93,7 +99,21 @@ export const routes: Routes = [
         children: [
           {
             path: '',
+            canActivate: [roleGuard],
+            data: { roles: ['SUPER_ADMIN', 'HR'], title: 'Business Units' },
             loadComponent: () => import('./features/business-units/bu-list/bu-list').then(m => m.BuList),
+          },
+          {
+            path: 'members',
+            canActivate: [roleGuard],
+            data: { roles: ['BU_MANAGER'], title: 'Membres de ma Business Unit' },
+            loadComponent: () => import('./features/business-units/bu-members/bu-members').then(m => m.BuMembers),
+          },
+          {
+            path: 'needs/new',
+            canActivate: [roleGuard],
+            data: { roles: ['BU_MANAGER'], title: 'Nouveau besoin' },
+            loadComponent: () => import('./features/business-units/bu-need-form/bu-need-form').then(m => m.BuNeedForm),
           },
           {
             path: 'needs',
@@ -104,6 +124,12 @@ export const routes: Routes = [
             path: ':id',
             data: { title: 'Détail de la Business Unit' },
             loadComponent: () => import('./features/business-units/bu-detail/bu-detail').then(m => m.BuDetail),
+          },
+          {
+            path: ':id/needs/:needId/edit',
+            canActivate: [roleGuard],
+            data: { roles: ['BU_MANAGER'], title: 'Modifier le besoin' },
+            loadComponent: () => import('./features/business-units/bu-need-form/bu-need-form').then(m => m.BuNeedForm),
           },
           {
             path: ':id/needs/:needId',

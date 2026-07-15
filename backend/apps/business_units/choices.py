@@ -2,9 +2,9 @@ from django.db import models
 
 
 class NeedType(models.TextChoices):
-    HIRING = "HIRING", "Recrutement"
-    INTERNSHIP = "INTERNSHIP", "Stage"
-    FREELANCE = "FREELANCE", "Freelance"
+    RECRUITMENT_INTERNSHIP = "RECRUITMENT_INTERNSHIP", "Recrutement / stagiaire"
+    TRAINING = "TRAINING", "Formation"
+    OTHER = "OTHER", "Autre"
 
 
 class NeedRequiredLevel(models.TextChoices):
@@ -22,8 +22,17 @@ class NeedPriority(models.TextChoices):
 
 
 class NeedStatus(models.TextChoices):
+    SUBMITTED = "SUBMITTED", "Soumis"
+    CONFIRMED = "CONFIRMED", "Confirmé"
+    REFUSED = "REFUSED", "Refusé"
     DRAFT = "DRAFT", "Brouillon"
     OPEN = "OPEN", "Ouvert"
     IN_PROGRESS = "IN_PROGRESS", "En cours"
+    VALIDATED = "VALIDATED", "Validé"
     FULFILLED = "FULFILLED", "Pourvu"
     CANCELLED = "CANCELLED", "Annulé"
+
+
+class TrainingAudience(models.TextChoices):
+    ALL = "ALL", "Tous les collaborateurs de la BU"
+    SPECIFIC = "SPECIFIC", "Collaborateurs spécifiques"

@@ -1,0 +1,46 @@
+<app-page-header
+  title="Formations de ma BU"
+  subtitle="Consultez les formations confirmées qui vous concernent"
+/>
+
+<div class="loading" *ngIf="isLoading"><mat-spinner diameter="36" /></div>
+<p class="error-state" *ngIf="!isLoading && errorMessage">{{ errorMessage }}</p>
+
+<mat-card *ngIf="!isLoading && !errorMessage">
+  <p class="empty-state" *ngIf="!trainings.length">Aucune formation confirmée ne vous concerne.</p>
+
+  <div class="table-wrapper" *ngIf="trainings.length">
+    <table mat-table [dataSource]="trainings">
+      <ng-container matColumnDef="title">
+        <th mat-header-cell *matHeaderCellDef>Titre</th>
+        <td mat-cell *matCellDef="let training"><strong>{{ training.title || 'À définir' }}</strong></td>
+      </ng-container>
+
+      <ng-container matColumnDef="type">
+        <th mat-header-cell *matHeaderCellDef>Type</th>
+        <td mat-cell *matCellDef="let training">{{ training.need_type_label || 'À définir' }}</td>
+      </ng-container>
+
+      <ng-container matColumnDef="training_start_date">
+        <th mat-header-cell *matHeaderCellDef>Date de début</th>
+        <td mat-cell *matCellDef="let training">{{ training.training_start_date ? (training.training_start_date | date:'dd/MM/yyyy') : 'À définir' }}</td>
+      </ng-container>
+
+      <ng-container matColumnDef="training_end_date">
+        <th mat-header-cell *matHeaderCellDef>Date de fin</th>
+        <td mat-cell *matCellDef="let training">{{ training.training_end_date ? (training.training_end_date | date:'dd/MM/yyyy') : 'À définir' }}</td>
+      </ng-container>
+
+      <ng-container matColumnDef="training_link">
+        <th mat-header-cell *matHeaderCellDef>Lien</th>
+        <td mat-cell *matCellDef="let training">
+          <a *ngIf="training.training_link; else undefinedLink" [href]="training.training_link" target="_blank" rel="noopener noreferrer">Ouvrir la formation</a>
+          <ng-template #undefinedLink>À définir</ng-template>
+        </td>
+      </ng-container>
+
+      <tr mat-header-row *matHeaderRowDef="displayedColumns"></tr>
+      <tr mat-row *matRowDef="let row; columns: displayedColumns"></tr>
+    </table>
+  </div>
+</mat-card>

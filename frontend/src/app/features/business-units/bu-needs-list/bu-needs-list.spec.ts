@@ -33,7 +33,7 @@ describe('BuNeedsList', () => {
   it('maps a successful paginated response', () => {
     service.getNeeds.and.returnValue(of({
       count: 1, next: null, previous: null,
-      results: [{ id: 1, title: 'Besoin test', business_unit: 1, business_unit_name: 'BU 1', status: 'DRAFT' as any, priority: 'MEDIUM' as any, need_type: 'HIRING' as any, required_level: 'MID' as any, description: '', required_skills: '', number_of_profiles: 1, created_by: 2, created_by_email: 'm@example.com', created_at: '', updated_at: '', need_type_label: 'Embauche', required_level_label: 'Moyen', priority_label: 'Moyenne', status_label: 'Brouillon', expected_date: '' }],
+      results: [{ id: 1, title: 'Besoin test', business_unit: 1, business_unit_name: 'BU 1', status: 'DRAFT' as any, priority: 'MEDIUM' as any, need_type: 'RECRUITMENT_INTERNSHIP' as any, required_level: 'MID' as any, description: '', required_skills: '', number_of_profiles: 1, created_by: 2, created_by_email: 'm@example.com', created_at: '', updated_at: '', need_type_label: 'Recrutement / stagiaire', required_level_label: 'Moyen', priority_label: 'Moyenne', status_label: 'Brouillon', expected_date: '' }],
     }));
     fixture.detectChanges();
     expect(component.total).toBe(1);

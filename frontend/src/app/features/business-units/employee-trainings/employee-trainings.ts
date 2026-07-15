@@ -5,30 +5,34 @@ import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { MatTableModule } from '@angular/material/table';
 import { finalize } from 'rxjs/operators';
 
-import { BusinessUnitMembership } from '../../../core/models/business-unit.models';
+import { BusinessUnitNeed, NeedStatus, NeedType } from '../../../core/models/business-unit.models';
 import { BusinessUnitService } from '../../../core/services/business-unit.service';
 import { PageHeaderComponent } from '../../../shared/components/page-header/page-header.component';
 
 @Component({
-  selector: 'app-bu-members',
+  selector: 'app-employee-trainings',
   standalone: true,
   imports: [DatePipe, MatCardModule, MatProgressSpinnerModule, MatTableModule, NgIf, PageHeaderComponent],
-  templateUrl: './bu-members.html',
-  styleUrl: './bu-members.scss',
+  templateUrl: './employee-trainings.html',
+  styleUrl: './employee-trainings.scss',
 })
-export class BuMembers implements OnInit {
+export class EmployeeTrainings implements OnInit {
   private readonly service = inject(BusinessUnitService);
-  readonly displayedColumns = ['name', 'email', 'position', 'joined_at'];
-  members: BusinessUnitMembership[] = [];
+
+  readonly displayedColumns = ['title', 'type', 'training_start_date', 'training_end_date', 'training_link'];
+  trainings: BusinessUnitNeed[] = [];
   isLoading = true;
   errorMessage = '';
 
   ngOnInit(): void {
-    this.service.getMemberships({ is_active: true }).pipe(
+    this.service.getNeeds({
+      need_type: NeedType.TRAINING,
+      status: NeedStatus.CONFIRMED,
+    }).pipe(
       finalize(() => this.isLoading = false),
     ).subscribe({
-      next: response => this.members = response.results ?? [],
-      error: () => this.errorMessage = 'Impossible de charger les membres de votre Business Unit.',
+      next: response => this.trainings = response.results ?? [],
+      error: () => this.errorMessage = 'Impossible de charger les formations de votre Business Unit.',
     });
   }
 }

@@ -19,7 +19,7 @@ const ALL_ROLES: readonly UserRole[] = [
 ];
 
 const ADMIN_ROLES: readonly UserRole[] = ['SUPER_ADMIN', 'HR'];
-const BU_ROLES: readonly UserRole[] = ['SUPER_ADMIN', 'HR', 'BU_MANAGER'];
+const ADMIN_BU_ROLES: readonly UserRole[] = ['SUPER_ADMIN', 'HR'];
 
 export const AUTHENTICATED_NAVIGATION: readonly NavigationSection[] = [
   {
@@ -38,8 +38,11 @@ export const AUTHENTICATED_NAVIGATION: readonly NavigationSection[] = [
   {
     label: 'Organisation',
     items: [
-      { label: 'Business Units', icon: 'domain', route: '/business-units', roles: BU_ROLES, exact: true },
-      { label: 'Besoins des BU', icon: 'fact_check', route: '/business-units/needs', roles: BU_ROLES },
+      { label: 'Business Units', icon: 'domain', route: '/business-units', roles: ADMIN_BU_ROLES, exact: true },
+      { label: 'Besoins des BU', icon: 'fact_check', route: '/business-units/needs', roles: ADMIN_BU_ROLES },
+      { label: 'Besoins de ma BU', icon: 'fact_check', route: '/business-units/needs', roles: ['BU_MANAGER'] },
+      { label: 'Membres de ma BU', icon: 'groups', route: '/business-units/members', roles: ['BU_MANAGER'] },
+      { label: 'Formations de ma BU', icon: 'school', route: '/my-business-unit/trainings', roles: ['EMPLOYEE'] },
     ],
   },
 ];

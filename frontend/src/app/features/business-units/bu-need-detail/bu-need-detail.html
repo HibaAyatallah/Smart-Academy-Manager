@@ -7,11 +7,30 @@
     <p><strong>Statut</strong><span>{{ item.status_label }}</span></p>
     <p><strong>Type</strong><span>{{ item.need_type_label }}</span></p>
     <p><strong>Priorite</strong><span>{{ item.priority_label }}</span></p>
-    <p><strong>Niveau</strong><span>{{ item.required_level_label }}</span></p>
-    <p><strong>Profils</strong><span>{{ item.number_of_profiles }}</span></p>
-    <p><strong>Date attendue</strong><span>{{ item.expected_date ? (item.expected_date | date:'dd/MM/yyyy') : 'Non definie' }}</span></p>
-    <p><strong>Competences</strong><span>{{ item.required_skills || 'Non precisees' }}</span></p>
+    <p><strong>Demandeur</strong><span>{{ item.requester_name || 'Aucun' }}</span></p>
+    <p *ngIf="item.need_type === 'TRAINING'"><strong>Public cible</strong><span>{{ item.training_audience === 'SPECIFIC' ? 'Collaborateurs spécifiques' : 'Tous les collaborateurs de la BU' }}</span></p>
+    <p><strong>Commentaire</strong><span>{{ item.decision_comment || 'Aucun commentaire' }}</span></p>
+    <p><strong>Date souhaitée</strong><span>{{ item.expected_date ? (item.expected_date | date:'dd/MM/yyyy') : 'Non définie' }}</span></p>
+    <p *ngIf="item.need_type === 'TRAINING'"><strong>Dates de formation</strong><span>{{ item.training_start_date ? (item.training_start_date | date:'dd/MM/yyyy') : 'À définir' }} - {{ item.training_end_date ? (item.training_end_date | date:'dd/MM/yyyy') : 'À définir' }}</span></p>
+    <p *ngIf="item.need_type === 'TRAINING'"><strong>Formateur</strong><span>{{ item.trainer_name || 'À définir' }}</span></p>
+    <p *ngIf="item.need_type === 'TRAINING'"><strong>Lien</strong><span>{{ item.training_link || 'À définir' }}</span></p>
     <p><strong>Description</strong><span>{{ item.description }}</span></p>
   </mat-card-content>
-  <mat-card-actions><a mat-button routerLink="/business-units/needs">Retour aux besoins</a></mat-card-actions>
+  <mat-card-actions>
+    <a mat-button routerLink="/business-units/needs">Retour aux besoins</a>
+    <a mat-flat-button color="primary" *ngIf="canManageNeeds" [routerLink]="['/business-units', item.business_unit, 'needs', item.id, 'edit']">Modifier</a>
+  </mat-card-actions>
+
+  <mat-card-content *ngIf="canDecide && item.status === 'SUBMITTED'">
+    <form [formGroup]="decisionForm" class="details">
+      <mat-form-field appearance="outline"><mat-label>Commentaire</mat-label><textarea matInput formControlName="decision_comment"></textarea><mat-error>Le commentaire est obligatoire.</mat-error></mat-form-field>
+      <ng-container *ngIf="item.need_type === 'TRAINING'">
+        <mat-form-field appearance="outline"><mat-label>Date de début</mat-label><input matInput type="date" formControlName="training_start_date"></mat-form-field>
+        <mat-form-field appearance="outline"><mat-label>Date de fin</mat-label><input matInput type="date" formControlName="training_end_date"></mat-form-field>
+        <mat-form-field appearance="outline"><mat-label>Formateur</mat-label><mat-select formControlName="trainer"><mat-option *ngFor="let trainer of trainers" [value]="trainer.id">{{ trainer.full_name }}</mat-option></mat-select></mat-form-field>
+        <mat-form-field appearance="outline"><mat-label>Lien</mat-label><input matInput formControlName="training_link"></mat-form-field>
+      </ng-container>
+      <div><button mat-button type="button" (click)="decide('REFUSED')">Refuser</button><button mat-flat-button color="primary" type="button" (click)="decide('CONFIRMED')">Confirmer</button></div>
+    </form>
+  </mat-card-content>
 </mat-card>

@@ -3,6 +3,10 @@
   subtitle="Gérer les besoins des Business Units"
 />
 
+<div class="page-actions" *ngIf="canManageNeeds">
+  <a mat-flat-button color="primary" routerLink="/business-units/needs/new">Nouveau besoin</a>
+</div>
+
 <mat-card class="filters-card">
   <form [formGroup]="filtersForm" class="filters" (ngSubmit)="applyFilters()">
     <mat-form-field appearance="outline">
@@ -106,6 +110,7 @@
         <th mat-header-cell *matHeaderCellDef></th>
         <td mat-cell *matCellDef="let need" class="actions-cell">
           <a mat-button [routerLink]="['/business-units', need.business_unit, 'needs', need.id]">Détails</a>
+          <a mat-button *ngIf="canManageNeeds" [routerLink]="['/business-units', need.business_unit, 'needs', need.id, 'edit']">Modifier</a>
         </td>
       </ng-container>
 

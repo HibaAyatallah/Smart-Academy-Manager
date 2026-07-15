@@ -31,8 +31,10 @@ class IsHRSuperAdminOrManager(BasePermission):
 
     def has_permission(self, request, view) -> bool:
         user = request.user
-        if is_hr_or_superadmin(user) or is_bu_manager(user):
+        if is_hr_or_superadmin(user):
             return True
+        if is_bu_manager(user):
+            return request.method in SAFE_METHODS
         return False
 
     def has_object_permission(self, request, view, obj) -> bool:

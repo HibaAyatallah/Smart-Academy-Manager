@@ -15,6 +15,7 @@ import { finalize } from 'rxjs/operators';
 
 import { BusinessUnitNeed, NeedStatus, NeedPriority, NeedType } from '../../../core/models/business-unit.models';
 import { BusinessUnitService } from '../../../core/services/business-unit.service';
+import { AuthService } from '../../../core/services/auth.service';
 import { PageHeaderComponent } from '../../../shared/components/page-header/page-header.component';
 
 @Component({
@@ -42,6 +43,7 @@ import { PageHeaderComponent } from '../../../shared/components/page-header/page
 })
 export class BuNeedsList implements OnInit {
   private readonly buService = inject(BusinessUnitService);
+  private readonly authService = inject(AuthService, { optional: true });
   private readonly formBuilder = inject(FormBuilder);
   private readonly snackBar = inject(MatSnackBar);
 
@@ -64,6 +66,7 @@ export class BuNeedsList implements OnInit {
   readonly pageSize = 20;
   isLoading = false;
   errorMessage = '';
+  readonly canManageNeeds = this.authService?.currentUserSnapshot?.role === 'BU_MANAGER';
 
   ngOnInit(): void {
     this.loadNeeds();

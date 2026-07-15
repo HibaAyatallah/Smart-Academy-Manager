@@ -4,6 +4,7 @@ import { Observable } from 'rxjs';
 import { environment } from '../../../environments/environment';
 import { PaginatedResponse } from '../models/application.models';
 import { BusinessUnit, BusinessUnitMembership, BusinessUnitNeed } from '../models/business-unit.models';
+import { UserProfile } from '../models/auth.models';
 
 @Injectable({
   providedIn: 'root'
@@ -94,5 +95,9 @@ export class BusinessUnitService {
 
   deleteNeed(id: number): Observable<void> {
     return this.http.delete<void>(`${this.baseUrl}business-unit-needs/${id}/`);
+  }
+
+  getUsers(): Observable<PaginatedResponse<UserProfile>> {
+    return this.http.get<PaginatedResponse<UserProfile>>(`${this.baseUrl}users/`);
   }
 }

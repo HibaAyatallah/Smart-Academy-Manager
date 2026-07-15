@@ -46,8 +46,9 @@ class BusinessUnitNeedAdmin(admin.ModelAdmin):
     readonly_fields = ["created_at", "updated_at"]
     autocomplete_fields = ["business_unit", "created_by"]
     fieldsets = (
-        ("Informations principales", {"fields": ("business_unit", "title", "description")}),
+        ("Informations principales", {"fields": ("business_unit", "title", "description", "requester")}),
         ("Détails du besoin", {"fields": ("need_type", "required_skills", "required_level", "number_of_profiles")}),
-        ("Planification & Statut", {"fields": ("priority", "expected_date", "status")}),
+        ("Planification & Statut", {"fields": ("priority", "expected_date", "status", "decision_comment")}),
+        ("Organisation de la formation", {"fields": ("training_audience", "training_recipients", "training_start_date", "training_end_date", "training_link", "trainer")}),
         ("Traçabilité", {"fields": ("created_by", "created_at", "updated_at")}),
     )

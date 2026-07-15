@@ -16,7 +16,7 @@ describe('BuNeedDetail', () => {
     business_unit_name: 'BU 1',
     status: 'DRAFT' as any,
     priority: 'MEDIUM' as any,
-    need_type: 'HIRING' as any,
+    need_type: 'RECRUITMENT_INTERNSHIP' as any,
     required_level: 'MID' as any,
     description: 'Description',
     required_skills: 'Skill A',

@@ -1,9 +1,9 @@
 
 
 export enum NeedType {
-  HIRING = 'HIRING',
-  INTERNSHIP = 'INTERNSHIP',
-  FREELANCE = 'FREELANCE',
+  RECRUITMENT_INTERNSHIP = 'RECRUITMENT_INTERNSHIP',
+  TRAINING = 'TRAINING',
+  OTHER = 'OTHER',
 }
 
 export enum NeedRequiredLevel {
@@ -21,9 +21,13 @@ export enum NeedPriority {
 }
 
 export enum NeedStatus {
+  SUBMITTED = 'SUBMITTED',
+  CONFIRMED = 'CONFIRMED',
+  REFUSED = 'REFUSED',
   DRAFT = 'DRAFT',
   OPEN = 'OPEN',
   IN_PROGRESS = 'IN_PROGRESS',
+  VALIDATED = 'VALIDATED',
   FULFILLED = 'FULFILLED',
   CANCELLED = 'CANCELLED',
 }
@@ -61,6 +65,8 @@ export interface BusinessUnitNeed {
   description: string;
   need_type: NeedType;
   need_type_label: string;
+  requester?: number | null;
+  requester_name?: string;
   required_skills: string;
   required_level: NeedRequiredLevel;
   required_level_label: string;
@@ -68,6 +74,15 @@ export interface BusinessUnitNeed {
   priority: NeedPriority;
   priority_label: string;
   expected_date: string | null;
+  training_audience?: 'ALL' | 'SPECIFIC';
+  training_recipient_emails?: string[];
+  specific_recipient_emails?: string[];
+  training_start_date?: string | null;
+  training_end_date?: string | null;
+  training_link?: string;
+  trainer?: number | null;
+  trainer_name?: string;
+  decision_comment?: string;
   status: NeedStatus;
   status_label: string;
   created_by: number;
