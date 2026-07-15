@@ -1,7 +1,7 @@
 from django.contrib.auth import get_user_model
 from django.urls import reverse
 from rest_framework import status
-from rest_framework.test import APITestCase
+from rest_framework.test import APITestCase, override_settings
 from rest_framework_simplejwt.tokens import AccessToken
 
 from .choices import UserRole
@@ -21,6 +21,27 @@ class UserModelTests(APITestCase):
         self.assertTrue(user.is_superuser)
 
 
+@override_settings(
+    REST_FRAMEWORK={
+        "DEFAULT_AUTHENTICATION_CLASSES": (
+            "rest_framework_simplejwt.authentication.JWTAuthentication",
+        ),
+        "DEFAULT_PERMISSION_CLASSES": (
+            "rest_framework.permissions.IsAuthenticated",
+        ),
+        "DEFAULT_THROTTLE_CLASSES": (
+            "rest_framework.throttling.AnonRateThrottle",
+            "rest_framework.throttling.UserRateThrottle",
+        ),
+        "DEFAULT_THROTTLE_RATES": {
+            "anon": "1000/hour",
+            "user": "1000/minute",
+            "login": "1000/minute",
+            "public_submission": "1000/hour",
+        },
+        "NUM_PROXIES": None,
+    },
+)
 class AuthAPITests(APITestCase):
     def setUp(self):
         self.user = User.objects.create_user(
@@ -65,6 +86,31 @@ class AuthAPITests(APITestCase):
         self.user.refresh_from_db()
         self.assertEqual(self.user.phone_number, "+212600000000")
         self.assertEqual(self.user.role, UserRole.EMPLOYEE)
+
+    def test_password_change_requires_authentication(self):
+        response = self.client.post(reverse("auth_change_password"), {})
+        self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
+
+    def test_password_change_verifies_current_password_and_hashes_new_password(self):
+        self.client.force_authenticate(user=self.user)
+        invalid = self.client.post(reverse("auth_change_password"), {
+            "current_password": "wrong", "new_password": "NewStrongPass456!"
+        }, format="json")
+        self.assertEqual(invalid.status_code, status.HTTP_400_BAD_REQUEST)
+        response = self.client.post(reverse("auth_change_password"), {
+            "current_password": "StrongPass123!", "new_password": "NewStrongPass456!"
+        }, format="json")
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.user.refresh_from_db()
+        self.assertTrue(self.user.check_password("NewStrongPass456!"))
+        self.assertNotEqual(self.user.password, "NewStrongPass456!")
+
+    def test_password_change_applies_django_validation(self):
+        self.client.force_authenticate(user=self.user)
+        response = self.client.post(reverse("auth_change_password"), {
+            "current_password": "StrongPass123!", "new_password": "123"
+        }, format="json")
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
 
 
 class UserPermissionTests(APITestCase):
@@ -143,3 +189,38 @@ class UserPermissionTests(APITestCase):
 
         self.assertEqual(response.status_code, status.HTTP_201_CREATED)
         self.assertTrue(User.objects.filter(email="candidate@example.com").exists())
+
+
+from django.core.cache import cache
+
+class ThrottleTests(APITestCase):
+    def setUp(self):
+        self.user = User.objects.create_user(
+            email="test@example.com",
+            password="StrongPass123!",
+            role=UserRole.EMPLOYEE,
+        )
+        cache.clear()
+
+    def test_excessive_login_attempts_throttled(self):
+        """Excessive login attempts are throttled (429)"""
+        # Use up the 10/minute limit configured in base.py
+        for _ in range(10):
+            self.client.post(
+                reverse("token_obtain_pair"),
+                {"email": "test@example.com", "password": "StrongPass123!"},
+                format="json",
+            )
+        # 11th attempt should be throttled
+        response = self.client.post(
+            reverse("token_obtain_pair"),
+            {"email": "test@example.com", "password": "StrongPass123!"},
+            format="json",
+        )
+        self.assertEqual(response.status_code, status.HTTP_429_TOO_MANY_REQUESTS)
+
+    def test_authenticated_endpoints_not_affected(self):
+        """Authenticated internal endpoints are not blocked by login throttle"""
+        self.client.force_authenticate(user=self.user)
+        response = self.client.get(reverse("auth_me"))
+        self.assertEqual(response.status_code, status.HTTP_200_OK)

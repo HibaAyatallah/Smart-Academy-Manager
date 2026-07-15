@@ -4,7 +4,7 @@ from drf_spectacular.views import SpectacularAPIView, SpectacularRedocView, Spec
 from rest_framework.routers import DefaultRouter
 from rest_framework_simplejwt.views import TokenRefreshView, TokenVerifyView
 
-from apps.accounts.views import MeAPIView, UserViewSet, SmartAcademyTokenObtainPairView
+from apps.accounts.views import ChangePasswordAPIView, MeAPIView, UserViewSet, SmartAcademyTokenObtainPairView
 from apps.recruitment.views import ApplicationDocumentViewSet, ApplicationViewSet, InterviewViewSet
 
 router = DefaultRouter()
@@ -21,6 +21,7 @@ urlpatterns = [
     path("api/auth/token/refresh/", TokenRefreshView.as_view(), name="token_refresh"),
     path("api/auth/token/verify/", TokenVerifyView.as_view(), name="token_verify"),
     path("api/auth/me/", MeAPIView.as_view(), name="auth_me"),
+    path("api/auth/change-password/", ChangePasswordAPIView.as_view(), name="auth_change_password"),
     path("api/schema/", SpectacularAPIView.as_view(), name="schema"),
     path("api/docs/", SpectacularSwaggerView.as_view(url_name="schema"), name="swagger-ui"),
     path("api/redoc/", SpectacularRedocView.as_view(url_name="schema"), name="redoc"),

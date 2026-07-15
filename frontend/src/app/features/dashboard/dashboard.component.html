@@ -1,23 +1,15 @@
 <section class="dashboard" *ngIf="user$ | async as user">
   <app-page-header
-    [title]="(title$ | async) || 'Dashboard'"
-    [subtitle]="roleLabels[user.role]"
+    [title]="'Bonjour ' + user.first_name"
+    [subtitle]="'Bienvenue dans votre espace ' + roleLabels[user.role].toLowerCase() + '.'"
   />
 
-  <div class="identity-panel">
-    <div>
-      <span>Utilisateur</span>
-      <strong>{{ user.full_name }}</strong>
-    </div>
-    <div>
-      <span>Email</span>
-      <strong>{{ user.email }}</strong>
-    </div>
-    <div>
-      <span>Role</span>
-      <strong>{{ roleLabels[user.role] }}</strong>
-    </div>
-  </div>
+  <app-empty-state
+    *ngIf="user.role !== 'CANDIDATE'"
+    icon="dashboard"
+    title="Aucune donnée opérationnelle à afficher"
+    message="Votre espace est prêt. Utilisez la navigation pour accéder aux fonctionnalités disponibles pour votre rôle."
+  />
 
   <section class="candidate-space" *ngIf="user.role === 'CANDIDATE'">
     <div class="loading" *ngIf="candidateApplicationsLoading">
@@ -182,7 +174,4 @@
     />
   </section>
 
-  <button mat-flat-button color="primary" type="button" (click)="logout()">
-    Deconnexion
-  </button>
 </section>

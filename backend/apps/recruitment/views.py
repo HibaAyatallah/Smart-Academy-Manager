@@ -7,6 +7,8 @@ from rest_framework.parsers import FormParser, JSONParser, MultiPartParser
 from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
 
+from apps.accounts.throttles import PublicSubmissionRateThrottle
+
 from .choices import ApplicationStatus
 from .models import Application, ApplicationDocument, Interview
 from .permissions import (
@@ -93,6 +95,7 @@ class ApplicationViewSet(viewsets.ModelViewSet):
         detail=False,
         methods=["post"],
         permission_classes=[AllowAny],
+        throttle_classes=[PublicSubmissionRateThrottle],
         url_path="public-submit",
     )
     def public_submit(self, request):

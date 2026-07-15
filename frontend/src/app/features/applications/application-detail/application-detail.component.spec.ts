@@ -4,7 +4,7 @@ import { MatDialog, MatDialogModule } from '@angular/material/dialog';
 import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
 import { provideNoopAnimations } from '@angular/platform-browser/animations';
 import { ActivatedRoute, convertToParamMap } from '@angular/router';
-import { of, Subject, throwError } from 'rxjs';
+import { EMPTY, of, Subject, throwError } from 'rxjs';
 
 import { Application } from '../../../core/models/application.models';
 import { ApplicationService } from '../../../core/services/application.service';
@@ -141,5 +141,13 @@ describe('ApplicationDetailComponent', () => {
       'Fermer',
       { duration: 5000 },
     );
+  });
+
+  it('always stops the initial loader when the detail request completes', () => {
+    applicationService.getApplication.and.returnValue(EMPTY);
+
+    component.loadApplication();
+
+    expect(component.isLoading).toBeFalse();
   });
 });

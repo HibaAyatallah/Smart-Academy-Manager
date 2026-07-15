@@ -80,13 +80,15 @@ export class ApplicationDetailComponent implements OnInit {
     this.isLoading = true;
     this.errorMessage = null;
 
-    this.applicationService.getApplication(id).subscribe({
+    this.applicationService.getApplication(id).pipe(
+      finalize(() => {
+        this.isLoading = false;
+      }),
+    ).subscribe({
       next: (application) => {
         this.application = application;
-        this.isLoading = false;
       },
       error: (error: HttpErrorResponse) => {
-        this.isLoading = false;
         if (error.status === 404) {
           this.errorMessage = "Cette candidature n'existe pas ou a été supprimée.";
         } else if (error.status === 403) {

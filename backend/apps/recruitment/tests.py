@@ -4,6 +4,7 @@ from datetime import timedelta
 
 from django.contrib import admin
 from django.contrib.auth import get_user_model
+from django.core.cache import cache
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test import RequestFactory, override_settings
 from django.utils import timezone
@@ -44,6 +45,9 @@ class RecruitmentAPITests(APITestCase):
         shutil.rmtree(TEST_MEDIA_ROOT, ignore_errors=True)
 
     def setUp(self):
+        # Throttle state is stored outside the test database. Reset it so a
+        # public submission made by one test cannot rate-limit another test.
+        cache.clear()
         self.hr = User.objects.create_user(
             email="hr@example.com",
             password="StrongPass123!",

@@ -57,7 +57,13 @@ class BusinessUnitMembership(models.Model):
     class Meta:
         verbose_name = "Membre de Business Unit"
         verbose_name_plural = "Membres de Business Unit"
-        unique_together = [("business_unit", "user")]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["business_unit", "user"],
+                condition=models.Q(is_active=True),
+                name="unique_active_bu_membership",
+            ),
+        ]
         ordering = ["-joined_at"]
 
     def __str__(self):
@@ -65,11 +71,16 @@ class BusinessUnitMembership(models.Model):
 
     def clean(self):
         if self.is_active:
-            # A user must not have duplicate active membership in the SAME Business Unit
-            # (handled by unique_together, but we can also check globally if required. 
-            # The prompt says: "A user must not have duplicate active membership in the same Business Unit" 
-            # so unique_together handles it).
-            pass
+            # Check for duplicate active membership in the same Business Unit
+            if BusinessUnitMembership.objects.filter(
+                business_unit=self.business_unit,
+                user=self.user,
+                is_active=True,
+            ).exclude(pk=self.pk).exists():
+                from django.core.exceptions import ValidationError
+                raise ValidationError(
+                    "Cet utilisateur est déjà membre actif de cette Business Unit."
+                )
 
 
 class BusinessUnitNeed(models.Model):

@@ -106,6 +106,10 @@ export class AuthService {
       );
   }
 
+  changePassword(payload: { current_password: string; new_password: string }): Observable<{ detail: string }> {
+    return this.http.post<{ detail: string }>(`${this.apiBaseUrl}auth/change-password/`, payload);
+  }
+
   logout(redirect = true): void {
     this.tokenStorage.clear();
     this.clearProfileState();

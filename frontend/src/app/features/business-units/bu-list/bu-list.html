@@ -3,8 +3,8 @@
   subtitle="Gestion des départements et centres de profit"
 />
 
-<mat-card class="filters-card" style="margin-bottom: 2rem;">
-  <form [formGroup]="filtersForm" class="filters" (ngSubmit)="applyFilters()" style="display: flex; gap: 1rem; align-items: center;">
+<mat-card class="filters-card">
+  <form [formGroup]="filtersForm" class="filters" (ngSubmit)="applyFilters()">
     <mat-form-field appearance="outline">
       <mat-label>Recherche</mat-label>
       <input matInput formControlName="search" placeholder="Nom ou code">
@@ -20,31 +20,31 @@
     </mat-form-field>
 
     <div class="filter-actions">
-      <button mat-stroked-button type="button" (click)="resetFilters()" style="margin-right: 0.5rem;">Réinitialiser</button>
+      <button mat-stroked-button type="button" (click)="resetFilters()">Réinitialiser</button>
       <button mat-flat-button color="primary" type="submit">Filtrer</button>
     </div>
   </form>
 </mat-card>
 
-<div class="loading" *ngIf="isLoading" style="display: flex; justify-content: center; margin: 2rem;">
+<div class="loading" *ngIf="isLoading">
   <mat-spinner diameter="36"></mat-spinner>
 </div>
 
-<p class="error-state" *ngIf="!isLoading && errorMessage" style="color: red; text-align: center;">
+<p class="error-state" *ngIf="!isLoading && errorMessage">
   {{ errorMessage }}
 </p>
 
 <mat-card class="table-card" *ngIf="!isLoading && !errorMessage">
-  <div class="table-header" style="padding: 1rem; display: flex; justify-content: space-between; align-items: center;">
+  <div class="table-header">
     <strong>{{ total }} Business Unit(s)</strong>
   </div>
 
-  <p class="empty-state" *ngIf="!businessUnits.length" style="padding: 2rem; text-align: center;">
+  <p class="empty-state" *ngIf="!businessUnits.length">
     Aucune Business Unit trouvée.
   </p>
 
   <div class="table-wrapper" *ngIf="businessUnits.length">
-    <table mat-table [dataSource]="businessUnits" style="width: 100%;">
+    <table mat-table [dataSource]="businessUnits">
       <ng-container matColumnDef="name">
         <th mat-header-cell *matHeaderCellDef>Nom</th>
         <td mat-cell *matCellDef="let bu">
@@ -69,7 +69,7 @@
       <ng-container matColumnDef="status">
         <th mat-header-cell *matHeaderCellDef>Statut</th>
         <td mat-cell *matCellDef="let bu">
-          <span [style.color]="bu.is_active ? 'green' : 'red'">
+          <span class="status-pill" [class.inactive]="!bu.is_active">
             {{ bu.is_active ? 'Actif' : 'Inactif' }}
           </span>
         </td>
@@ -84,8 +84,8 @@
 
       <ng-container matColumnDef="actions">
         <th mat-header-cell *matHeaderCellDef></th>
-        <td mat-cell *matCellDef="let bu" style="text-align: right;">
-          <a mat-button [routerLink]="['/business-units', bu.id]">Gérer</a>
+        <td mat-cell *matCellDef="let bu" class="actions-cell">
+          <a mat-button [routerLink]="['/business-units', bu.id]">Consulter</a>
         </td>
       </ng-container>
 

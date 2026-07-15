@@ -35,12 +35,11 @@ export interface UserProfile {
 
 export const ROLE_LABELS: Record<UserRole, string> = {
   SUPER_ADMIN: 'Super administrateur',
-  HR: 'RH',
-  BU_MANAGER: 'Manager de Business Unit',
-  TRAINER_TUTOR: 'Formateur / Tuteur',
+  HR: 'Ressources humaines',
+  BU_MANAGER: 'Manager BU',
+  TRAINER_TUTOR: 'Formateur',
   EMPLOYEE: 'Collaborateur',
   INTERN: 'Stagiaire',
   CANDIDATE: 'Candidat',
-  CLIENT: 'Client',
+  CLIENT: 'Client externe',
 };
-

@@ -1,92 +1,17 @@
-<mat-sidenav-container class="app-shell">
-  <mat-sidenav
-    #drawer
-    class="app-sidebar"
-    [mode]="(isCompact$ | async) ? 'over' : 'side'"
-    [opened]="(isCompact$ | async) === false"
-  >
-    <div class="brand">
-      <span class="brand-mark">SA</span>
-      <span>Smart Academy</span>
-    </div>
-
-    <nav class="nav-list" aria-label="Navigation principale">
-      <a
-        mat-button
-        [routerLink]="dashboardLink()"
-        routerLinkActive="active"
-        [routerLinkActiveOptions]="{ exact: false }"
-      >
-        Dashboard
-      </a>
-
-      <ng-container *ngIf="user$ | async as user">
-        <a
-          mat-button
-          *ngIf="canManageApplications(user)"
-          routerLink="/applications"
-          routerLinkActive="active"
-        >
-          Candidatures
-        </a>
-
-        <a
-          mat-button
-          *ngIf="canManageBusinessUnits(user)"
-          routerLink="/business-units"
-          routerLinkActive="active"
-          [routerLinkActiveOptions]="{ exact: true }"
-        >
-          Business Units
-        </a>
-
-        <a
-          mat-button
-          *ngIf="canManageBusinessUnits(user)"
-          routerLink="/business-units/needs"
-          routerLinkActive="active"
-        >
-          Besoins (BUs)
-        </a>
-
-        <a
-          mat-button
-          *ngIf="canViewOwnApplications(user)"
-          routerLink="/applications/my"
-          routerLinkActive="active"
-        >
-          Mes candidatures
-        </a>
-      </ng-container>
-    </nav>
+<a class="skip-link" href="#main-content">Aller au contenu principal</a>
+<mat-sidenav-container class="app-shell" *ngIf="viewModel$ | async as vm">
+  <mat-sidenav #drawer class="mobile-drawer" mode="over" [opened]="false" [fixedInViewport]="true" aria-label="Navigation mobile">
+    <div class="drawer-brand"><img src="/images/logos/logo_finatech.png" alt="Finatech"></div>
+    <nav aria-label="Navigation mobile principale"><ng-container *ngFor="let section of vm.navigation"><a class="mobile-nav-item" *ngFor="let item of section.items" [routerLink]="item.route" routerLinkActive="active" [routerLinkActiveOptions]="{exact:item.exact ?? false}" (click)="closeMobileNavigation()"><mat-icon aria-hidden="true">{{item.icon}}</mat-icon><span>{{item.label}}</span></a></ng-container></nav>
   </mat-sidenav>
-
-  <mat-sidenav-content>
-    <mat-toolbar class="topbar">
-      <button
-        mat-button
-        class="menu-button"
-        type="button"
-        aria-label="Ouvrir le menu"
-        (click)="drawer.toggle()"
-      >
-        <span class="menu-lines" aria-hidden="true"></span>
-      </button>
-
-      <span class="topbar-title">Smart Academy Manager</span>
-      <span class="spacer"></span>
-
-      <ng-container *ngIf="user$ | async as user">
-        <span class="user-name">{{ user.full_name }}</span>
-      </ng-container>
-
-      <button mat-flat-button color="primary" type="button" (click)="logout()">
-        Deconnexion
-      </button>
-    </mat-toolbar>
-
-    <main class="content">
-      <router-outlet />
-    </main>
+  <mat-sidenav-content class="app-workspace">
+    <header class="authenticated-nav">
+      <a class="brand-link" routerLink="/dashboard" aria-label="Smart Academy Manager — accueil"><img src="/images/logos/logo_finatech.png" alt="Finatech"><span>Smart Academy Manager</span></a>
+      <nav class="desktop-navigation" aria-label="Navigation principale"><ng-container *ngFor="let section of vm.navigation"><a class="desktop-nav-item" *ngFor="let item of section.items" [routerLink]="item.route" routerLinkActive="active" [routerLinkActiveOptions]="{exact:item.exact ?? false}">{{item.label}}</a></ng-container></nav>
+      <button mat-icon-button type="button" class="mobile-menu" aria-label="Ouvrir la navigation" (click)="toggleNavigation()"><mat-icon>menu</mat-icon></button>
+      <button mat-button type="button" class="account-trigger" [matMenuTriggerFor]="accountMenu" aria-label="Ouvrir le menu du compte"><span class="avatar" aria-hidden="true">{{initials(vm.user)}}</span><span class="account-copy"><strong>{{vm.user.full_name}}</strong><small>{{roleLabels[vm.user.role]}}</small></span><mat-icon>expand_more</mat-icon></button>
+      <mat-menu #accountMenu="matMenu" xPosition="before"><a mat-menu-item routerLink="/espace-personnel"><mat-icon>person</mat-icon><span>Mon espace personnel</span></a><button mat-menu-item type="button" (click)="logout()"><mat-icon>logout</mat-icon><span>Se déconnecter</span></button></mat-menu>
+    </header>
+    <main id="main-content" class="content" tabindex="-1"><div class="page-container"><router-outlet /></div></main>
   </mat-sidenav-content>
 </mat-sidenav-container>

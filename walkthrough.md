@@ -136,7 +136,7 @@ Commands executed: `git status`, `git diff --stat`, `git diff`, and `git log --o
 - Ignored generated content observed: `frontend/node_modules/`, `frontend/.angular/`, `frontend/dist/`, Python `__pycache__/`. Ignore rules cover these. `coverage/` and `*.tsbuildinfo` were newly added to `.gitignore`.
 - The modified accounts permission makes HR pass the nominal “super admin” permission and allows HR object management, while `UserViewSet` and serializers still distinguish HR from Super Admin. This is unfinished harmonization, not a completed HR/Super Admin equivalence.
 - Recent BU work is unfinished: `bu-detail`, `bu-members`, and `bu-need-detail` are generated placeholders; no BU frontend specs exist.
-- The working tree contains mojibake (for example `CrÃ©ation`) across newly added Python/Angular files, indicating an encoding/tooling quality issue.
+- The working tree contains mojibake (for example `Création`) across newly added Python/Angular files, indicating an encoding/tooling quality issue.
 
 No valid work was reverted. `walkthrough.md` is the only audit-created file.
 
@@ -414,6 +414,146 @@ This score is intentionally below a vertical-slice demo estimate because the tar
 
 - Add private media/object storage, production email, Docker, Render, Vercel, and GitHub CI/CD.
 - Design Moodle integration later with separate databases, separate credentials, and no password copying. Do not add SSO or AI.
+
+# Authenticated Interface Stabilization — 14 July 2026
+
+## 1. Authenticated UI Summary
+
+The former authenticated shell had a fixed sidebar, scattered role checks, a static header title, duplicate logout controls, and inconsistent spacing. It now uses one responsive Material sidenav, a sticky header, constrained content, and typed role-filtered navigation. Recruitment and Business Unit API behavior was preserved; no public authentication or backend business file was changed.
+
+The shell supports expanded/collapsed desktop modes, an overlay mobile drawer, independent sidebar scrolling, route-derived titles, active navigation, a compact account menu, and shared loading, empty, error, and table presentation.
+
+## 2. Design System
+
+Central tokens in `frontend/src/styles.scss` define indigo/teal brand colors, neutral surfaces, borders, text and semantic colors, a 64 px header, 272/76 px sidebar widths, a 4–48 px spacing scale, 6/10/14 px radii, restrained shadows, and a 180 ms transition. Responsive rules cover 1024 px, drawer mode below 768 px, and compact 390 px spacing. Reduced-motion overrides remain global.
+
+## 3. Sidebar
+
+`core/navigation/authenticated-navigation.ts` uses existing `UserRole` values, hides empty groups and nonexistent routes, and gives HR/Super Admin equivalent links. Candidates see dashboard and their applications; BU Managers see dashboard, their authorized BU view, and BU needs. Other roles see only implemented pages.
+
+The sidebar includes application identity, initials/name/French role label, grouped Material icons, active/hover/focus states, collapsed tooltips, and bottom logout. Below 768 px it becomes an accessible overlay drawer and closes after navigation.
+
+## 4. Header
+
+The sticky header provides the responsive sidebar toggle, route-derived page title, and a single account menu with identity, role, and logout. Compact screens retain essential controls. Icon-only controls have French accessible labels and tooltips. No fake notification action was added.
+
+## 5. Dashboard Improvements
+
+Candidate application data still comes from the existing API. Candidate cards and real loading/error/empty/status states were standardized without changing business logic. Other roles now receive an honest empty state instead of invented KPIs, charts, training values, or notifications. Duplicate dashboard logout was removed.
+
+## 6. Page Improvements
+
+Business Unit and BU-needs lists now share filter, table, pagination, loading, error, empty, status-chip, and action styles. Inline layout styles were removed and tables scroll within their own surface. The shared page header now has a responsive action area, and the new empty-state component provides reusable semantic messaging without mock data. Forms and API contracts were intentionally unchanged.
+
+## 7. Accessibility
+
+Added a skip link, semantic navigation labels, visible keyboard focus, accessible icon-button names, tooltips, readable French roles, text-backed status meaning, responsive drawer semantics, minimum-size controls, and reduced-motion handling.
+
+## 8. Tests
+
+New tests cover centralized role navigation, HR/Super Admin equivalence, candidate/BU Manager restrictions, empty groups, layout rendering, desktop collapse, mobile drawer close behavior, logout, page-header projection, and empty-state semantics.
+
+Final result: **54/54 frontend tests passed** in Chrome 147 (`TOTAL: 54 SUCCESS`). The original 44 tests remain; no specification was deleted or skipped.
+
+## 9. Files Created
+
+- `frontend/src/app/core/navigation/authenticated-navigation.ts` and `.spec.ts`: typed navigation policy.
+- `frontend/src/app/layouts/main-layout/main-layout.component.spec.ts`: shell behavior tests.
+- `frontend/src/app/shared/components/empty-state/empty-state.component.ts` and `.spec.ts`: accessible empty state.
+- `frontend/src/app/shared/components/page-header/page-header.component.spec.ts`: header projection test.
+- `task.md`: verified pre-edit inspection and direction.
+
+## 10. Files Modified
+
+- `frontend/src/app/layouts/main-layout/*`: responsive shell, navigation, header, user menu, route titles, collapse/drawer behavior.
+- `frontend/src/styles.scss`: tokens and shared page/list/accessibility primitives.
+- `frontend/src/app/app.routes.ts`: descriptive route metadata; permissions/targets unchanged.
+- `frontend/src/app/core/models/auth.models.ts`: French labels while preserving backend values.
+- `frontend/src/app/features/dashboard/*`: honest role-aware presentation; candidate API flow preserved.
+- Business Unit list/needs templates and SCSS: consistent states and no inline layout styling.
+- Page header template/SCSS: responsive projected action area.
+
+## 11. Files Removed
+
+No file was removed. No test, feature, route, or backend file was deleted.
+
+## 12. Validation
+
+- Production build: **passed** (`Application bundle generation complete`; initial raw bundle 424.76 kB).
+- Frontend tests: **passed, 54/54** (`TOTAL: 54 SUCCESS`).
+- Scripts: `start`, `test`, `ng`, `build`; no lint script exists, so lint was not run.
+- Git review: changes are limited to authenticated Angular UI, tests, `task.md`, and this report. No Django file, fake dashboard data, deleted test, or unfinished route is present.
+
+## 13. Remaining Visual Work
+
+- A live authenticated walkthrough at 1440, 1024, 768, and 390 px remains necessary with a reachable local server and test session. The isolated browser could not connect to the local dev server, so no visual-pass claim is made.
+- Some feature-specific detail/form templates retain legacy SCSS; this sprint prioritized the shared shell and stable list flows.
+- No visual-regression/accessibility scanner or lint script is configured.
+
+## Authenticated Navigation Rendering Fix — 14 July 2026
+
+The global first-click rendering defect was traced to the authenticated Material sidenav layout. The sidebar supports a live width change for collapsed mode, but `mat-sidenav-container` was not using `autosize`, so its routed-content margins could remain stale until a hamburger click or resize forced Material to measure again. The persistent routed wrapper also used a transform/opacity animation, creating an unnecessary composited layer around content replaced by `router-outlet`.
+
+Corrections:
+
+- enabled Angular Material sidenav `autosize` so content margins follow the actual expanded/collapsed width;
+- established a complete explicit `100dvh` and flex sizing chain with `min-width: 0` and `min-height: 0`;
+- made the main content region the vertical scroll owner;
+- removed the persistent route-wrapper transform/opacity animation;
+- retained direct `routerLink`, existing guards, roles, permissions, routes, and API behavior;
+- added regression coverage proving a single sidebar click changes the URL and renders the destination component, plus coverage for enabled sidenav autosizing.
+
+Additional regression coverage verifies route-aware header updates, direct authenticated-route initialization, asynchronous current-user initialization, and routed-content visibility through sidebar collapse/expansion. Existing navigation-policy tests cover equivalent HR/Super Admin navigation, Candidate restrictions, BU Manager navigation, forbidden roles, and mobile drawer closing.
+
+No route definition, guard, permission, API call, or change-detection strategy was changed. No `detectChanges()` production workaround, timeout, full-page reload, fake data, or duplicate navigation call was introduced.
+
+Automated validation: production build passed (424.76 kB initial raw bundle) and **60/60 frontend tests passed** (`TOTAL: 60 SUCCESS`). No frontend test was deleted and no backend file was changed.
+
+Manual validation limitation: a live authenticated session for Super Admin, HR, Candidate, Collaborator, and BU Manager could not be executed in this environment. The isolated browser could not reach the locally started Angular server, and no test credentials were available. Consequently, console/network inspection and the requested 1440×900, 1024×768, 768×1024, and 390×844 role matrix remain pending; they are not reported as passed. The automated Chrome suite does verify single-click routing, immediate routed component insertion, route title updates, direct initialization, asynchronous identity, desktop collapse independence, and mobile drawer behavior.
+
+## Shared Authenticated Shell and Personal Space — 14 July 2026
+
+1. **Previous problems:** the authenticated UI duplicated identity in a sidebar card and global top bar; both consumed excessive space.
+2. **Removed:** global authenticated header, route title duplication, sidebar profile card, and duplicate account presentation.
+3. **Shell:** compact Material navigation rail plus full-width flex content. The account controls are a compact page-top utility row; page titles remain owned by each routed `app-page-header`.
+4. **Rail:** 272 px expanded / 76 px collapsed, icons in both states, labels and identity copy only when expanded, rail-local collapse control, active indicator, tooltips, mobile overlay drawer.
+5. **Page header:** existing reusable title/subtitle/action structure remains the sole title surface; no platform-name eyebrow is repeated.
+6. **Account:** exactly one account trigger; menu contains only `Mon espace personnel` and `Se déconnecter`.
+7. **Personal space:** new authenticated `/espace-personnel` route for every role, displaying real `auth/me` identity data and account security.
+8. **Read-only fields:** first name, last name, email, role, and phone are rendered as text; no administrative field is editable.
+9. **Password:** new authenticated `POST /api/auth/change-password/` verifies the current password, applies Django validators, and saves through `set_password()`. The JWT session remains active because the current architecture has no token-revocation-on-password-change policy.
+10. **Responsive/accessibility:** account copy collapses on small screens, mobile menu appears only in drawer mode, content retains zero minimum sizing, controls have accessible labels, and reduced motion remains supported.
+11. **Tests:** shell assertions cover global-header removal, absence of sidebar identity, and exactly one account control. Personal-space tests cover real read-only data, confirmation mismatch, success, and invalid current password. Backend tests cover authentication, incorrect current password, Django validation, successful hashing, and self-only operation.
+12. **Validation:** Angular production build passed, initial raw bundle **425.00 kB**. Frontend tests: **65/65 passed**. Django check passed; migration drift check reported no changes; backend tests: **59/59 passed**.
+13. **Files created:** `frontend/src/app/features/personal-space/personal-space.component.{ts,html,scss}`.
+14. **Files modified:** authenticated main layout HTML/SCSS/tests, Angular routes/AuthService, accounts serializers/views/tests, root Django URLs, and this report.
+15. **Remaining limitation:** live visual verification at the four requested viewports remains unavailable because the isolated browser cannot reach the local server. No role dashboard was customized.
+
+## Final Horizontal Authenticated Shell — 14 July 2026
+
+### 1. Confirmed previous problems
+
+The permanent sidebar consumed desktop width, retained obsolete collapse/logout controls, used placeholder SA branding, and duplicated account identity. Personal space rendered inside the public layout. Dashboard identity cards duplicated profile data.
+
+### 2. Personal-space redirect root cause
+
+`frontend/src/app/app.routes.ts` incorrectly registered `espace-personnel` as a child of `PublicLayoutComponent`. The menu's `/espace-personnel` `routerLink` was internal, but route ordering selected the public shell. The route now belongs to the `authGuard`-protected `MainLayoutComponent` children.
+
+### 3–6. Shell, branding, navigation, and account
+
+Desktop now uses one 68 px horizontal navigation with the real `frontend/public/images/logos/logo_finatech.png`, centralized role-filtered links, active underline, and exactly one account trigger. No permanent sidenav, collapse state, “Réduire”, sidebar logout, or SA block remains. Below 768 px, navigation uses a temporary Material overlay drawer that closes after selection; the account control remains unique.
+
+### 7–9. Personal space, password, and dashboard
+
+The shared authenticated personal page renders real `/auth/me/` name, email, role, and phone values as read-only text. Only the password form is editable. `POST /api/auth/change-password/` affects `request.user`, checks the current password, applies Django validators, and hashes through `set_password()`; no password is returned. JWT remains active under the existing policy. Dashboard name/email/role cards were removed; operational candidate content and honest empty states remain.
+
+### 10–12. Files and cleanup
+
+Created personal-space component files and tests in `frontend/src/app/features/personal-space/`. Modified the authenticated layout, routes, AuthService, dashboard template, accounts serializer/view/URL/tests, `task.md`, and this report. No source file was removed; obsolete sidebar markup, SCSS, state, and tests were replaced in place. Public business logic and backend role permissions were unchanged.
+
+### 13–15. Tests, validation, limitations
+
+Tests cover absent permanent sidebar/reduce/placeholder identity, Finatech logo, horizontal and active navigation, role filtering, unique account control, internal profile link, mobile drawer, logout, first-click rendering, read-only profile, password validation/success/errors, and backend password security. Production build passed with a **424.99 kB** initial raw bundle; frontend tests passed **65/65**. Django check passed, migration drift check reported no changes, and backend tests passed **59/59**. Live viewport inspection remains limited because the isolated browser cannot reach the local server.
 
 ## 15. Recommended Next Sprint
 

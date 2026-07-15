@@ -46,6 +46,21 @@ class BusinessUnitViewSet(viewsets.ModelViewSet):
         
         return queryset.none()
 
+    def perform_update(self, serializer):
+        user = self.request.user
+        if is_bu_manager(user):
+            # BU Managers may only update non-sensitive fields on their own BU.
+            # The manager field is already blocked by the serializer validator.
+            # Explicitly prevent changing sensitive fields at the view level.
+            forbidden = {"manager", "code", "is_active"}
+            attempted = set(serializer.validated_data.keys()) & forbidden
+            if attempted:
+                from rest_framework.exceptions import PermissionDenied
+                raise PermissionDenied(
+                    "Vous n'êtes pas autorisé à modifier les champs sensibles."
+                )
+        serializer.save()
+
 
 class BusinessUnitMembershipViewSet(viewsets.ModelViewSet):
     serializer_class = BusinessUnitMembershipSerializer

@@ -151,3 +151,169 @@ class BusinessUnitTests(APITestCase):
         response = self.client.post(reverse("business-unit-need-list"), data)
         # Should be forbidden/validation error because bu2 is not in their queryset
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+
+    # === BU Manager Protection Tests ===
+
+    def test_hr_can_reassign_manager(self):
+        """HR can reassign a Business Unit manager"""
+        self.client.force_authenticate(user=self.hr)
+        response = self.client.patch(
+            reverse("business-unit-detail", args=[self.bu1.id]),
+            {"manager": self.manager2.id},
+        )
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.bu1.refresh_from_db()
+        self.assertEqual(self.bu1.manager, self.manager2)
+
+    def test_super_admin_can_reassign_manager(self):
+        """Super Admin can reassign a Business Unit manager"""
+        self.client.force_authenticate(user=self.superadmin)
+        response = self.client.patch(
+            reverse("business-unit-detail", args=[self.bu1.id]),
+            {"manager": self.manager2.id},
+        )
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.bu1.refresh_from_db()
+        self.assertEqual(self.bu1.manager, self.manager2)
+
+    def test_manager_cannot_reassign_own_bu_to_another_manager(self):
+        """BU Manager cannot reassign their own BU to a different manager"""
+        self.client.force_authenticate(user=self.manager1)
+        response = self.client.patch(
+            reverse("business-unit-detail", args=[self.bu1.id]),
+            {"manager": self.manager2.id},
+        )
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.bu1.refresh_from_db()
+        self.assertEqual(self.bu1.manager, self.manager1)
+
+    def test_manager_cannot_remove_manager_from_own_bu(self):
+        """BU Manager cannot remove or nullify the manager field"""
+        self.client.force_authenticate(user=self.manager1)
+        response = self.client.patch(
+            reverse("business-unit-detail", args=[self.bu1.id]),
+            {"manager": None},
+            format="json",
+        )
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.bu1.refresh_from_db()
+        self.assertEqual(self.bu1.manager, self.manager1)
+
+    def test_manager_cannot_change_code(self):
+        """BU Manager cannot change the code of their own BU"""
+        self.client.force_authenticate(user=self.manager1)
+        response = self.client.patch(
+            reverse("business-unit-detail", args=[self.bu1.id]),
+            {"code": "HACKED"},
+        )
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+        self.bu1.refresh_from_db()
+        self.assertEqual(self.bu1.code, "BU1")
+
+    def test_manager_cannot_deactivate_own_bu(self):
+        """BU Manager cannot deactivate their own BU"""
+        self.client.force_authenticate(user=self.manager1)
+        response = self.client.patch(
+            reverse("business-unit-detail", args=[self.bu1.id]),
+            {"is_active": False},
+        )
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+        self.bu1.refresh_from_db()
+        self.assertTrue(self.bu1.is_active)
+
+    def test_manager_cannot_modify_other_bu(self):
+        """BU Manager cannot modify another BU's data"""
+        self.client.force_authenticate(user=self.manager1)
+        response = self.client.patch(
+            reverse("business-unit-detail", args=[self.bu2.id]),
+            {"name": "Hacked BU"},
+        )
+        self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
+
+    def test_manager_can_update_own_bu_description(self):
+        """BU Manager can update allowed fields on their own BU"""
+        self.client.force_authenticate(user=self.manager1)
+        response = self.client.patch(
+            reverse("business-unit-detail", args=[self.bu1.id]),
+            {"description": "Nouvelle description"},
+        )
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.bu1.refresh_from_db()
+        self.assertEqual(self.bu1.description, "Nouvelle description")
+
+
+class BusinessUnitMembershipTests(APITestCase):
+    """Tests for membership history constraint changes"""
+
+    def setUp(self):
+        self.hr = User.objects.create_user(
+            email="hr@test.com", password="pwd", role=UserRole.HR
+        )
+        self.manager = User.objects.create_user(
+            email="mgr@test.com", password="pwd", role=UserRole.BU_MANAGER
+        )
+        self.employee = User.objects.create_user(
+            email="emp@test.com", password="pwd", role=UserRole.EMPLOYEE
+        )
+        self.bu = BusinessUnit.objects.create(
+            name="Test BU", code="TBU", manager=self.manager
+        )
+
+    def test_duplicate_active_membership_rejected(self):
+        """Creating a second active membership for the same user/BU is rejected"""
+        BusinessUnitMembership.objects.create(
+            business_unit=self.bu, user=self.employee, is_active=True
+        )
+        with self.assertRaises(Exception):
+            BusinessUnitMembership.objects.create(
+                business_unit=self.bu, user=self.employee, is_active=True
+            )
+
+    def test_inactive_historical_membership_preserved(self):
+        """Creating an inactive membership does not affect existing inactive history"""
+        membership = BusinessUnitMembership.objects.create(
+            business_unit=self.bu, user=self.employee, is_active=True
+        )
+        membership.is_active = False
+        membership.save()
+        # Still one membership record
+        self.assertEqual(BusinessUnitMembership.objects.count(), 1)
+        self.assertEqual(BusinessUnitMembership.objects.first().is_active, False)
+
+    def test_user_can_rejoin_after_inactive(self):
+        """A user can rejoin a BU after their previous membership becomes inactive"""
+        membership = BusinessUnitMembership.objects.create(
+            business_unit=self.bu, user=self.employee, is_active=True
+        )
+        membership.is_active = False
+        membership.save()
+
+        # Rejoin
+        new_membership = BusinessUnitMembership.objects.create(
+            business_unit=self.bu, user=self.employee, is_active=True
+        )
+        self.assertTrue(new_membership.is_active)
+        self.assertEqual(BusinessUnitMembership.objects.count(), 2)
+
+    def test_unrelated_memberships_unaffected(self):
+        """Creating memberships for different BUs or users works normally"""
+        bu2 = BusinessUnit.objects.create(
+            name="BU 2", code="BU2", manager=self.manager
+        )
+        employee2 = User.objects.create_user(
+            email="emp2@test.com", password="pwd", role=UserRole.EMPLOYEE
+        )
+
+        m1 = BusinessUnitMembership.objects.create(
+            business_unit=self.bu, user=self.employee, is_active=True
+        )
+        m2 = BusinessUnitMembership.objects.create(
+            business_unit=bu2, user=self.employee, is_active=True
+        )
+        m3 = BusinessUnitMembership.objects.create(
+            business_unit=self.bu, user=employee2, is_active=True
+        )
+
+        self.assertTrue(m1.is_active)
+        self.assertTrue(m2.is_active)
+        self.assertTrue(m3.is_active)

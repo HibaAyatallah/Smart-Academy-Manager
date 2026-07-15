@@ -1,14 +1,15 @@
 import { HttpErrorResponse } from '@angular/common/http';
 import { NgIf } from '@angular/common';
-import { Component, inject } from '@angular/core';
+import { ChangeDetectorRef, Component, inject } from '@angular/core';
 import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
 import { MatButtonModule } from '@angular/material/button';
 import { MatCardModule } from '@angular/material/card';
 import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatInputModule } from '@angular/material/input';
 import { MatIconModule } from '@angular/material/icon';
-import { ActivatedRoute, Router } from '@angular/router';
+import { Router } from '@angular/router';
 import { RouterLink } from '@angular/router';
+import { TimeoutError, timeout } from 'rxjs';
 import { finalize } from 'rxjs/operators';
 
 import { AuthService } from '../../../core/services/auth.service';
@@ -30,9 +31,10 @@ import { AuthService } from '../../../core/services/auth.service';
   styleUrl: './login.component.scss',
 })
 export class LoginComponent {
+  private static readonly loginTimeoutMs = 10_000;
   private readonly authService = inject(AuthService);
+  private readonly changeDetectorRef = inject(ChangeDetectorRef);
   private readonly formBuilder = inject(FormBuilder);
-  private readonly route = inject(ActivatedRoute);
   private readonly router = inject(Router);
 
   readonly loginForm = this.formBuilder.nonNullable.group({
@@ -44,7 +46,7 @@ export class LoginComponent {
   errorMessage = '';
   hidePassword = true;
 
-  submit(): void {
+  onSubmit(): void {
     if (this.loginForm.invalid || this.isSubmitting) {
       this.loginForm.markAllAsTouched();
       return;
@@ -56,37 +58,37 @@ export class LoginComponent {
     this.authService
       .login(this.loginForm.getRawValue())
       .pipe(
+        timeout(LoginComponent.loginTimeoutMs),
         finalize(() => {
           this.isSubmitting = false;
+          this.changeDetectorRef.markForCheck();
         }),
       )
       .subscribe({
-        next: () => {
-          const returnUrl = this.route.snapshot.queryParamMap.get('returnUrl');
-          const redirectUrl = this.resolveRedirectUrl(returnUrl);
-          void this.router.navigateByUrl(redirectUrl);
+        next: (profile) => {
+          const dashboardUrl = this.authService.getDashboardUrlForRole(profile.role);
+          void this.router.navigateByUrl(dashboardUrl);
         },
-        error: (error: HttpErrorResponse) => {
+        error: (error: unknown) => {
           console.error('[Auth] Échec de connexion.');
           this.errorMessage = this.resolveErrorMessage(error);
         },
       });
   }
 
-  private resolveRedirectUrl(returnUrl: string | null): string {
-    if (returnUrl && !returnUrl.startsWith('/login')) {
-      return returnUrl;
+  private resolveErrorMessage(error: unknown): string {
+    if (error instanceof TimeoutError) {
+      return 'Le backend ne répond pas. Vérifiez qu\'il est bien démarré.';
     }
-    return '/dashboard';
-  }
-
-  private resolveErrorMessage(error: HttpErrorResponse): string {
+    if (!(error instanceof HttpErrorResponse)) {
+      return 'La connexion a échoué. Réessayez dans un instant.';
+    }
     if (error.status === 401) {
       return 'Email ou mot de passe incorrect.';
     }
     if (error.status === 0) {
-      return 'Impossible de joindre l API Django locale.';
+      return 'Impossible de joindre le backend. Vérifiez qu\'il est bien démarré.';
     }
-    return 'La connexion a echoue. Reessaie dans un instant.';
+    return 'La connexion a échoué. Réessayez dans un instant.';
   }
 }

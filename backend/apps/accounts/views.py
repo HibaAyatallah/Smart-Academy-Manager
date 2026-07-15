@@ -1,6 +1,7 @@
 from django.contrib.auth import get_user_model
 from rest_framework import viewsets
-from rest_framework.generics import RetrieveUpdateAPIView
+from rest_framework.generics import GenericAPIView, RetrieveUpdateAPIView
+from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
 from rest_framework_simplejwt.views import TokenObtainPairView
 
@@ -8,16 +9,19 @@ from .permissions import CanManageUsers
 from .roles import is_administrative_user
 from .serializers import (
     MeSerializer,
+    ChangePasswordSerializer,
     SmartAcademyTokenObtainPairSerializer,
     UserCreateSerializer,
     UserSerializer,
 )
+from .throttles import LoginRateThrottle
 
 User = get_user_model()
 
 
 class SmartAcademyTokenObtainPairView(TokenObtainPairView):
     serializer_class = SmartAcademyTokenObtainPairSerializer
+    throttle_classes = [LoginRateThrottle]
 
 
 class MeAPIView(RetrieveUpdateAPIView):
@@ -26,6 +30,17 @@ class MeAPIView(RetrieveUpdateAPIView):
 
     def get_object(self):
         return self.request.user
+
+
+class ChangePasswordAPIView(GenericAPIView):
+    serializer_class = ChangePasswordSerializer
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        serializer.save()
+        return Response({"detail": "Mot de passe modifié avec succès."})
 
 
 class UserViewSet(viewsets.ModelViewSet):

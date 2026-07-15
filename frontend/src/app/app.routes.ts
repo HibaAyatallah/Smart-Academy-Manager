@@ -53,6 +53,7 @@ export const routes: Routes = [
     canActivate: [authGuard],
     loadComponent: () => import('./layouts/main-layout/main-layout.component').then(m => m.MainLayoutComponent),
     children: [
+      { path: 'espace-personnel', data: { title: 'Mon espace personnel' }, loadComponent: () => import('./features/personal-space/personal-space.component').then(m => m.PersonalSpaceComponent) },
       {
         path: 'dashboard',
         pathMatch: 'full',
@@ -61,19 +62,19 @@ export const routes: Routes = [
       {
         path: 'applications/my',
         canActivate: [roleGuard],
-        data: { roles: ['CANDIDATE'] },
+        data: { roles: ['CANDIDATE'], title: 'Mes candidatures' },
         loadComponent: () => import('./features/applications/candidate-applications/candidate-applications.component').then(m => m.CandidateApplicationsComponent),
       },
       {
         path: 'applications/:id',
         canActivate: [roleGuard],
-        data: { roles: ['SUPER_ADMIN', 'HR'] },
+        data: { roles: ['SUPER_ADMIN', 'HR'], title: 'Détail de la candidature' },
         loadComponent: () => import('./features/applications/application-detail/application-detail.component').then(m => m.ApplicationDetailComponent),
       },
       {
         path: 'applications',
         canActivate: [roleGuard],
-        data: { roles: ['SUPER_ADMIN', 'HR'] },
+        data: { roles: ['SUPER_ADMIN', 'HR'], title: 'Candidatures' },
         loadComponent: () => import('./features/applications/hr-application-list/hr-application-list.component').then(m => m.HrApplicationListComponent),
       },
       dashboardRoute('dashboard/super-admin', 'SUPER_ADMIN', 'Dashboard super administrateur'),
@@ -88,7 +89,7 @@ export const routes: Routes = [
       {
         path: 'business-units',
         canActivate: [roleGuard],
-        data: { roles: ['SUPER_ADMIN', 'HR', 'BU_MANAGER'] },
+        data: { roles: ['SUPER_ADMIN', 'HR', 'BU_MANAGER'], title: 'Business Units' },
         children: [
           {
             path: '',
@@ -96,14 +97,17 @@ export const routes: Routes = [
           },
           {
             path: 'needs',
+            data: { title: 'Besoins des Business Units' },
             loadComponent: () => import('./features/business-units/bu-needs-list/bu-needs-list').then(m => m.BuNeedsList),
           },
           {
             path: ':id',
+            data: { title: 'Détail de la Business Unit' },
             loadComponent: () => import('./features/business-units/bu-detail/bu-detail').then(m => m.BuDetail),
           },
           {
             path: ':id/needs/:needId',
+            data: { title: 'Détail du besoin' },
             loadComponent: () => import('./features/business-units/bu-need-detail/bu-need-detail').then(m => m.BuNeedDetail),
           },
         ]

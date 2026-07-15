@@ -3,8 +3,8 @@
   subtitle="Gérer les besoins des Business Units"
 />
 
-<mat-card class="filters-card" style="margin-bottom: 2rem;">
-  <form [formGroup]="filtersForm" class="filters" (ngSubmit)="applyFilters()" style="display: flex; gap: 1rem; align-items: center; flex-wrap: wrap;">
+<mat-card class="filters-card">
+  <form [formGroup]="filtersForm" class="filters" (ngSubmit)="applyFilters()">
     <mat-form-field appearance="outline">
       <mat-label>Recherche</mat-label>
       <input matInput formControlName="search" placeholder="Titre du besoin">
@@ -35,32 +35,31 @@
     </mat-form-field>
 
     <div class="filter-actions">
-      <button mat-stroked-button type="button" (click)="resetFilters()" style="margin-right: 0.5rem;">Réinitialiser</button>
+      <button mat-stroked-button type="button" (click)="resetFilters()">Réinitialiser</button>
       <button mat-flat-button color="primary" type="submit">Filtrer</button>
     </div>
   </form>
 </mat-card>
 
-<div class="loading" *ngIf="isLoading" style="display: flex; justify-content: center; margin: 2rem;">
+<div class="loading" *ngIf="isLoading">
   <mat-spinner diameter="36"></mat-spinner>
 </div>
 
-<p class="error-state" *ngIf="!isLoading && errorMessage" style="color: red; text-align: center;">
+<p class="error-state" *ngIf="!isLoading && errorMessage">
   {{ errorMessage }}
 </p>
 
 <mat-card class="table-card" *ngIf="!isLoading && !errorMessage">
-  <div class="table-header" style="padding: 1rem; display: flex; justify-content: space-between; align-items: center;">
+  <div class="table-header">
     <strong>{{ total }} Besoin(s)</strong>
-    <!-- We hide global create here because creating a need requires a BU id in route usually, but a global create is fine if we provide a select list. For now, no global create button. -->
   </div>
 
-  <p class="empty-state" *ngIf="!needs.length" style="padding: 2rem; text-align: center;">
+  <p class="empty-state" *ngIf="!needs.length">
     Aucun besoin trouvé.
   </p>
 
   <div class="table-wrapper" *ngIf="needs.length">
-    <table mat-table [dataSource]="needs" style="width: 100%;">
+    <table mat-table [dataSource]="needs">
       <ng-container matColumnDef="title">
         <th mat-header-cell *matHeaderCellDef>Titre</th>
         <td mat-cell *matCellDef="let need">
@@ -85,7 +84,7 @@
       <ng-container matColumnDef="status">
         <th mat-header-cell *matHeaderCellDef>Statut</th>
         <td mat-cell *matCellDef="let need">
-          {{ need.status_label }}
+          <span class="status-pill">{{ need.status_label }}</span>
         </td>
       </ng-container>
 
@@ -105,7 +104,7 @@
 
       <ng-container matColumnDef="actions">
         <th mat-header-cell *matHeaderCellDef></th>
-        <td mat-cell *matCellDef="let need" style="text-align: right;">
+        <td mat-cell *matCellDef="let need" class="actions-cell">
           <a mat-button [routerLink]="['/business-units', need.business_unit, 'needs', need.id]">Détails</a>
         </td>
       </ng-container>

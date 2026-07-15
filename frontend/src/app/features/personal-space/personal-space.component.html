@@ -1,0 +1,13 @@
+<app-page-header title="Mon espace personnel" subtitle="Consultez vos informations et sécurisez votre compte." />
+<ng-container *ngIf="auth.currentUser$ | async as user">
+  <section aria-labelledby="personal-title"><h2 id="personal-title">Informations personnelles</h2><mat-card class="info-grid">
+    <div><span>Prénom</span><strong>{{user.first_name || 'Non renseigné'}}</strong></div><div><span>Nom</span><strong>{{user.last_name || 'Non renseigné'}}</strong></div>
+    <div><span>Adresse e-mail</span><strong>{{user.email}}</strong></div><div><span>Rôle</span><strong>{{labels[user.role]}}</strong></div><div><span>Téléphone</span><strong>{{user.phone_number || 'Non renseigné'}}</strong></div>
+  </mat-card></section>
+  <section aria-labelledby="security-title"><h2 id="security-title">Sécurité du compte</h2><mat-card><form [formGroup]="form" (ngSubmit)="submit()">
+    <mat-form-field><mat-label>Mot de passe actuel</mat-label><input matInput [type]="hideCurrent?'password':'text'" formControlName="current_password"><button mat-icon-button matSuffix type="button" aria-label="Afficher ou masquer le mot de passe actuel" (click)="hideCurrent=!hideCurrent"><mat-icon>{{hideCurrent?'visibility':'visibility_off'}}</mat-icon></button><mat-error>Champ obligatoire</mat-error></mat-form-field>
+    <mat-form-field><mat-label>Nouveau mot de passe</mat-label><input matInput [type]="hideNew?'password':'text'" formControlName="new_password"><button mat-icon-button matSuffix type="button" aria-label="Afficher ou masquer le nouveau mot de passe" (click)="hideNew=!hideNew"><mat-icon>{{hideNew?'visibility':'visibility_off'}}</mat-icon></button><mat-error>8 caractères minimum</mat-error></mat-form-field>
+    <mat-form-field><mat-label>Confirmation</mat-label><input matInput [type]="hideConfirmation?'password':'text'" formControlName="confirmation"><button mat-icon-button matSuffix type="button" aria-label="Afficher ou masquer la confirmation" (click)="hideConfirmation=!hideConfirmation"><mat-icon>{{hideConfirmation?'visibility':'visibility_off'}}</mat-icon></button><mat-error>Champ obligatoire</mat-error></mat-form-field>
+    <p class="success" role="status" *ngIf="success">{{success}}</p><p class="error" role="alert" *ngIf="error">{{error}}</p><button mat-flat-button color="primary" type="submit" [disabled]="busy">{{busy?'Modification…':'Modifier le mot de passe'}}</button>
+  </form></mat-card></section>
+</ng-container>

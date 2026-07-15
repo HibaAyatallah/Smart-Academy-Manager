@@ -7,7 +7,7 @@ import { MatPaginatorModule, PageEvent } from '@angular/material/paginator';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
 import { ActivatedRoute } from '@angular/router';
-import { filter, finalize, map, take } from 'rxjs/operators';
+import { finalize, map, shareReplay, take } from 'rxjs/operators';
 
 import { ROLE_LABELS } from '../../core/models/auth.models';
 import {
@@ -21,6 +21,7 @@ import {
 import { ApplicationService } from '../../core/services/application.service';
 import { AuthService } from '../../core/services/auth.service';
 import { PageHeaderComponent } from '../../shared/components/page-header/page-header.component';
+import { EmptyStateComponent } from '../../shared/components/empty-state/empty-state.component';
 import {
   candidateApplicationStepLabel,
   candidateApplicationStepState,
@@ -37,6 +38,7 @@ import {
   imports: [
     AsyncPipe,
     DatePipe,
+    EmptyStateComponent,
     MatButtonModule,
     MatCardModule,
     MatChipsModule,
@@ -60,7 +62,9 @@ export class DashboardComponent implements OnDestroy, OnInit {
   readonly roleLabels = ROLE_LABELS;
   readonly typeLabels = APPLICATION_TYPE_LABELS;
   readonly statusLabels = APPLICATION_STATUS_LABELS;
-  readonly user$ = this.authService.currentUser$;
+  readonly user$ = this.authService.ensureProfile().pipe(
+    shareReplay({ bufferSize: 1, refCount: true }),
+  );
   readonly title$ = this.route.data.pipe(map((data) => data['title'] as string));
   candidateApplications: Application[] = [];
   candidatePhotoUrls = new Map<number, string>();
@@ -83,10 +87,7 @@ export class DashboardComponent implements OnDestroy, OnInit {
     }
     // Fallback: profile not yet in cache (should not happen in practice
     // thanks to the guard, but keeps the component self-contained).
-    this.authService.currentUser$.pipe(
-      filter((u): u is NonNullable<typeof u> => u !== null),
-      take(1),
-    ).subscribe((u) => {
+    this.user$.pipe(take(1)).subscribe((u) => {
       if (u.role === 'CANDIDATE') {
         this.loadCandidateApplications();
       }
@@ -95,10 +96,6 @@ export class DashboardComponent implements OnDestroy, OnInit {
 
   ngOnDestroy(): void {
     this.candidatePhotoUrls.forEach((url) => URL.revokeObjectURL(url));
-  }
-
-  logout(): void {
-    this.authService.logout();
   }
 
   loadCandidateApplications(): void {
