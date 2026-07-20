@@ -44,6 +44,7 @@ Le frontend Angular contient l'authentification, les espaces par rôle, le recru
 - Business Units, membres et besoins ;
 - catalogue de formations et gestion des sessions ;
 - demandes d'inscription, validation Manager puis Super Admin et historique ;
+- gestion des stages : affectations, dates, progression, documents et évaluations ;
 - vues dédiées Formateur/Tuteur et Client externe ;
 - documentation OpenAPI/Swagger.
 

@@ -79,7 +79,7 @@ def is_employee(user) -> bool:
 class IsInternshipParticipant(BasePermission):
     """
     Super Admin: Full CRUD.
-    HR: Read-only access to all interns.
+    HR: Full internship administration access.
     BU Manager: Read-only access to interns assigned to their BU.
     Supervisor: Read-only access to interns they supervise.
     Intern: Read-only access to their own profile.
@@ -89,20 +89,23 @@ class IsInternshipParticipant(BasePermission):
         user = request.user
         if not user or not user.is_authenticated:
             return False
-        if is_recruitment_manager(user):
+        if is_recruitment_manager(user) or is_hr(user):
             return True
+        if is_intern(user) and view.basename == "intern-document":
+            return request.method in SAFE_METHODS or request.method == "POST"
+        if is_employee(user) and view.basename == "intern":
+            return request.method in SAFE_METHODS or request.method == "PATCH"
+        if is_employee(user) and view.basename == "intern-evaluation":
+            return request.method in SAFE_METHODS or request.method in {"POST", "PATCH"}
+        if is_employee(user) and view.basename == "intern-document":
+            return request.method in SAFE_METHODS or request.method == "POST"
         return request.method in SAFE_METHODS and (
-            is_hr(user) or is_bu_manager(user) or is_intern(user) or is_employee(user)
+            is_bu_manager(user) or is_intern(user) or is_employee(user)
         )
 
     def has_object_permission(self, request, view, obj) -> bool:
         user = request.user
-        if is_recruitment_manager(user):
-            return True
-        if request.method not in SAFE_METHODS:
-            return False
-
-        if is_hr(user):
+        if is_recruitment_manager(user) or is_hr(user):
             return True
 
         if hasattr(obj, "intern"):
@@ -111,6 +114,8 @@ class IsInternshipParticipant(BasePermission):
             intern_profile = obj
 
         if is_intern(user):
+            if request.method not in SAFE_METHODS:
+                return False
             return intern_profile.user_id == user.id
 
         if is_bu_manager(user):
@@ -119,7 +124,11 @@ class IsInternshipParticipant(BasePermission):
                 and intern_profile.business_unit.manager_id == user.id
             )
 
-        return intern_profile.supervisor_id == user.id
+        if is_employee(user) and intern_profile.supervisor_id == user.id:
+            if view.basename == "intern-document":
+                return request.method in SAFE_METHODS
+            return request.method in SAFE_METHODS or request.method in {"POST", "PATCH"}
+        return False
 
 
 class CanManageOffersOrReadPublished(BasePermission):

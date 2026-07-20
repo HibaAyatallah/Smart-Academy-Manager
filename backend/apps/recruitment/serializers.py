@@ -547,6 +547,19 @@ class InternEvaluationSerializer(serializers.ModelSerializer):
         ]
         read_only_fields = ["id", "evaluator", "evaluator_email", "created_at"]
 
+    def validate(self, attrs):
+        score_fields = [
+            "technical_skills", "autonomy", "communication", "teamwork",
+            "deadline_respect", "work_quality", "professionalism",
+        ]
+        for field in score_fields:
+            value = attrs.get(field, getattr(self.instance, field, 0))
+            if value < 0 or value > 5:
+                raise serializers.ValidationError({field: "La note doit être comprise entre 0 et 5."})
+        scores = [attrs.get(field, getattr(self.instance, field, 0)) for field in score_fields]
+        attrs["overall_score"] = round(sum(scores) / len(scores), 2)
+        return attrs
+
 
 class InternProfileSerializer(serializers.ModelSerializer):
     user_email = serializers.EmailField(source="user.email", read_only=True)
@@ -584,3 +597,15 @@ class InternProfileSerializer(serializers.ModelSerializer):
             "created_at",
         ]
         read_only_fields = ["id", "user", "source_application", "created_at"]
+
+    def validate_progress(self, value):
+        if value < 0 or value > 100:
+            raise serializers.ValidationError("La progression doit être comprise entre 0 et 100.")
+        return value
+
+    def validate(self, attrs):
+        start = attrs.get("internship_start", getattr(self.instance, "internship_start", None))
+        end = attrs.get("internship_end", getattr(self.instance, "internship_end", None))
+        if start and end and start > end:
+            raise serializers.ValidationError({"internship_end": "La date de fin doit suivre la date de début."})
+        return attrs

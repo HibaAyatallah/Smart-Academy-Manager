@@ -20,6 +20,16 @@ describe('Business Unit routes', () => {
     expect(client?.data?.['roles']).toEqual(['CLIENT']);
   });
 
+  it('separates intern self-service from internship administration', () => {
+    const privateShell = routes.find((route) => route.canActivate?.length && route.children);
+    const own = privateShell?.children?.find((child) => child.path === 'internships/me');
+    const detail = privateShell?.children?.find((child) => child.path === 'internships/:id');
+    const list = privateShell?.children?.find((child) => child.path === 'internships');
+    expect(own?.data?.['roles']).toEqual(['INTERN']);
+    expect(detail?.data?.['roles']).toContain('EMPLOYEE');
+    expect(list?.data?.['roles']).toContain('HR');
+  });
+
   it('exposes only implemented BU pages and preserves role restrictions', () => {
     const privateShell = routes.find((route) => route.canActivate?.length && route.children);
     const businessUnits = privateShell?.children?.find((route) => route.path === 'business-units');

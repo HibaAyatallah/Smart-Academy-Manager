@@ -154,6 +154,24 @@ export const routes: Routes = [
         data: { roles: ['CLIENT'], title: 'Formations client' },
         loadComponent: () => import('./features/trainings/client-training-view/client-training-view.component').then(m => m.ClientTrainingViewComponent),
       },
+      {
+        path: 'internships/me',
+        canActivate: [roleGuard],
+        data: { roles: ['INTERN'], title: 'Mon stage' },
+        loadComponent: () => import('./features/internships/intern-detail/intern-detail.component').then(m => m.InternDetailComponent),
+      },
+      {
+        path: 'internships/:id',
+        canActivate: [roleGuard],
+        data: { roles: ['SUPER_ADMIN', 'HR', 'BU_MANAGER', 'EMPLOYEE'], title: 'Dossier de stage' },
+        loadComponent: () => import('./features/internships/intern-detail/intern-detail.component').then(m => m.InternDetailComponent),
+      },
+      {
+        path: 'internships',
+        canActivate: [roleGuard],
+        data: { roles: ['SUPER_ADMIN', 'HR', 'BU_MANAGER', 'EMPLOYEE'], title: 'Stagiaires' },
+        loadComponent: () => import('./features/internships/intern-list/intern-list.component').then(m => m.InternListComponent),
+      },
       // Business Units Routes
       {
         path: 'business-units',

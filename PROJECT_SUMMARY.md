@@ -1,6 +1,6 @@
 # Smart Academy Manager — Project Summary
 
-> **Mise à jour 2026-07-20 :** les sections historiques qui qualifient les offres, stages et formations de modules absents sont obsolètes. Le code actuel comprend les offres, les profils/documents/évaluations de stage, ainsi qu'un workflow de formation complet : catalogue, sessions, inscriptions, validation BU Manager puis Super Admin, vues Formateur/Tuteur et Client. Le frontend de production compile et les migrations Django ne présentent aucune dérive. Les prochains modules majeurs restent les projets, la présence, les certificats, les notifications, les rapports/KPI, Moodle, le CI/CD et le déploiement.
+> **Mise à jour 2026-07-20 :** les sections historiques qui qualifient les offres, stages et formations de modules absents sont obsolètes. Le code actuel comprend les offres, un workflow Angular complet de gestion des stages (affectations, dates, statut, progression, documents et évaluations), ainsi que le workflow de formation : catalogue, sessions, inscriptions, validation BU Manager puis Super Admin, vues Formateur/Tuteur et Client. Le frontend de production compile et les migrations Django ne présentent aucune dérive. Les prochains modules majeurs restent les projets, la présence, les certificats, les notifications, les rapports/KPI, Moodle, le CI/CD et le déploiement.
 
 ## 1. Project Overview
 

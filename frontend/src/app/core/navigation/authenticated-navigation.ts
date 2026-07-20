@@ -55,6 +55,13 @@ export const AUTHENTICATED_NAVIGATION: readonly NavigationSection[] = [
       { label: 'Mes formations client', icon: 'business_center', route: '/client-trainings', roles: ['CLIENT'] },
     ],
   },
+  {
+    label: 'Stages',
+    items: [
+      { label: 'Gestion des stagiaires', icon: 'badge', route: '/internships', roles: ['SUPER_ADMIN', 'HR', 'BU_MANAGER', 'EMPLOYEE'] },
+      { label: 'Mon stage', icon: 'assignment', route: '/internships/me', roles: ['INTERN'] },
+    ],
+  },
 ];
 
 export function navigationForRole(role: UserRole): NavigationSection[] {

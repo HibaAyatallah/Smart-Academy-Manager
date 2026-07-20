@@ -161,3 +161,14 @@ Super Admin et HR administrent le catalogue et les sessions. Les autres rôles i
 - `GET /api/client/sessions/`.
 
 Ces endpoints sont strictement limités au profil client connecté.
+
+## Stages
+
+- `GET /api/interns/` et `GET /api/interns/{id}/` : dossiers filtrés selon le rôle ;
+- `PATCH /api/interns/{id}/` : administration Super Admin/RH, ou progression et statut pour le superviseur affecté ;
+- `POST /api/intern-documents/` : ajout de document par le stagiaire concerné, son superviseur, RH ou Super Admin ;
+- `GET /api/intern-documents/{id}/download/` : téléchargement proté ;
+- `POST /api/intern-documents/{id}/validate/` : validation RH ou Super Admin ;
+- `POST /api/intern-evaluations/` : évaluation par le superviseur affecté, RH ou Super Admin.
+
+Le Super Admin et RH voient et administrent tous les stages. Les superviseurs voient uniquement leurs stagiaires, les BU Managers uniquement ceux de leur BU, et les stagiaires uniquement leur propre dossier.

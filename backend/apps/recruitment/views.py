@@ -1,6 +1,7 @@
 from django.db.models import Q
 from django.http import FileResponse, Http404
-from rest_framework import status, viewsets
+from rest_framework import filters, status, viewsets
+from django_filters.rest_framework import DjangoFilterBackend
 from rest_framework.decorators import action
 from rest_framework.exceptions import PermissionDenied
 from rest_framework.parsers import FormParser, JSONParser, MultiPartParser
@@ -385,6 +386,11 @@ class InterviewViewSet(viewsets.ModelViewSet):
 class InternProfileViewSet(viewsets.ModelViewSet):
     serializer_class = InternProfileSerializer
     permission_classes = [IsInternshipParticipant]
+    filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
+    filterset_fields = ["business_unit", "supervisor", "current_status", "internship_type", "paid"]
+    search_fields = ["user__email", "user__first_name", "user__last_name", "school", "specialization", "subject_title"]
+    ordering_fields = ["created_at", "internship_start", "internship_end", "progress"]
+    ordering = ["-created_at"]
     
     def get_queryset(self):
         queryset = InternProfile.objects.select_related(
@@ -402,6 +408,14 @@ class InternProfileViewSet(viewsets.ModelViewSet):
             return queryset.filter(user_id=user.id)
             
         return queryset.filter(supervisor_id=user.id)
+
+    def perform_update(self, serializer):
+        user = self.request.user
+        if is_employee(user) and not (is_recruitment_manager(user) or is_hr(user)):
+            forbidden = set(serializer.validated_data) - {"progress", "current_status", "final_decision"}
+            if forbidden:
+                raise PermissionDenied("Le superviseur peut uniquement mettre à jour la progression et le statut.")
+        serializer.save()
 
 
 class InternDocumentViewSet(viewsets.ModelViewSet):
@@ -423,6 +437,35 @@ class InternDocumentViewSet(viewsets.ModelViewSet):
             
         return queryset.filter(intern__supervisor_id=user.id)
 
+    def perform_create(self, serializer):
+        intern = serializer.validated_data["intern"]
+        user = self.request.user
+        if is_intern(user) and intern.user_id != user.id:
+            raise PermissionDenied("Vous pouvez uniquement ajouter vos propres documents.")
+        if is_employee(user) and not (is_recruitment_manager(user) or is_hr(user)) and intern.supervisor_id != user.id:
+            raise PermissionDenied("Ce stagiaire ne vous est pas affecté.")
+        serializer.save()
+
+    @action(detail=True, methods=["get"], url_path="download")
+    def download(self, request, pk=None):
+        document = self.get_object()
+        if not document.file:
+            raise Http404
+        return FileResponse(document.file.open("rb"), as_attachment=True, filename=document.file.name.rsplit("/", 1)[-1])
+
+    @action(detail=True, methods=["post"], url_path="validate")
+    def validate_document(self, request, pk=None):
+        if not (is_recruitment_manager(request.user) or is_hr(request.user)):
+            raise PermissionDenied("Seuls le Super Admin et RH peuvent valider un document.")
+        document = self.get_object()
+        from django.utils import timezone
+        document.is_validated = True
+        document.validated_at = timezone.now()
+        document.validator = request.user
+        document.comment = request.data.get("comment", document.comment)
+        document.save(update_fields=["is_validated", "validated_at", "validator", "comment"])
+        return Response(self.get_serializer(document).data)
+
 
 class InternEvaluationViewSet(viewsets.ModelViewSet):
     serializer_class = InternEvaluationSerializer
@@ -442,3 +485,19 @@ class InternEvaluationViewSet(viewsets.ModelViewSet):
             return queryset.filter(intern__user_id=user.id)
             
         return queryset.filter(intern__supervisor_id=user.id)
+
+    def perform_create(self, serializer):
+        intern = serializer.validated_data["intern"]
+        user = self.request.user
+        if is_employee(user) and not (is_recruitment_manager(user) or is_hr(user)) and intern.supervisor_id != user.id:
+            raise PermissionDenied("Ce stagiaire ne vous est pas affecté.")
+        serializer.save(evaluator=user)
+
+    def perform_update(self, serializer):
+        evaluation = self.get_object()
+        user = self.request.user
+        if is_employee(user) and not (is_recruitment_manager(user) or is_hr(user)) and evaluation.evaluator_id != user.id:
+            raise PermissionDenied("Vous pouvez uniquement modifier vos propres évaluations.")
+        if "intern" in serializer.validated_data and serializer.validated_data["intern"].id != evaluation.intern_id:
+            raise PermissionDenied("Une évaluation ne peut pas être réaffectée à un autre stagiaire.")
+        serializer.save()
