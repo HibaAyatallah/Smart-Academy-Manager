@@ -221,7 +221,7 @@ Latest verified results from the stabilization sprint (2026-07-14):
 
 Note: Running all backend tests together occasionally causes a PostgreSQL database lock. This is a pre-existing test infrastructure issue, not a code issue. Individual app test suites run successfully.
 
-Total automated test count: 146 tests (73 backend + 73 frontend), all passing.
+Total automated test count: 269 tests (147 backend + 122 frontend), all passing.
 
 Business Unit frontend tests:
 - `bu-list.spec.ts`: 4 tests covering create, load, empty state, pagination, error state
@@ -232,7 +232,6 @@ Business Unit frontend tests:
 
 The following target modules are not yet implemented end to end:
 
-- Projects
 - Attendance
 - Certificates
 - Notifications (notification inbox, preferences, delivery tracking)
@@ -242,27 +241,27 @@ The following target modules are not yet implemented end to end:
 - CI/CD
 - Production deployment
 
-Offers and the training/session/enrollment workflow are implemented across the backend and Angular frontend. Internship profiles, documents, and evaluations are implemented in the backend but still need a dedicated Angular administration workspace. The modules listed above are planned for future sprints.
+Offers, training/session/enrollment, internship management, and project management are implemented across the backend and Angular frontend. The modules listed above are planned for future sprints.
 
 ## 11. Current Project Progress
 
-**Overall progress: approximately 55%**
+**Overall progress: approximately 66%**
 
 This percentage is calculated from a weighted assessment of backend implementation, frontend implementation, frontend-backend integration, roles and security, tests and validation, and deployment and documentation. The scoring counts working connected behavior, not file presence.
 
 | Category | Weight | Score | Weighted contribution | Basis |
 |---|---|---:|---:|---|
-| Backend implementation | 25% | 70% | 17.50% | Auth, recruitment, offers, BU, internships and training APIs exist |
-| Frontend implementation | 25% | 56% | 14.00% | Public/auth/recruitment/BU/offers/users/training workflows are connected |
-| Frontend-backend integration | 20% | 62% | 12.40% | Main implemented modules have role-aware Angular routes and API services |
-| Roles and security | 10% | 58% | 5.80% | Scoped querysets, permissions, throttling and protected downloads exist |
-| Tests and validation | 10% | 45% | 4.50% | Broad backend and frontend suites exist; newer UI paths need deeper component coverage |
+| Backend implementation | 25% | 80% | 20.00% | Auth, recruitment, offers, BU, internships, training and project APIs exist |
+| Frontend implementation | 25% | 70% | 17.50% | Implemented core workflows are connected, including internships and projects |
+| Frontend-backend integration | 20% | 76% | 15.20% | Implemented modules have role-aware Angular routes, services and protected downloads |
+| Roles and security | 10% | 72% | 7.20% | Scoped querysets, object permissions, throttling and protected downloads exist |
+| Tests and validation | 10% | 52% | 5.20% | Broad backend/frontend suites and focused project permission tests exist |
 | Deployment and documentation | 10% | 12% | 1.20% | Local documentation/env example only; no deployment artifacts/CI |
-| **Total** | **100%** |  | **55.40%** | Weighted sum |
+| **Total** | **100%** |  | **66.30%** | Weighted sum |
 
 The percentage is not higher because:
 - Passing tests validate only the functionality that has been implemented.
-- Many planned modules (offers, projects, training, sessions, enrollments, attendance, evaluations, certificates, notifications, reports, Moodle, AI) are completely absent.
+- Several planned modules (attendance, certificates, notifications, reports, Moodle and AI) are still absent.
 - Production deployment, CI/CD, and infrastructure are not implemented.
 - The project is assessed against the final multi-module application scope, not an MVP.
 

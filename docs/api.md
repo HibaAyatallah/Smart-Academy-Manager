@@ -172,3 +172,14 @@ Ces endpoints sont strictement limités au profil client connecté.
 - `POST /api/intern-evaluations/` : évaluation par le superviseur affecté, RH ou Super Admin.
 
 Le Super Admin et RH voient et administrent tous les stages. Les superviseurs voient uniquement leurs stagiaires, les BU Managers uniquement ceux de leur BU, et les stagiaires uniquement leur propre dossier.
+
+## Projets
+
+- `GET|POST /api/projects/` et `GET|PATCH|DELETE /api/projects/{id}/` ;
+- `GET /api/projects/assignment-options/` : options d'affectation filtrées selon le rôle ;
+- `GET|POST /api/project-deliverables/` et `PATCH /api/project-deliverables/{id}/` ;
+- `GET|POST /api/project-comments/` ;
+- `GET|POST /api/project-documents/` ;
+- `GET /api/project-documents/{id}/download/` : téléchargement protégé.
+
+Le Super Admin administre tous les projets. RH dispose d'une vue globale en lecture seule. Un superviseur collaborateur crée et administre les projets de ses Business Units. Les collaborateurs et stagiaires affectés consultent leur projet, commentent, ajoutent des documents et mettent à jour le statut de leurs livrables. Les listes et objets sont filtrés côté API.

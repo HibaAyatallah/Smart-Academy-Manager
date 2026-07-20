@@ -30,6 +30,16 @@ describe('Business Unit routes', () => {
     expect(list?.data?.['roles']).toContain('HR');
   });
 
+  it('protects project management and keeps HR read-only at navigation level', () => {
+    const privateShell = routes.find((route) => route.canActivate?.length && route.children);
+    const list = privateShell?.children?.find((child) => child.path === 'projects');
+    const detail = privateShell?.children?.find((child) => child.path === 'projects/:id');
+    const create = privateShell?.children?.find((child) => child.path === 'projects/new');
+    expect(list?.data?.['roles']).toEqual(['SUPER_ADMIN', 'HR', 'EMPLOYEE', 'INTERN']);
+    expect(detail?.data?.['roles']).toEqual(['SUPER_ADMIN', 'HR', 'EMPLOYEE', 'INTERN']);
+    expect(create?.data?.['roles']).toEqual(['SUPER_ADMIN', 'EMPLOYEE']);
+  });
+
   it('exposes only implemented BU pages and preserves role restrictions', () => {
     const privateShell = routes.find((route) => route.canActivate?.length && route.children);
     const businessUnits = privateShell?.children?.find((route) => route.path === 'business-units');

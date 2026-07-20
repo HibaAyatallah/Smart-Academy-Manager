@@ -2,7 +2,7 @@
 
 Smart Academy Manager est une plateforme de gestion academique et RH construite avec Angular, Django REST Framework et PostgreSQL.
 
-Cette premiere etape met en place uniquement la fondation technique :
+Le projet fournit une fondation technique et plusieurs workflows metier complets :
 
 - backend Django structure et evolutif ;
 - PostgreSQL configure via variables d'environnement ;
@@ -45,6 +45,7 @@ Le frontend Angular contient l'authentification, les espaces par rôle, le recru
 - catalogue de formations et gestion des sessions ;
 - demandes d'inscription, validation Manager puis Super Admin et historique ;
 - gestion des stages : affectations, dates, progression, documents et évaluations ;
+- gestion des projets : affectations collaborateurs/stagiaires, livrables, progression, commentaires et documents ;
 - vues dédiées Formateur/Tuteur et Client externe ;
 - documentation OpenAPI/Swagger.
 

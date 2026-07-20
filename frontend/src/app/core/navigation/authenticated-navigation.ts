@@ -62,6 +62,12 @@ export const AUTHENTICATED_NAVIGATION: readonly NavigationSection[] = [
       { label: 'Mon stage', icon: 'assignment', route: '/internships/me', roles: ['INTERN'] },
     ],
   },
+  {
+    label: 'Projets',
+    items: [
+      { label: 'Projets', icon: 'folder_open', route: '/projects', roles: ['SUPER_ADMIN', 'HR', 'EMPLOYEE', 'INTERN'] },
+    ],
+  },
 ];
 
 export function navigationForRole(role: UserRole): NavigationSection[] {

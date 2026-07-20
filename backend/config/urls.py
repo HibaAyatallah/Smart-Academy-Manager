@@ -29,6 +29,7 @@ urlpatterns = [
     path("api/", include(router.urls)),
     path("api/", include("apps.business_units.urls")),
     path("api/", include("apps.trainings.urls")),
+    path("api/", include("apps.projects.urls")),
     # HR read-only endpoints (restricted scope: interns, collaborators by BU)
     path("api/", include("apps.accounts.hr_urls")),
     path("api/auth/token/", SmartAcademyTokenObtainPairView.as_view(), name="token_obtain_pair"),

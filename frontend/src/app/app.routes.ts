@@ -172,6 +172,24 @@ export const routes: Routes = [
         data: { roles: ['SUPER_ADMIN', 'HR', 'BU_MANAGER', 'EMPLOYEE'], title: 'Stagiaires' },
         loadComponent: () => import('./features/internships/intern-list/intern-list.component').then(m => m.InternListComponent),
       },
+      {
+        path: 'projects/new',
+        canActivate: [roleGuard],
+        data: { roles: ['SUPER_ADMIN', 'EMPLOYEE'], title: 'Nouveau projet' },
+        loadComponent: () => import('./features/projects/project-detail/project-detail.component').then(m => m.ProjectDetailComponent),
+      },
+      {
+        path: 'projects/:id',
+        canActivate: [roleGuard],
+        data: { roles: ['SUPER_ADMIN', 'HR', 'EMPLOYEE', 'INTERN'], title: 'Projet' },
+        loadComponent: () => import('./features/projects/project-detail/project-detail.component').then(m => m.ProjectDetailComponent),
+      },
+      {
+        path: 'projects',
+        canActivate: [roleGuard],
+        data: { roles: ['SUPER_ADMIN', 'HR', 'EMPLOYEE', 'INTERN'], title: 'Projets' },
+        loadComponent: () => import('./features/projects/project-list/project-list.component').then(m => m.ProjectListComponent),
+      },
       // Business Units Routes
       {
         path: 'business-units',

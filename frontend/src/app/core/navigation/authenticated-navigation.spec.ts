@@ -25,16 +25,26 @@ describe('authenticated navigation', () => {
 
   it('gives interns access to the training catalogue and their enrollments', () => {
     const sections = navigationForRole('INTERN');
-    expect(sections.length).toBe(3);
+    expect(sections.length).toBe(4);
     expect(sections[0].items[0].label).toBe('Tableau de bord');
     expect(labelsFor('INTERN')).toContain('Catalogue et sessions');
     expect(labelsFor('INTERN')).toContain('Inscriptions et validations');
     expect(labelsFor('INTERN')).toContain('Mon stage');
+    expect(labelsFor('INTERN')).toContain('Projets');
   });
 
   it('exposes scoped internship management to supervisors and HR', () => {
     expect(labelsFor('EMPLOYEE')).toContain('Gestion des stagiaires');
     expect(labelsFor('HR')).toContain('Gestion des stagiaires');
+  });
+
+  it('exposes project views only to project workflow roles', () => {
+    for (const role of ['SUPER_ADMIN', 'HR', 'EMPLOYEE', 'INTERN'] as const) {
+      expect(labelsFor(role)).toContain('Projets');
+    }
+    expect(labelsFor('HR')).not.toContain('Nouveau projet');
+    expect(labelsFor('CANDIDATE')).not.toContain('Projets');
+    expect(labelsFor('CLIENT')).not.toContain('Projets');
   });
 
   it('isolates the client training view', () => {

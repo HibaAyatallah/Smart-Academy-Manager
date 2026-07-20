@@ -1,0 +1,8 @@
+export type ProjectStatus='PLANNED'|'ACTIVE'|'ON_HOLD'|'COMPLETED'|'CANCELLED';export type DeliverableStatus='PENDING'|'IN_PROGRESS'|'SUBMITTED'|'APPROVED'|'REJECTED';
+export interface ProjectAssignee{id:number;email:string;full_name:string;role:'EMPLOYEE'|'INTERN'}
+export interface ProjectDeliverable{id:number;project:number;title:string;description:string;due_date:string|null;status:DeliverableStatus;created_at:string;updated_at:string}
+export interface ProjectComment{id:number;project:number;author:number;author_name:string;author_email:string;content:string;created_at:string}
+export interface ProjectDocument{id:number;project:number;original_name:string;uploaded_by_email:string;uploaded_at:string}
+export interface Project{id:number;title:string;description:string;business_unit:number;business_unit_name:string;supervisor:number;supervisor_name:string;supervisor_email:string;assignees:ProjectAssignee[];start_date:string|null;end_date:string|null;status:ProjectStatus;progress:number;deliverables:ProjectDeliverable[];comments:ProjectComment[];documents:ProjectDocument[];created_at:string;updated_at:string}
+export interface ProjectOptions{business_units:Array<{id:number;name:string;code:string}>;supervisors:Array<{id:number;full_name:string;email:string}>;assignees:ProjectAssignee[]}
+export const PROJECT_STATUS_LABELS:Record<string,string>={PLANNED:'Planifié',ACTIVE:'En cours',ON_HOLD:'En pause',COMPLETED:'Terminé',CANCELLED:'Annulé'};export const DELIVERABLE_STATUS_LABELS:Record<string,string>={PENDING:'À faire',IN_PROGRESS:'En cours',SUBMITTED:'Soumis',APPROVED:'Validé',REJECTED:'À corriger'};
