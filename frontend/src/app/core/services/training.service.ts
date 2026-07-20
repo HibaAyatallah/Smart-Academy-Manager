@@ -3,7 +3,7 @@ import { Injectable, inject } from '@angular/core';
 import { Observable } from 'rxjs';
 import { environment } from '../../../environments/environment';
 import { PaginatedResponse } from '../models/application.models';
-import { ClientTraining, Training, TrainingEnrollment, TrainingSession } from '../models/training.models';
+import { ClientTraining, SessionAttendance, Training, TrainingCertificate, TrainingEnrollment, TrainingSession } from '../models/training.models';
 
 @Injectable({ providedIn: 'root' })
 export class TrainingService {
@@ -39,4 +39,10 @@ export class TrainingService {
   directEnrollment(user: number, training: number, session: number): Observable<TrainingEnrollment> { return this.http.post<TrainingEnrollment>(`${this.baseUrl}enrollments/direct_enrollment/`, { user, training, session }); }
 
   getClientTrainings(): Observable<PaginatedResponse<ClientTraining>> { return this.http.get<PaginatedResponse<ClientTraining>>(`${this.baseUrl}client/trainings/`); }
+  getAttendance(filters: Record<string, unknown> = {}): Observable<PaginatedResponse<SessionAttendance>> { return this.http.get<PaginatedResponse<SessionAttendance>>(`${this.baseUrl}attendance/`, { params: this.params(filters) }); }
+  recordAttendance(enrollment:number, status:string, note=''): Observable<SessionAttendance> { return this.http.post<SessionAttendance>(`${this.baseUrl}attendance/`, { enrollment, status, note }); }
+  updateAttendance(id:number, status:string, note=''): Observable<SessionAttendance> { return this.http.patch<SessionAttendance>(`${this.baseUrl}attendance/${id}/`, { status, note }); }
+  validateAttendance(id:number): Observable<SessionAttendance> { return this.http.post<SessionAttendance>(`${this.baseUrl}attendance/${id}/validate/`, {}); }
+  getCertificates(filters: Record<string, unknown> = {}): Observable<PaginatedResponse<TrainingCertificate>> { return this.http.get<PaginatedResponse<TrainingCertificate>>(`${this.baseUrl}certificates/`, { params: this.params(filters) }); }
+  downloadCertificate(id:number): Observable<Blob> { return this.http.get(`${this.baseUrl}certificates/${id}/download/`, { responseType:'blob' }); }
 }

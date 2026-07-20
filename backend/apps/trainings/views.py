@@ -1,23 +1,62 @@
 from django.db import transaction
 from django.db.models import Q, F
+from django.core.files.base import ContentFile
+from django.http import FileResponse
+from django.utils import timezone
+import uuid
 from rest_framework import viewsets, filters, status
 from rest_framework.exceptions import ValidationError
 from django_filters.rest_framework import DjangoFilterBackend
 from rest_framework.decorators import action
 from rest_framework.response import Response
 
-from .models import Training, TrainingSession, ClientProfile, TrainingEnrollment, EnrollmentHistory
+from .models import Training, TrainingSession, ClientProfile, TrainingEnrollment, EnrollmentHistory, SessionAttendance, AttendanceHistory, TrainingCertificate
 from .serializers import (
     TrainingSerializer, TrainingSessionSerializer,
     ClientTrainingSerializer, ClientTrainingSessionSerializer,
     ClientProfileSerializer,
     TrainingEnrollmentSerializer, TrainingEnrollmentCreateSerializer,
     ManagerDecisionSerializer, SuperAdminDecisionSerializer,
-    DirectEnrollmentSerializer
+    DirectEnrollmentSerializer, SessionAttendanceSerializer, TrainingCertificateSerializer
 )
 from .permissions import IsSuperAdminOrReadOnly, IsClientProfile, IsNotClientProfile, IsSuperAdmin
 from apps.accounts.choices import UserRole
 from .choices import TrainingStatus, SessionStatus, EnrollmentStatus
+
+
+def _certificate_pdf(enrollment, number):
+    name = (enrollment.user.get_full_name() or enrollment.user.email).replace("(", "").replace(")", "")
+    title = enrollment.training.title.replace("(", "").replace(")", "")
+    text = f"Certificate {number} - {name} completed {title}"
+    stream = f"BT /F1 16 Tf 50 740 Td ({text}) Tj ET".encode("latin-1", "replace")
+    objects = [
+        b"<< /Type /Catalog /Pages 2 0 R >>",
+        b"<< /Type /Pages /Kids [3 0 R] /Count 1 >>",
+        b"<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] /Resources << /Font << /F1 4 0 R >> >> /Contents 5 0 R >>",
+        b"<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>",
+        f"<< /Length {len(stream)} >> stream\n".encode() + stream + b"\nendstream",
+    ]
+    pdf = bytearray(b"%PDF-1.4\n")
+    offsets = []
+    for index, body in enumerate(objects, 1):
+        offsets.append(len(pdf))
+        pdf.extend(f"{index} 0 obj\n".encode() + body + b"\nendobj\n")
+    xref = len(pdf)
+    pdf.extend(f"xref\n0 {len(objects) + 1}\n0000000000 65535 f \n".encode())
+    for offset in offsets:
+        pdf.extend(f"{offset:010d} 00000 n \n".encode())
+    pdf.extend(f"trailer << /Size {len(objects) + 1} /Root 1 0 R >>\nstartxref\n{xref}\n%%EOF\n".encode())
+    return bytes(pdf)
+
+
+def _issue_certificate(enrollment, user):
+    certificate, created = TrainingCertificate.objects.get_or_create(
+        enrollment=enrollment,
+        defaults={"certificate_number": f"SAM-{uuid.uuid4().hex[:12].upper()}", "issued_by": user},
+    )
+    if created:
+        certificate.file.save(f"{certificate.certificate_number}.pdf", ContentFile(_certificate_pdf(enrollment, certificate.certificate_number)), save=True)
+    return certificate
 
 
 class TrainingViewSet(viewsets.ModelViewSet):
@@ -138,12 +177,26 @@ class TrainingSessionViewSet(viewsets.ModelViewSet):
         session.save(update_fields=['status', 'updated_at'])
         return Response({"status": "Session registration closed"})
         
-    @action(detail=True, methods=['post'])
+    @action(detail=True, methods=['post'], permission_classes=[IsNotClientProfile])
     def complete(self, request, pk=None):
         session = self.get_object()
-        session.status = SessionStatus.COMPLETED
-        session.save(update_fields=['status', 'updated_at'])
-        return Response({"status": "Session completed"})
+        if request.user.role != UserRole.SUPER_ADMIN and not (request.user.role == UserRole.TRAINER_TUTOR and session.trainer_id == request.user.id):
+            return Response({"detail": "Access denied."}, status=status.HTTP_403_FORBIDDEN)
+        attendances = SessionAttendance.objects.filter(enrollment__session=session, enrollment__status=EnrollmentStatus.ENROLLED)
+        if attendances.filter(validated=False).exists() or attendances.count() != session.enrollments.filter(status=EnrollmentStatus.ENROLLED).count():
+            return Response({"detail": "All enrolled participants require validated attendance."}, status=status.HTTP_400_BAD_REQUEST)
+        with transaction.atomic():
+            for attendance in attendances.select_related("enrollment"):
+                if attendance.status in ["PRESENT", "LATE"]:
+                    enrollment = attendance.enrollment
+                    previous = enrollment.status
+                    enrollment.status = enrollment.final_status = EnrollmentStatus.COMPLETED
+                    enrollment.save(update_fields=["status", "final_status", "updated_at"])
+                    EnrollmentHistory.objects.create(enrollment=enrollment, previous_status=previous, new_status=EnrollmentStatus.COMPLETED, changed_by=request.user, comment="Attendance validated")
+                    _issue_certificate(enrollment, request.user)
+            session.status = SessionStatus.COMPLETED
+            session.save(update_fields=['status', 'updated_at'])
+        return Response({"status": "Session completed", "certificates": TrainingCertificate.objects.filter(enrollment__session=session).count()})
 
 
 class ClientTrainingViewSet(viewsets.ReadOnlyModelViewSet):
@@ -259,6 +312,8 @@ class TrainingEnrollmentViewSet(viewsets.ModelViewSet):
             self._log_history(enrollment, prev_status, enrollment.manager_comment)
             
         return Response(self.get_serializer(enrollment).data)
+
+
 
     @action(detail=True, methods=["post"], permission_classes=[IsNotClientProfile])
     def manager_reject(self, request, pk=None):

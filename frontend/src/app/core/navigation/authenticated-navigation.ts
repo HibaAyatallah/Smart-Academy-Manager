@@ -52,6 +52,7 @@ export const AUTHENTICATED_NAVIGATION: readonly NavigationSection[] = [
     items: [
       { label: 'Catalogue et sessions', icon: 'school', route: '/trainings', roles: ['SUPER_ADMIN', 'HR', 'BU_MANAGER', 'TRAINER_TUTOR', 'EMPLOYEE', 'INTERN'] },
       { label: 'Inscriptions et validations', icon: 'how_to_reg', route: '/training-enrollments', roles: ['SUPER_ADMIN', 'HR', 'BU_MANAGER', 'TRAINER_TUTOR', 'EMPLOYEE', 'INTERN'] },
+      { label: 'Présences et certificats', icon: 'workspace_premium', route: '/attendance-certificates', roles: ['SUPER_ADMIN', 'HR', 'TRAINER_TUTOR', 'EMPLOYEE', 'INTERN'] },
       { label: 'Mes formations client', icon: 'business_center', route: '/client-trainings', roles: ['CLIENT'] },
     ],
   },

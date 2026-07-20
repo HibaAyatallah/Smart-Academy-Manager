@@ -35,4 +35,20 @@ describe('TrainingService', () => {
     service.getClientTrainings().subscribe();
     http.expectOne(`${environment.apiBaseUrl}client/trainings/`).flush({ count: 0, next: null, previous: null, results: [] });
   });
+  it('records and validates session attendance', () => {
+    service.recordAttendance(12, 'PRESENT', 'On time').subscribe();
+    const record = http.expectOne(`${environment.apiBaseUrl}attendance/`);
+    expect(record.request.body).toEqual({ enrollment: 12, status: 'PRESENT', note: 'On time' });
+    record.flush({});
+    service.validateAttendance(3).subscribe();
+    const validate = http.expectOne(`${environment.apiBaseUrl}attendance/3/validate/`);
+    expect(validate.request.method).toBe('POST');
+    validate.flush({});
+  });
+  it('downloads certificates through the protected endpoint', () => {
+    service.downloadCertificate(7).subscribe();
+    const request = http.expectOne(`${environment.apiBaseUrl}certificates/7/download/`);
+    expect(request.request.responseType).toBe('blob');
+    request.flush(new Blob());
+  });
 });

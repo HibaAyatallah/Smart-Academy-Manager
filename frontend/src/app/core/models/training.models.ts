@@ -74,6 +74,12 @@ export interface ClientTraining {
   sessions: Omit<TrainingSession, 'training' | 'trainer' | 'maximum_participants' | 'participant_count' | 'remaining_capacity' | 'external_client'>[];
 }
 
+export type AttendanceStatus = 'PRESENT' | 'ABSENT' | 'LATE' | 'EXCUSED';
+export interface AttendanceHistory { id:number; status:AttendanceStatus; validated:boolean; changed_by_email:string; note:string; timestamp:string; }
+export interface SessionAttendance { id:number; enrollment:number; session:number; user_email:string; training_title:string; status:AttendanceStatus; note:string; validated:boolean; validated_at:string|null; history:AttendanceHistory[]; }
+export interface TrainingCertificate { id:number; enrollment:number; user_email:string; training_title:string; session:number; certificate_number:string; issued_at:string; download_url:string; }
+export const ATTENDANCE_STATUS_LABELS: Record<AttendanceStatus,string> = { PRESENT:'Présent', ABSENT:'Absent', LATE:'En retard', EXCUSED:'Absence justifiée' };
+
 export const TRAINING_STATUS_LABELS: Record<string, string> = { DRAFT: 'Brouillon', PUBLISHED: 'Publiée', ARCHIVED: 'Archivée' };
 export const SESSION_STATUS_LABELS: Record<string, string> = { PLANNED: 'Planifiée', OPEN: 'Inscriptions ouvertes', FULL: 'Complète', IN_PROGRESS: 'En cours', COMPLETED: 'Terminée', CANCELLED: 'Annulée' };
 export const ENROLLMENT_STATUS_LABELS: Record<string, string> = { PENDING_MANAGER: 'En attente du manager', REJECTED_BY_MANAGER: 'Refusée par le manager', PENDING_SUPER_ADMIN: 'En attente du Super Admin', REJECTED_BY_SUPER_ADMIN: 'Refusée par le Super Admin', APPROVED: 'Approuvée', ENROLLED: 'Inscrit', COMPLETED: 'Terminée', CANCELLED: 'Annulée' };

@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from .models import ClientProfile, Training, TrainingSession, TrainingEnrollment, EnrollmentHistory
+from .models import ClientProfile, Training, TrainingSession, TrainingEnrollment, EnrollmentHistory, SessionAttendance, AttendanceHistory, TrainingCertificate
 from .choices import EnrollmentStatus, SessionStatus
 
 class ClientProfileSerializer(serializers.ModelSerializer):
@@ -174,3 +174,42 @@ class DirectEnrollmentSerializer(serializers.ModelSerializer):
             
         return attrs
 
+
+class AttendanceHistorySerializer(serializers.ModelSerializer):
+    changed_by_email = serializers.EmailField(source="changed_by.email", read_only=True)
+
+    class Meta:
+        model = AttendanceHistory
+        fields = ["id", "status", "validated", "changed_by_email", "note", "timestamp"]
+
+
+class SessionAttendanceSerializer(serializers.ModelSerializer):
+    history = AttendanceHistorySerializer(many=True, read_only=True)
+    user_email = serializers.EmailField(source="enrollment.user.email", read_only=True)
+    training_title = serializers.CharField(source="enrollment.training.title", read_only=True)
+    session = serializers.IntegerField(source="enrollment.session_id", read_only=True)
+
+    class Meta:
+        model = SessionAttendance
+        fields = ["id", "enrollment", "session", "user_email", "training_title", "status", "note", "validated", "recorded_by", "validated_by", "validated_at", "created_at", "updated_at", "history"]
+        read_only_fields = ["validated", "recorded_by", "validated_by", "validated_at", "created_at", "updated_at"]
+
+    def validate_enrollment(self, enrollment):
+        if enrollment.status not in [EnrollmentStatus.ENROLLED, EnrollmentStatus.COMPLETED]:
+            raise serializers.ValidationError("Attendance is limited to enrolled participants.")
+        return enrollment
+
+
+class TrainingCertificateSerializer(serializers.ModelSerializer):
+    user_email = serializers.EmailField(source="enrollment.user.email", read_only=True)
+    training_title = serializers.CharField(source="enrollment.training.title", read_only=True)
+    session = serializers.IntegerField(source="enrollment.session_id", read_only=True)
+    download_url = serializers.SerializerMethodField()
+
+    class Meta:
+        model = TrainingCertificate
+        fields = ["id", "enrollment", "user_email", "training_title", "session", "certificate_number", "issued_at", "issued_by", "download_url"]
+        read_only_fields = fields
+
+    def get_download_url(self, obj):
+        return f"/api/certificates/{obj.pk}/download/"

@@ -31,6 +31,7 @@ describe('authenticated navigation', () => {
     expect(labelsFor('INTERN')).toContain('Inscriptions et validations');
     expect(labelsFor('INTERN')).toContain('Mon stage');
     expect(labelsFor('INTERN')).toContain('Projets');
+    expect(labelsFor('INTERN')).toContain('Présences et certificats');
   });
 
   it('exposes scoped internship management to supervisors and HR', () => {

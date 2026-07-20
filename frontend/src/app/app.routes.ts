@@ -149,6 +149,12 @@ export const routes: Routes = [
         loadComponent: () => import('./features/trainings/enrollment-workflow/enrollment-workflow.component').then(m => m.EnrollmentWorkflowComponent),
       },
       {
+        path: 'attendance-certificates',
+        canActivate: [roleGuard],
+        data: { roles: ['SUPER_ADMIN', 'HR', 'TRAINER_TUTOR', 'EMPLOYEE', 'INTERN'], title: 'Présences et certificats' },
+        loadComponent: () => import('./features/trainings/attendance-certificates/attendance-certificates.component').then(m => m.AttendanceCertificatesComponent),
+      },
+      {
         path: 'client-trainings',
         canActivate: [roleGuard],
         data: { roles: ['CLIENT'], title: 'Formations client' },

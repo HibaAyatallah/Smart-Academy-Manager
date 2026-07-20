@@ -221,7 +221,7 @@ Latest verified results from the stabilization sprint (2026-07-14):
 
 Note: Running all backend tests together occasionally causes a PostgreSQL database lock. This is a pre-existing test infrastructure issue, not a code issue. Individual app test suites run successfully.
 
-Total automated test count: 269 tests (147 backend + 122 frontend), all passing.
+Total automated test count: 276 tests (152 backend + 124 frontend), all passing.
 
 Business Unit frontend tests:
 - `bu-list.spec.ts`: 4 tests covering create, load, empty state, pagination, error state
@@ -232,8 +232,6 @@ Business Unit frontend tests:
 
 The following target modules are not yet implemented end to end:
 
-- Attendance
-- Certificates
 - Notifications (notification inbox, preferences, delivery tracking)
 - Reports and KPIs
 - Moodle integration
@@ -245,27 +243,25 @@ Offers, training/session/enrollment, internship management, and project manageme
 
 ## 11. Current Project Progress
 
-**Overall progress: approximately 66%**
+**Overall progress: approximately 70%**
 
 This percentage is calculated from a weighted assessment of backend implementation, frontend implementation, frontend-backend integration, roles and security, tests and validation, and deployment and documentation. The scoring counts working connected behavior, not file presence.
 
 | Category | Weight | Score | Weighted contribution | Basis |
 |---|---|---:|---:|---|
-| Backend implementation | 25% | 80% | 20.00% | Auth, recruitment, offers, BU, internships, training and project APIs exist |
-| Frontend implementation | 25% | 70% | 17.50% | Implemented core workflows are connected, including internships and projects |
-| Frontend-backend integration | 20% | 76% | 15.20% | Implemented modules have role-aware Angular routes, services and protected downloads |
-| Roles and security | 10% | 72% | 7.20% | Scoped querysets, object permissions, throttling and protected downloads exist |
-| Tests and validation | 10% | 52% | 5.20% | Broad backend/frontend suites and focused project permission tests exist |
+| Backend implementation | 25% | 84% | 21.00% | Core APIs include training attendance, completion and generated certificates |
+| Frontend implementation | 25% | 74% | 18.50% | Implemented workflows include internships, projects, attendance and certificates |
+| Frontend-backend integration | 20% | 80% | 16.00% | Role-aware routes, services and protected document/certificate downloads exist |
+| Roles and security | 10% | 76% | 7.60% | Scoped querysets, trainer validation, object permissions and protected downloads exist |
+| Tests and validation | 10% | 57% | 5.70% | 276 passing tests include attendance, completion and certificate security coverage |
 | Deployment and documentation | 10% | 12% | 1.20% | Local documentation/env example only; no deployment artifacts/CI |
-| **Total** | **100%** |  | **66.30%** | Weighted sum |
+| **Total** | **100%** |  | **70.00%** | Weighted sum |
 
 The percentage is not higher because:
 - Passing tests validate only the functionality that has been implemented.
-- Several planned modules (attendance, certificates, notifications, reports, Moodle and AI) are still absent.
+- Several planned modules (notifications, reports, Moodle and AI) are still absent.
 - Production deployment, CI/CD, and infrastructure are not implemented.
 - The project is assessed against the final multi-module application scope, not an MVP.
-
-The 30.1% figure reflects a useful early foundation with a substantial recruitment vertical slice and a partially implemented Business Unit module, but it is not production-ready and does not represent the full business scope.
 
 ## 12. Main Strengths
 
@@ -288,7 +284,7 @@ The 30.1% figure reflects a useful early foundation with a substantial recruitme
 
 ### Priority 2 — Implement the next business modules
 - Design and implement offers and offer-linked application workflow.
-- Implement internships management, projects, training, training sessions, enrollments, attendance, evaluations, and certificates.
+- Extend implemented internships, projects, training, attendance, evaluations, and certificates with reporting and notification integrations.
 - Build real role-specific dashboards for Intern, Trainer/Tutor, Collaborator, and External Client.
 - Add notification inbox, preferences, and delivery tracking.
 

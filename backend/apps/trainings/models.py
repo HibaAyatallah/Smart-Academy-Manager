@@ -236,3 +236,33 @@ class EnrollmentHistory(models.Model):
 
     def __str__(self):
         return f"{self.enrollment.id}: {self.previous_status} -> {self.new_status}"
+
+
+class SessionAttendance(models.Model):
+    STATUS_CHOICES = [("PRESENT", "Present"), ("ABSENT", "Absent"), ("LATE", "Late"), ("EXCUSED", "Excused")]
+    enrollment = models.OneToOneField(TrainingEnrollment, on_delete=models.CASCADE, related_name="attendance")
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES)
+    note = models.TextField(blank=True)
+    validated = models.BooleanField(default=False)
+    recorded_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, related_name="recorded_attendance")
+    validated_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True, related_name="validated_attendance")
+    validated_at = models.DateTimeField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+
+class AttendanceHistory(models.Model):
+    attendance = models.ForeignKey(SessionAttendance, on_delete=models.CASCADE, related_name="history")
+    status = models.CharField(max_length=20, choices=SessionAttendance.STATUS_CHOICES)
+    validated = models.BooleanField(default=False)
+    changed_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True)
+    note = models.TextField(blank=True)
+    timestamp = models.DateTimeField(auto_now_add=True)
+
+
+class TrainingCertificate(models.Model):
+    enrollment = models.OneToOneField(TrainingEnrollment, on_delete=models.CASCADE, related_name="certificate")
+    certificate_number = models.CharField(max_length=64, unique=True)
+    file = models.FileField(upload_to="certificates/%Y/%m/")
+    issued_at = models.DateTimeField(auto_now_add=True)
+    issued_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, related_name="issued_certificates")

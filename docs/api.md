@@ -162,6 +162,17 @@ Super Admin et HR administrent le catalogue et les sessions. Les autres rôles i
 
 Ces endpoints sont strictement limités au profil client connecté.
 
+## Présences et certificats
+
+- `GET|POST /api/attendance/` : historique visible selon le rôle et saisie par le formateur affecté ou le Super Admin ;
+- `PATCH /api/attendance/{id}/` : correction d'une présence, avec nouvelle validation requise ;
+- `POST /api/attendance/{id}/validate/` : validation formateur ou Super Admin ;
+- `POST /api/training-sessions/{id}/complete/` : complétion après validation de toutes les présences ;
+- `GET /api/certificates/` : certificats filtrés par rôle ;
+- `GET /api/certificates/{id}/download/` : téléchargement PDF protégé.
+
+Les présences `PRESENT` et `LATE` validées complètent l'inscription et génèrent automatiquement un certificat. RH dispose d'une lecture globale, les formateurs voient leurs sessions et chaque participant voit uniquement son historique et ses certificats.
+
 ## Stages
 
 - `GET /api/interns/` et `GET /api/interns/{id}/` : dossiers filtrés selon le rôle ;

@@ -18,6 +18,8 @@ describe('Business Unit routes', () => {
     expect(catalogue?.data?.['roles']).toContain('TRAINER_TUTOR');
     expect(approvals?.data?.['roles']).toContain('BU_MANAGER');
     expect(client?.data?.['roles']).toEqual(['CLIENT']);
+    const attendance = privateShell?.children?.find((child) => child.path === 'attendance-certificates');
+    expect(attendance?.data?.['roles']).toEqual(['SUPER_ADMIN', 'HR', 'TRAINER_TUTOR', 'EMPLOYEE', 'INTERN']);
   });
 
   it('separates intern self-service from internship administration', () => {

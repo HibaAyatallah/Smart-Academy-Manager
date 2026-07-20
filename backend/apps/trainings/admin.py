@@ -1,5 +1,5 @@
 from django.contrib import admin
-from .models import ClientProfile, Training, TrainingSession, TrainingEnrollment, EnrollmentHistory
+from .models import ClientProfile, Training, TrainingSession, TrainingEnrollment, EnrollmentHistory, SessionAttendance, AttendanceHistory, TrainingCertificate
 
 @admin.register(ClientProfile)
 class ClientProfileAdmin(admin.ModelAdmin):
@@ -92,3 +92,6 @@ class EnrollmentHistoryAdmin(admin.ModelAdmin):
     list_filter = ("new_status",)
     readonly_fields = ("timestamp",)
 
+admin.site.register(SessionAttendance)
+admin.site.register(AttendanceHistory)
+admin.site.register(TrainingCertificate)
