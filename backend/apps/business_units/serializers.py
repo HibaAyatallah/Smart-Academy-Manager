@@ -1,8 +1,9 @@
 from rest_framework import serializers
+from django.contrib.auth import get_user_model
 
 from apps.accounts.choices import UserRole
 from apps.business_units.permissions import is_bu_manager
-from .models import BusinessUnit, BusinessUnitMembership, BusinessUnitNeed
+from .models import BusinessUnit, BusinessUnitMembership, BusinessUnitNeed, BusinessUnitNeedHistory
 
 
 class BusinessUnitSerializer(serializers.ModelSerializer):
@@ -38,9 +39,14 @@ class BusinessUnitMembershipSerializer(serializers.ModelSerializer):
     user_email = serializers.EmailField(source="user.email", read_only=True)
     user_name = serializers.CharField(source="user.full_name", read_only=True)
     business_unit_name = serializers.CharField(source="business_unit.name", read_only=True)
+    member_email = serializers.EmailField(write_only=True, required=False)
+    user = serializers.PrimaryKeyRelatedField(
+        queryset=get_user_model().objects.all(), required=False
+    )
 
     class Meta:
         model = BusinessUnitMembership
+        validators = []
         fields = [
             "id",
             "business_unit",
@@ -48,6 +54,7 @@ class BusinessUnitMembershipSerializer(serializers.ModelSerializer):
             "user",
             "user_email",
             "user_name",
+            "member_email",
             "position",
             "joined_at",
             "is_active",
@@ -59,6 +66,54 @@ class BusinessUnitMembershipSerializer(serializers.ModelSerializer):
             if value.manager != request.user:
                 raise serializers.ValidationError("Vous ne pouvez gérer que votre propre Business Unit.")
         return value
+
+    def validate(self, attrs):
+        attrs = super().validate(attrs)
+        request = self.context.get("request")
+        email = attrs.pop("member_email", None)
+        user = attrs.get("user", getattr(self.instance, "user", None))
+        business_unit = attrs.get("business_unit", getattr(self.instance, "business_unit", None))
+
+        if self.instance is None and not user and email:
+            user = get_user_model().objects.filter(email__iexact=email).first()
+            if not user:
+                raise serializers.ValidationError({
+                    "member_email": "Aucun collaborateur existant ne correspond à cet email."
+                })
+            attrs["user"] = user
+        if self.instance is None and not user:
+            raise serializers.ValidationError({"member_email": "L'email du collaborateur est obligatoire."})
+        if user and user.role != UserRole.EMPLOYEE:
+            raise serializers.ValidationError({
+                "member_email": "Seul un compte collaborateur peut être ajouté à une Business Unit."
+            })
+        if business_unit and user and BusinessUnitMembership.objects.filter(
+            business_unit=business_unit, user=user, is_active=True
+        ).exclude(pk=getattr(self.instance, "pk", None)).exists():
+            raise serializers.ValidationError({
+                "member_email": "Ce collaborateur est déjà membre actif de cette Business Unit."
+            })
+        if request and is_bu_manager(request.user) and self.instance is None:
+            attrs["is_active"] = True
+        return attrs
+
+class BusinessUnitNeedHistorySerializer(serializers.ModelSerializer):
+    changed_by_email = serializers.EmailField(source="changed_by.email", read_only=True)
+
+    class Meta:
+        model = BusinessUnitNeedHistory
+        fields = [
+            "id",
+            "from_status",
+            "to_status",
+            "changed_by_email",
+            "comment",
+            "created_at",
+        ]
+
+
+class NeedDecisionSerializer(serializers.Serializer):
+    comment = serializers.CharField(required=False, allow_blank=True)
 
 
 class BusinessUnitNeedSerializer(serializers.ModelSerializer):
@@ -72,6 +127,7 @@ class BusinessUnitNeedSerializer(serializers.ModelSerializer):
         source="requester.full_name", read_only=True
     )
     trainer_name = serializers.CharField(source="trainer.full_name", read_only=True)
+    history = BusinessUnitNeedHistorySerializer(many=True, read_only=True)
 
     class Meta:
         model = BusinessUnitNeed
@@ -103,6 +159,7 @@ class BusinessUnitNeedSerializer(serializers.ModelSerializer):
             "created_by_email",
             "created_at",
             "updated_at",
+            "history",
         ]
         read_only_fields = [
             "id",
@@ -110,6 +167,7 @@ class BusinessUnitNeedSerializer(serializers.ModelSerializer):
             "created_by_email",
             "created_at",
             "updated_at",
+            "history",
         ]
 
     def validate_business_unit(self, value):

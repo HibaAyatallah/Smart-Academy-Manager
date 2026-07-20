@@ -5,8 +5,9 @@ from django.utils import timezone
 from rest_framework import serializers
 
 from apps.accounts.choices import UserRole
+from apps.business_units.models import BusinessUnit
 
-from .choices import ApplicationDocumentType, ApplicationStatus, ApplicationType, StudyLevel
+from .choices import ApplicationDocumentType, ApplicationStatus, ApplicationType, StudyLevel, OfferStatus
 from .models import (
     Application,
     ApplicationDocument,
@@ -14,7 +15,10 @@ from .models import (
     CandidateProfile,
     EmployeeProfile,
     InternProfile,
+    InternDocument,
+    InternEvaluation,
     Interview,
+    Offer,
 )
 from .validators import validate_application_file
 
@@ -49,6 +53,47 @@ class CandidateProfileSerializer(serializers.ModelSerializer):
             "linkedin_url",
             "portfolio_url",
             "address",
+        ]
+
+
+class OfferSerializer(serializers.ModelSerializer):
+    business_unit_name = serializers.CharField(source="business_unit.name", read_only=True)
+    created_by_email = serializers.EmailField(source="created_by.email", read_only=True)
+    application_type_label = serializers.CharField(source="get_application_type_display", read_only=True)
+    status_label = serializers.CharField(source="get_status_display", read_only=True)
+
+    class Meta:
+        model = Offer
+        fields = [
+            "id",
+            "title",
+            "description",
+            "business_unit",
+            "business_unit_name",
+            "application_type",
+            "application_type_label",
+            "required_skills",
+            "required_level",
+            "number_of_positions",
+            "location",
+            "start_date",
+            "end_date",
+            "application_deadline",
+            "publication_date",
+            "status",
+            "status_label",
+            "created_by_email",
+            "created_at",
+            "updated_at",
+        ]
+        read_only_fields = [
+            "id",
+            "business_unit_name",
+            "application_type_label",
+            "status_label",
+            "created_by_email",
+            "created_at",
+            "updated_at",
         ]
 
 
@@ -138,12 +183,15 @@ class ApplicationSerializer(serializers.ModelSerializer):
     status_history = ApplicationStatusHistorySerializer(many=True, read_only=True)
     application_type_label = serializers.CharField(source="get_application_type_display", read_only=True)
     status_label = serializers.CharField(source="get_status_display", read_only=True)
+    offer_title = serializers.CharField(source="offer.title", read_only=True)
 
     class Meta:
         model = Application
         fields = [
             "id",
             "candidate_profile",
+            "offer",
+            "offer_title",
             "application_type",
             "application_type_label",
             "status",
@@ -180,6 +228,11 @@ class PublicApplicationCreateSerializer(serializers.Serializer):
     linkedin_url = serializers.URLField(required=False, allow_blank=True)
     portfolio_url = serializers.URLField(required=False, allow_blank=True)
     address = serializers.CharField(max_length=255, required=False, allow_blank=True)
+    offer = serializers.PrimaryKeyRelatedField(
+        queryset=Offer.objects.filter(status=OfferStatus.PUBLISHED),
+        required=False,
+        allow_null=True,
+    )
     application_type = serializers.ChoiceField(choices=ApplicationType.choices)
     motivation_message = serializers.CharField(required=False, allow_blank=True)
     cv = serializers.FileField(write_only=True)
@@ -249,15 +302,17 @@ class PublicApplicationCreateSerializer(serializers.Serializer):
             role=UserRole.CANDIDATE,
         )
         profile = CandidateProfile.objects.create(user=user, **validated_data)
+        offer = validated_data.pop("offer", None)
         application = Application.objects.create(
             candidate_profile=profile,
+            offer=offer,
             application_type=application_type,
             motivation_message=motivation_message,
         )
         ApplicationStatusHistory.objects.create(
             application=application,
             from_status="",
-            to_status=ApplicationStatus.SUBMITTED,
+            to_status=ApplicationStatus.RECEIVED,
             changed_by=user,
             comment="Candidature déposée.",
         )
@@ -324,3 +379,208 @@ class ScheduleInterviewSerializer(serializers.ModelSerializer):
         if value < timezone.now():
             raise serializers.ValidationError("La date d'entretien doit être future.")
         return value
+
+
+class AuthenticatedApplicationCreateSerializer(serializers.Serializer):
+    offer = serializers.PrimaryKeyRelatedField(
+        queryset=Offer.objects.filter(status=OfferStatus.PUBLISHED),
+        required=False,
+        allow_null=True,
+    )
+    application_type = serializers.ChoiceField(choices=ApplicationType.choices)
+    motivation_message = serializers.CharField(required=False, allow_blank=True)
+    cv = serializers.FileField(write_only=True)
+    cover_letter = serializers.FileField(write_only=True)
+    personal_photo = serializers.FileField(write_only=True)
+    other_documents = serializers.ListField(
+        child=serializers.FileField(),
+        write_only=True,
+        required=False,
+        allow_empty=True,
+    )
+
+    def validate_cv(self, value):
+        validate_application_file(value, ApplicationDocumentType.CV)
+        return value
+
+    def validate_cover_letter(self, value):
+        validate_application_file(value, ApplicationDocumentType.COVER_LETTER)
+        return value
+
+    def validate_personal_photo(self, value):
+        validate_application_file(value, ApplicationDocumentType.PERSONAL_PHOTO)
+        return value
+
+    def validate_other_documents(self, value):
+        for document in value:
+            validate_application_file(document, ApplicationDocumentType.OTHER)
+        return value
+
+    @transaction.atomic
+    def create(self, validated_data):
+        cv = validated_data.pop("cv")
+        cover_letter = validated_data.pop("cover_letter")
+        personal_photo = validated_data.pop("personal_photo")
+        other_documents = validated_data.pop("other_documents", [])
+        offer = validated_data.pop("offer", None)
+        application_type = validated_data.pop("application_type")
+        motivation_message = validated_data.pop("motivation_message", "")
+
+        user = self.context["request"].user
+        profile = user.candidate_profile
+
+        application = Application.objects.create(
+            candidate_profile=profile,
+            offer=offer,
+            application_type=application_type,
+            motivation_message=motivation_message,
+        )
+        ApplicationStatusHistory.objects.create(
+            application=application,
+            from_status="",
+            to_status=ApplicationStatus.RECEIVED,
+            changed_by=user,
+            comment="Candidature déposée.",
+        )
+
+        self._create_document(application, cv, ApplicationDocumentType.CV, user)
+        self._create_document(
+            application,
+            cover_letter,
+            ApplicationDocumentType.COVER_LETTER,
+            user,
+        )
+        self._create_document(
+            application,
+            personal_photo,
+            ApplicationDocumentType.PERSONAL_PHOTO,
+            user,
+        )
+        for document in other_documents:
+            self._create_document(application, document, ApplicationDocumentType.OTHER, user)
+
+        return application
+
+    def _create_document(self, application, uploaded_file, document_type, user):
+        return ApplicationDocument.objects.create(
+            application=application,
+            document_type=document_type,
+            file=uploaded_file,
+            original_name=uploaded_file.name,
+            content_type=getattr(uploaded_file, "content_type", ""),
+            size=uploaded_file.size,
+            uploaded_by=user,
+        )
+
+
+class ApplicationConversionSerializer(serializers.Serializer):
+    CONVERSION_CHOICES = (
+        ("INTERN", "Stagiaire"),
+        ("EMPLOYEE", "Collaborateur"),
+    )
+    conversion_type = serializers.ChoiceField(choices=CONVERSION_CHOICES)
+    business_unit = serializers.PrimaryKeyRelatedField(
+        queryset=BusinessUnit.objects.filter(is_active=True)
+    )
+    supervisor = serializers.PrimaryKeyRelatedField(
+        queryset=User.objects.filter(role__in=[UserRole.EMPLOYEE, UserRole.BU_MANAGER, UserRole.SUPER_ADMIN, UserRole.TRAINER_TUTOR]),
+        required=False,
+        allow_null=True,
+    )
+    internship_start = serializers.DateField(required=False, allow_null=True)
+    internship_end = serializers.DateField(required=False, allow_null=True)
+    internship_type = serializers.CharField(required=False, allow_blank=True, max_length=32)
+    school = serializers.CharField(required=False, allow_blank=True, max_length=255)
+    specialization = serializers.CharField(required=False, allow_blank=True, max_length=255)
+    paid = serializers.BooleanField(required=False, default=False)
+    subject_title = serializers.CharField(required=False, allow_blank=True, max_length=255)
+    specification_pdf = serializers.FileField(required=False, allow_null=True)
+
+    def validate(self, data):
+        conversion_type = data.get("conversion_type")
+        if conversion_type == "INTERN" and not data.get("supervisor"):
+            raise serializers.ValidationError({"supervisor": "Le superviseur est requis pour un stagiaire."})
+        return data
+
+
+class InternDocumentSerializer(serializers.ModelSerializer):
+    validator_email = serializers.EmailField(source="validator.email", read_only=True)
+
+    class Meta:
+        model = InternDocument
+        fields = [
+            "id",
+            "intern",
+            "document_type",
+            "file",
+            "is_validated",
+            "validated_at",
+            "validator",
+            "validator_email",
+            "comment",
+            "uploaded_at",
+        ]
+        read_only_fields = ["id", "is_validated", "validated_at", "validator", "validator_email", "uploaded_at"]
+
+
+class InternEvaluationSerializer(serializers.ModelSerializer):
+    evaluator_email = serializers.EmailField(source="evaluator.email", read_only=True)
+
+    class Meta:
+        model = InternEvaluation
+        fields = [
+            "id",
+            "intern",
+            "evaluation_type",
+            "technical_skills",
+            "autonomy",
+            "communication",
+            "teamwork",
+            "deadline_respect",
+            "work_quality",
+            "professionalism",
+            "overall_score",
+            "comments",
+            "evaluator",
+            "evaluator_email",
+            "created_at",
+        ]
+        read_only_fields = ["id", "evaluator", "evaluator_email", "created_at"]
+
+
+class InternProfileSerializer(serializers.ModelSerializer):
+    user_email = serializers.EmailField(source="user.email", read_only=True)
+    user_full_name = serializers.CharField(source="user.full_name", read_only=True)
+    business_unit_name = serializers.CharField(source="business_unit.name", read_only=True)
+    supervisor_email = serializers.EmailField(source="supervisor.email", read_only=True)
+    documents = InternDocumentSerializer(many=True, read_only=True)
+    evaluations = InternEvaluationSerializer(many=True, read_only=True)
+
+    class Meta:
+        model = InternProfile
+        fields = [
+            "id",
+            "user",
+            "user_email",
+            "user_full_name",
+            "source_application",
+            "school",
+            "specialization",
+            "internship_type",
+            "paid",
+            "business_unit",
+            "business_unit_name",
+            "supervisor",
+            "supervisor_email",
+            "subject_title",
+            "specification_pdf",
+            "internship_start",
+            "internship_end",
+            "current_status",
+            "progress",
+            "final_decision",
+            "documents",
+            "evaluations",
+            "created_at",
+        ]
+        read_only_fields = ["id", "user", "source_application", "created_at"]

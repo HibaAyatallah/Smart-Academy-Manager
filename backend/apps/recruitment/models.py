@@ -5,13 +5,28 @@ from django.db import models
 from django.utils import timezone
 
 from apps.accounts.choices import UserRole
+from apps.business_units.models import BusinessUnit
 
-from .choices import ApplicationDocumentType, ApplicationStatus, ApplicationType, StudyLevel
+from .choices import (
+    ApplicationDocumentType,
+    ApplicationStatus,
+    ApplicationType,
+    StudyLevel,
+    OfferStatus,
+    InternshipStatus,
+    InternDocumentType,
+    EvaluationType,
+)
 
 
 def application_document_upload_to(instance, filename: str) -> str:
-    application_id = instance.application_id or "pending"
-    return f"applications/{application_id}/{instance.document_type.lower()}/{filename}"
+    if instance.application_id:
+        candidate_id = instance.application.candidate_profile.user_id
+        application_id = instance.application_id
+    else:
+        candidate_id = "pending"
+        application_id = "pending"
+    return f"candidates/{candidate_id}/applications/{application_id}/{instance.document_type.lower()}/{filename}"
 
 
 class CandidateProfile(models.Model):
@@ -39,17 +54,63 @@ class CandidateProfile(models.Model):
         return self.user.email
 
 
+class Offer(models.Model):
+    title = models.CharField(max_length=255)
+    description = models.TextField()
+    business_unit = models.ForeignKey(
+        BusinessUnit, on_delete=models.CASCADE, related_name="offers"
+    )
+    application_type = models.CharField(
+        max_length=32, choices=ApplicationType.choices,
+        verbose_name="Type d'offre"
+    )
+    required_skills = models.TextField(blank=True)
+    required_level = models.CharField(max_length=32, choices=StudyLevel.choices, blank=True)
+    number_of_positions = models.PositiveIntegerField(default=1)
+    location = models.CharField(max_length=255, blank=True)
+    start_date = models.DateField(null=True, blank=True)
+    end_date = models.DateField(null=True, blank=True)
+    application_deadline = models.DateField(null=True, blank=True)
+    publication_date = models.DateField(null=True, blank=True)
+    status = models.CharField(
+        max_length=32,
+        choices=OfferStatus.choices,
+        default=OfferStatus.DRAFT,
+    )
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        related_name="created_offers",
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+
+    def __str__(self) -> str:
+        return self.title
+
+
 class Application(models.Model):
     candidate_profile = models.ForeignKey(
         CandidateProfile,
         on_delete=models.CASCADE,
         related_name="applications",
     )
+    offer = models.ForeignKey(
+        Offer,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="applications",
+    )
     application_type = models.CharField(max_length=32, choices=ApplicationType.choices)
     status = models.CharField(
         max_length=32,
         choices=ApplicationStatus.choices,
-        default=ApplicationStatus.SUBMITTED,
+        default=ApplicationStatus.RECEIVED,
     )
     motivation_message = models.TextField(blank=True)
     rejection_reason = models.TextField(blank=True)
@@ -88,7 +149,7 @@ class Application(models.Model):
         return self.status in {
             ApplicationStatus.ACCEPTED,
             ApplicationStatus.REJECTED,
-            ApplicationStatus.CANCELLED,
+            ApplicationStatus.ARCHIVED,
         }
 
     def set_retention_deadline(self) -> None:
@@ -194,10 +255,92 @@ class InternProfile(models.Model):
         blank=True,
         related_name="created_intern_profile",
     )
+    school = models.CharField(max_length=255, blank=True)
+    specialization = models.CharField(max_length=255, blank=True)
+    internship_type = models.CharField(max_length=32, blank=True)
+    paid = models.BooleanField(default=False)
+    business_unit = models.ForeignKey(
+        BusinessUnit,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="interns",
+    )
+    supervisor = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="supervised_interns",
+    )
+    subject_title = models.CharField(max_length=255, blank=True)
+    specification_pdf = models.FileField(upload_to="internships/specifications/", blank=True, null=True)
+    internship_start = models.DateField(null=True, blank=True)
+    internship_end = models.DateField(null=True, blank=True)
+    current_status = models.CharField(
+        max_length=32,
+        choices=InternshipStatus.choices,
+        default=InternshipStatus.UPCOMING,
+    )
+    progress = models.IntegerField(default=0)
+    final_decision = models.CharField(max_length=255, blank=True)
+    
     created_at = models.DateTimeField(auto_now_add=True)
 
     def __str__(self) -> str:
         return self.user.email
+
+class InternDocument(models.Model):
+    intern = models.ForeignKey(
+        InternProfile,
+        on_delete=models.CASCADE,
+        related_name="documents",
+    )
+    document_type = models.CharField(max_length=32, choices=InternDocumentType.choices)
+    file = models.FileField(upload_to="internships/documents/")
+    is_validated = models.BooleanField(default=False)
+    validated_at = models.DateTimeField(null=True, blank=True)
+    validator = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="validated_intern_documents",
+    )
+    comment = models.TextField(blank=True)
+    uploaded_at = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self) -> str:
+        return f"{self.intern.user.email} - {self.get_document_type_display()}"
+
+
+class InternEvaluation(models.Model):
+    intern = models.ForeignKey(
+        InternProfile,
+        on_delete=models.CASCADE,
+        related_name="evaluations",
+    )
+    evaluation_type = models.CharField(max_length=32, choices=EvaluationType.choices)
+    technical_skills = models.IntegerField(default=0)
+    autonomy = models.IntegerField(default=0)
+    communication = models.IntegerField(default=0)
+    teamwork = models.IntegerField(default=0)
+    deadline_respect = models.IntegerField(default=0)
+    work_quality = models.IntegerField(default=0)
+    professionalism = models.IntegerField(default=0)
+    overall_score = models.FloatField(default=0.0)
+    comments = models.TextField(blank=True)
+    evaluator = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="intern_evaluations",
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self) -> str:
+        return f"{self.intern.user.email} - {self.get_evaluation_type_display()}"
 
 
 class EmployeeProfile(models.Model):

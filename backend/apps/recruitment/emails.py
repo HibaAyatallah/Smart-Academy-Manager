@@ -4,10 +4,10 @@ from .choices import ApplicationStatus
 
 
 EMAIL_SUBJECTS = {
-    ApplicationStatus.PRESELECTED: "Votre candidature a ete preselectionnee",
-    ApplicationStatus.INTERVIEW_SCHEDULED: "Votre entretien est planifie",
-    ApplicationStatus.ACCEPTED: "Votre candidature est acceptee",
-    ApplicationStatus.REJECTED: "Votre candidature est refusee",
+    ApplicationStatus.PRESELECTED: "Votre candidature a été présélectionnée",
+    ApplicationStatus.INTERVIEW: "Votre entretien est planifié",
+    ApplicationStatus.ACCEPTED: "Votre candidature est acceptée",
+    ApplicationStatus.REJECTED: "Votre candidature est refusée",
 }
 
 
@@ -19,7 +19,7 @@ def send_application_status_email(application, status: str, message: str = "") -
     candidate = application.candidate
     body = message or (
         f"Bonjour {candidate.full_name},\n\n"
-        f"Le statut de votre candidature est maintenant: {application.get_status_display()}.\n\n"
+        f"Le statut de votre candidature est maintenant : {application.get_status_display()}.\n\n"
         "Cordialement,\nSmart Academy Manager"
     )
     send_mail(
@@ -29,4 +29,3 @@ def send_application_status_email(application, status: str, message: str = "") -
         recipient_list=[candidate.email],
         fail_silently=True,
     )
-

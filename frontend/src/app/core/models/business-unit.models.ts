@@ -55,6 +55,7 @@ export interface BusinessUnitMembership {
   position: string;
   joined_at: string;
   is_active: boolean;
+  member_email?: string;
 }
 
 export interface BusinessUnitNeed {

@@ -4,9 +4,11 @@ from rest_framework.generics import GenericAPIView, RetrieveUpdateAPIView
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
 from rest_framework_simplejwt.views import TokenObtainPairView
+from django_filters.rest_framework import DjangoFilterBackend
+from rest_framework.filters import OrderingFilter, SearchFilter
 
 from .permissions import CanManageUsers
-from .roles import is_administrative_user
+from .roles import is_super_admin
 from .serializers import (
     MeSerializer,
     ChangePasswordSerializer,
@@ -25,6 +27,7 @@ class SmartAcademyTokenObtainPairView(TokenObtainPairView):
 
 
 class MeAPIView(RetrieveUpdateAPIView):
+    """All authenticated users can read and update their own profile."""
     serializer_class = MeSerializer
     permission_classes = [IsAuthenticated]
 
@@ -33,6 +36,7 @@ class MeAPIView(RetrieveUpdateAPIView):
 
 
 class ChangePasswordAPIView(GenericAPIView):
+    """All authenticated users can change their own password."""
     serializer_class = ChangePasswordSerializer
     permission_classes = [IsAuthenticated]
 
@@ -44,14 +48,24 @@ class ChangePasswordAPIView(GenericAPIView):
 
 
 class UserViewSet(viewsets.ModelViewSet):
+    """User management — Super Admin only.
+
+    HR must NOT access this viewset. HR uses dedicated /api/hr/ endpoints
+    for the restricted read-only data they are authorised to see.
+    """
     queryset = User.objects.all()
     permission_classes = [CanManageUsers]
     http_method_names = ["get", "post", "patch", "delete", "head", "options"]
+    filter_backends = [DjangoFilterBackend, SearchFilter, OrderingFilter]
+    filterset_fields = ["role", "is_active"]
+    search_fields = ["email", "first_name", "last_name"]
+    ordering_fields = ["email", "created_at", "role"]
+    ordering = ["email"]
 
     def get_queryset(self):
-        if is_administrative_user(self.request.user):
-            return super().get_queryset()
-        return super().get_queryset().none()
+        if is_super_admin(self.request.user):
+            return User.objects.all()
+        return User.objects.none()
 
     def get_serializer_class(self):
         if self.action == "create":

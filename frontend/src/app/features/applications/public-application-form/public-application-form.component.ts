@@ -20,6 +20,9 @@ import {
   EducationLevel,
 } from '../../../core/models/application.models';
 import { ApplicationService } from '../../../core/services/application.service';
+import { OfferService } from '../../../core/services/offer.service';
+import { Offer } from '../../../core/models/offer.models';
+import { ActivatedRoute } from '@angular/router';
 
 type RequiredFileTarget = 'cv' | 'cover' | 'photo';
 type ApplicationFormField =
@@ -36,7 +39,8 @@ type ApplicationFormField =
   | 'portfolio_url'
   | 'address'
   | 'application_type'
-  | 'motivation_message';
+  | 'motivation_message'
+  | 'offer';
 
 const FILE_RULES: Record<
   RequiredFileTarget,
@@ -100,8 +104,10 @@ const FILE_SIGNATURES: Record<string, number[][]> = {
 })
 export class PublicApplicationFormComponent {
   private readonly applicationService = inject(ApplicationService);
+  private readonly offerService = inject(OfferService);
   private readonly formBuilder = inject(FormBuilder);
   private readonly router = inject(Router);
+  private readonly route = inject(ActivatedRoute);
   private readonly snackBar = inject(MatSnackBar);
 
   readonly applicationTypes = Object.entries(APPLICATION_TYPE_LABELS).map(([value, label]) => ({
@@ -131,6 +137,7 @@ export class PublicApplicationFormComponent {
     }),
     professional: this.formBuilder.nonNullable.group({
       application_type: ['PFA_INTERNSHIP' as ApplicationType, Validators.required],
+      offer: [null as number | null],
       linkedin_url: [''],
       portfolio_url: [''],
       motivation_message: [''],
@@ -149,6 +156,8 @@ export class PublicApplicationFormComponent {
   generalError = '';
   isSubmitting = false;
 
+  publishedOffers: Offer[] = [];
+
   constructor() {
     this.form.controls.academic.controls.study_level.valueChanges.subscribe((value) => {
       const otherControl = this.form.controls.academic.controls.study_level_other;
@@ -159,6 +168,17 @@ export class PublicApplicationFormComponent {
         otherControl.setValue('');
       }
       otherControl.updateValueAndValidity();
+    });
+  }
+
+  ngOnInit(): void {
+    this.offerService.getOffers({ status: 'PUBLISHED' }).subscribe(res => {
+      this.publishedOffers = res.results;
+      
+      const offerId = this.route.snapshot.queryParamMap.get('offer');
+      if (offerId) {
+        this.form.controls.professional.patchValue({ offer: Number(offerId) });
+      }
     });
   }
 

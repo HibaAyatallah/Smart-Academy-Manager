@@ -1,0 +1,140 @@
+<app-page-header
+  [title]="offer?.title || 'Détail de cette offre'"
+  [showBackButton]="true"
+  backButtonRoute="/offers"
+/>
+
+<div class="loading" *ngIf="isLoading">
+  <mat-spinner diameter="36"></mat-spinner>
+</div>
+
+<p class="error-state" *ngIf="!isLoading && errorMessage">
+  {{ errorMessage }}
+</p>
+
+<div class="content" *ngIf="!isLoading && !errorMessage && offer">
+  <div class="main-column">
+    <mat-card>
+      <mat-card-header>
+        <mat-card-title>Description</mat-card-title>
+      </mat-card-header>
+      <mat-card-content>
+        <p class="description">{{ offer.description }}</p>
+        
+        <mat-divider></mat-divider>
+        
+        <div class="section">
+          <h3>Compétences requises</h3>
+          <p>{{ offer.required_skills || 'Non spécifié' }}</p>
+        </div>
+      </mat-card-content>
+    </mat-card>
+  </div>
+
+  <div class="side-column">
+    <mat-card>
+      <mat-card-header>
+        <mat-card-title>Informations clés</mat-card-title>
+      </mat-card-header>
+      <mat-card-content>
+        <ul class="info-list">
+          <li>
+            <mat-icon>business</mat-icon>
+            <div class="info-text">
+              <span class="label">Business Unit</span>
+              <span>{{ offer.business_unit_name }}</span>
+            </div>
+          </li>
+          <li>
+            <mat-icon>work</mat-icon>
+            <div class="info-text">
+              <span class="label">Type de contrat</span>
+              <span>{{ typeLabel(offer.application_type) }}</span>
+            </div>
+          </li>
+          <li>
+            <mat-icon>location_on</mat-icon>
+            <div class="info-text">
+              <span class="label">Lieu</span>
+              <span>{{ offer.location || 'Non spécifié' }}</span>
+            </div>
+          </li>
+          <li>
+            <mat-icon>school</mat-icon>
+            <div class="info-text">
+              <span class="label">Niveau requis</span>
+              <span>{{ levelLabel(offer.required_level) }}</span>
+            </div>
+          </li>
+          <li>
+            <mat-icon>group</mat-icon>
+            <div class="info-text">
+              <span class="label">Postes ouverts</span>
+              <span>{{ offer.number_of_positions || 1 }}</span>
+            </div>
+          </li>
+          <li>
+            <mat-icon>event</mat-icon>
+            <div class="info-text">
+              <span class="label">Date de début</span>
+              <span>{{ (offer.start_date | date:'dd/MM/yyyy') || 'Non spécifié' }}</span>
+            </div>
+          </li>
+          <li>
+            <mat-icon>event_busy</mat-icon>
+            <div class="info-text">
+              <span class="label">Date de fin</span>
+              <span>{{ (offer.end_date | date:'dd/MM/yyyy') || 'Non spécifié' }}</span>
+            </div>
+          </li>
+          <li>
+            <mat-icon>timer</mat-icon>
+            <div class="info-text">
+              <span class="label">Date limite de candidature</span>
+              <span>{{ (offer.application_deadline | date:'dd/MM/yyyy') || 'Non spécifié' }}</span>
+            </div>
+          </li>
+          <li *ngIf="!isCandidate">
+            <mat-icon>info</mat-icon>
+            <div class="info-text">
+              <span class="label">Statut</span>
+              <mat-chip [class]="offer.status.toLowerCase()">
+                {{ statusLabel(offer.status) }}
+              </mat-chip>
+            </div>
+          </li>
+        </ul>
+      </mat-card-content>
+
+      <mat-divider></mat-divider>
+
+      <mat-card-actions class="actions-group vertical">
+        <!-- Actions candidat -->
+        <ng-container *ngIf="isCandidate">
+          <a mat-flat-button color="primary" [routerLink]="['/candidature']" [queryParams]="{offer: offer.id}">
+            Postuler à cette offre
+          </a>
+        </ng-container>
+
+        <!-- Actions admin -->
+        <ng-container *ngIf="isSuperAdmin">
+          <a mat-stroked-button color="primary" [routerLink]="['/offers', offer.id, 'edit']" *ngIf="offer.status === 'DRAFT' || offer.status === 'PUBLISHED'">
+            <mat-icon>edit</mat-icon> Modifier l'offre
+          </a>
+          <button mat-flat-button color="primary" (click)="publish()" *ngIf="offer.status === 'DRAFT'">
+            Publier l'offre
+          </button>
+          <button mat-stroked-button color="warn" (click)="closeOffer()" *ngIf="offer.status === 'PUBLISHED'">
+            Clôturer l'offre
+          </button>
+          <button mat-stroked-button (click)="archive()" *ngIf="offer.status === 'CLOSED'">
+            Archiver
+          </button>
+          <button mat-button color="warn" (click)="deleteOffer()" *ngIf="offer.status === 'DRAFT' || offer.status === 'ARCHIVED'">
+            Supprimer l'offre
+          </button>
+        </ng-container>
+      </mat-card-actions>
+    </mat-card>
+  </div>
+</div>

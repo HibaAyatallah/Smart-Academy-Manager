@@ -51,7 +51,7 @@ class BusinessUnitMembership(models.Model):
         verbose_name="Utilisateur",
     )
     position = models.CharField("Poste", max_length=255, blank=True)
-    joined_at = models.DateField("Date de rejoindre", default=timezone.now)
+    joined_at = models.DateField("Date de rejoindre", default=timezone.localdate)
     is_active = models.BooleanField("Actif", default=True)
 
     class Meta:
@@ -167,3 +167,30 @@ class BusinessUnitNeed(models.Model):
 
     def __str__(self):
         return f"[{self.business_unit.code}] {self.title} - {self.get_status_display()}"
+
+
+class BusinessUnitNeedHistory(models.Model):
+    need = models.ForeignKey(
+        BusinessUnitNeed,
+        on_delete=models.CASCADE,
+        related_name="history",
+        verbose_name="Besoin",
+    )
+    from_status = models.CharField("Statut précédent", max_length=50, blank=True)
+    to_status = models.CharField("Nouveau statut", max_length=50)
+    changed_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        verbose_name="Modifié par",
+    )
+    comment = models.TextField("Commentaire", blank=True)
+    created_at = models.DateTimeField("Créé le", auto_now_add=True)
+
+    class Meta:
+        verbose_name = "Historique du besoin"
+        verbose_name_plural = "Historiques des besoins"
+        ordering = ["-created_at"]
+
+    def __str__(self):
+        return f"{self.need.title}: {self.from_status} -> {self.to_status}"

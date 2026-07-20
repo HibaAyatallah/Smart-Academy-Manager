@@ -77,6 +77,33 @@ export const routes: Routes = [
         data: { roles: ['SUPER_ADMIN', 'HR'], title: 'Candidatures' },
         loadComponent: () => import('./features/applications/hr-application-list/hr-application-list.component').then(m => m.HrApplicationListComponent),
       },
+      {
+        path: 'offers',
+        canActivate: [roleGuard],
+        data: { roles: ['SUPER_ADMIN', 'HR', 'CANDIDATE'], title: 'Offres' },
+        children: [
+          {
+            path: '',
+            loadComponent: () => import('./features/offers/offer-list/offer-list.component').then(m => m.OfferListComponent),
+          },
+          {
+            path: 'new',
+            canActivate: [roleGuard],
+            data: { roles: ['SUPER_ADMIN', 'HR'] },
+            loadComponent: () => import('./features/offers/offer-form/offer-form.component').then(m => m.OfferFormComponent),
+          },
+          {
+            path: ':id',
+            loadComponent: () => import('./features/offers/offer-detail/offer-detail.component').then(m => m.OfferDetailComponent),
+          },
+          {
+            path: ':id/edit',
+            canActivate: [roleGuard],
+            data: { roles: ['SUPER_ADMIN', 'HR'] },
+            loadComponent: () => import('./features/offers/offer-form/offer-form.component').then(m => m.OfferFormComponent),
+          },
+        ]
+      },
       dashboardRoute('dashboard/super-admin', 'SUPER_ADMIN', 'Dashboard super administrateur'),
       dashboardRoute('dashboard/hr', 'HR', 'Dashboard RH'),
       dashboardRoute('dashboard/business-unit', 'BU_MANAGER', 'Dashboard Business Unit'),
@@ -86,10 +113,46 @@ export const routes: Routes = [
       dashboardRoute('dashboard/candidate', 'CANDIDATE', 'Dashboard candidat'),
       dashboardRoute('dashboard/client', 'CLIENT', 'Dashboard client'),
       {
+        path: 'users/new',
+        canActivate: [roleGuard],
+        data: { roles: ['SUPER_ADMIN'], title: 'Nouvel utilisateur' },
+        loadComponent: () => import('./features/users/user-form/user-form').then(m => m.UserForm),
+      },
+      {
+        path: 'users/:id/edit',
+        canActivate: [roleGuard],
+        data: { roles: ['SUPER_ADMIN'], title: 'Modifier un utilisateur' },
+        loadComponent: () => import('./features/users/user-form/user-form').then(m => m.UserForm),
+      },
+      {
+        path: 'users',
+        canActivate: [roleGuard],
+        data: { roles: ['SUPER_ADMIN'], title: 'Gestion des utilisateurs' },
+        loadComponent: () => import('./features/users/user-list/user-list').then(m => m.UserList),
+      },
+      {
         path: 'my-business-unit/trainings',
         canActivate: [roleGuard],
         data: { roles: ['EMPLOYEE'], title: 'Formations de ma Business Unit' },
         loadComponent: () => import('./features/business-units/employee-trainings/employee-trainings').then(m => m.EmployeeTrainings),
+      },
+      {
+        path: 'trainings',
+        canActivate: [roleGuard],
+        data: { roles: ['SUPER_ADMIN', 'HR', 'BU_MANAGER', 'TRAINER_TUTOR', 'EMPLOYEE', 'INTERN'], title: 'Formations' },
+        loadComponent: () => import('./features/trainings/training-workspace/training-workspace.component').then(m => m.TrainingWorkspaceComponent),
+      },
+      {
+        path: 'training-enrollments',
+        canActivate: [roleGuard],
+        data: { roles: ['SUPER_ADMIN', 'HR', 'BU_MANAGER', 'TRAINER_TUTOR', 'EMPLOYEE', 'INTERN'], title: 'Inscriptions aux formations' },
+        loadComponent: () => import('./features/trainings/enrollment-workflow/enrollment-workflow.component').then(m => m.EnrollmentWorkflowComponent),
+      },
+      {
+        path: 'client-trainings',
+        canActivate: [roleGuard],
+        data: { roles: ['CLIENT'], title: 'Formations client' },
+        loadComponent: () => import('./features/trainings/client-training-view/client-training-view.component').then(m => m.ClientTrainingViewComponent),
       },
       // Business Units Routes
       {

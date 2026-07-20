@@ -1,0 +1,13 @@
+<app-page-header [title]="isEdit ? 'Modifier un utilisateur' : 'Nouvel utilisateur'" subtitle="Gérez son identité, son rôle et son affectation" />
+<div class="loading" *ngIf="isLoading"><mat-spinner diameter="36" /></div><p class="error" *ngIf="errorMessage">{{ errorMessage }}</p>
+<mat-card *ngIf="!isLoading"><form [formGroup]="form" (ngSubmit)="save()">
+  <mat-form-field appearance="outline"><mat-label>Email</mat-label><input matInput type="email" formControlName="email"><mat-error>Un email valide est obligatoire.</mat-error></mat-form-field>
+  <mat-form-field appearance="outline" *ngIf="!isEdit"><mat-label>Mot de passe</mat-label><input matInput type="password" formControlName="password"></mat-form-field>
+  <mat-form-field appearance="outline"><mat-label>Prénom</mat-label><input matInput formControlName="first_name"></mat-form-field>
+  <mat-form-field appearance="outline"><mat-label>Nom</mat-label><input matInput formControlName="last_name"></mat-form-field>
+  <mat-form-field appearance="outline"><mat-label>Téléphone</mat-label><input matInput formControlName="phone_number"></mat-form-field>
+  <mat-form-field appearance="outline"><mat-label>Rôle</mat-label><mat-select formControlName="role"><mat-option *ngFor="let role of roles" [value]="role">{{ roleLabels[role] }}</mat-option></mat-select></mat-form-field>
+  <mat-form-field appearance="outline" *ngIf="supportsBusinessUnit"><mat-label>Business Unit</mat-label><mat-select formControlName="business_unit_id"><mat-option [value]="null">Non assignée</mat-option><mat-option *ngFor="let bu of businessUnits" [value]="bu.id">{{ bu.name }} ({{ bu.code }})</mat-option></mat-select></mat-form-field>
+  <mat-slide-toggle formControlName="is_active">Compte actif</mat-slide-toggle>
+  <div class="actions"><a mat-button routerLink="/users">Annuler</a><button mat-flat-button color="primary" type="submit" [disabled]="isSaving">{{ isSaving ? 'Enregistrement…' : 'Enregistrer' }}</button></div>
+</form></mat-card>

@@ -8,14 +8,19 @@ class ApplicationType(models.TextChoices):
 
 
 class ApplicationStatus(models.TextChoices):
-    SUBMITTED = "SUBMITTED", "Candidature deposee"
-    UNDER_REVIEW = "UNDER_REVIEW", "En cours d'etude"
-    PRESELECTED = "PRESELECTED", "Preselectionne"
-    INTERVIEW_SCHEDULED = "INTERVIEW_SCHEDULED", "Entretien planifie"
-    INTERVIEW_COMPLETED = "INTERVIEW_COMPLETED", "Entretien realise"
-    ACCEPTED = "ACCEPTED", "Accepte"
-    REJECTED = "REJECTED", "Refuse"
-    CANCELLED = "CANCELLED", "Annule"
+    RECEIVED = "RECEIVED", "Reçue"
+    UNDER_REVIEW = "UNDER_REVIEW", "En cours d'étude"
+    PRESELECTED = "PRESELECTED", "Présélectionné"
+    INTERVIEW = "INTERVIEW", "Entretien"
+    ACCEPTED = "ACCEPTED", "Accepté"
+    REJECTED = "REJECTED", "Refusé"
+    ARCHIVED = "ARCHIVED", "Archivé"
+
+class OfferStatus(models.TextChoices):
+    DRAFT = "DRAFT", "Brouillon"
+    PUBLISHED = "PUBLISHED", "Publiée"
+    CLOSED = "CLOSED", "Fermée"
+    ARCHIVED = "ARCHIVED", "Archivée"
 
 
 class ApplicationDocumentType(models.TextChoices):
@@ -36,3 +41,25 @@ class StudyLevel(models.TextChoices):
     ENGINEERING = "ENGINEERING", "Cycle ingenieur"
     DOCTORATE = "DOCTORATE", "Doctorat"
     OTHER = "OTHER", "Autre"
+
+
+class InternshipStatus(models.TextChoices):
+    UPCOMING = "UPCOMING", "À venir"
+    ACTIVE = "ACTIVE", "En cours"
+    SUSPENDED = "SUSPENDED", "Suspendu"
+    COMPLETED = "COMPLETED", "Terminé"
+    CANCELLED = "CANCELLED", "Annulé"
+
+
+class InternDocumentType(models.TextChoices):
+    CONVENTION = "CONVENTION", "Convention de stage"
+    INSURANCE = "INSURANCE", "Assurance"
+    SCHOOL_CERT = "SCHOOL_CERT", "Attestation de scolarité"
+    NDA = "NDA", "Accord de confidentialité"
+    OTHER = "OTHER", "Autre document"
+
+
+class EvaluationType(models.TextChoices):
+    INITIAL = "INITIAL", "Évaluation initiale"
+    MIDTERM = "MIDTERM", "Évaluation à mi-parcours"
+    FINAL = "FINAL", "Évaluation finale"

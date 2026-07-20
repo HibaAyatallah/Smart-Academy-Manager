@@ -52,7 +52,7 @@ Endpoints principaux :
 Filtres RH :
 
 - `GET /api/applications/?application_type=PFA_INTERNSHIP`
-- `GET /api/applications/?status=SUBMITTED`
+- `GET /api/applications/?status=RECEIVED`
 - `GET /api/applications/?search=nom-ou-email`
 
 Types de candidature :
@@ -103,14 +103,12 @@ Les tailles maximales sont configurees par `RECRUITMENT_MAX_UPLOAD_SIZE_MB` pour
 
 Statuts :
 
-- `SUBMITTED`
-- `UNDER_REVIEW`
-- `PRESELECTED`
-- `INTERVIEW_SCHEDULED`
-- `INTERVIEW_COMPLETED`
+- `RECEIVED`
+- `IN_REVIEW`
+- `INTERVIEW`
 - `ACCEPTED`
 - `REJECTED`
-- `CANCELLED`
+- `ARCHIVED`
 
 Regles de securite :
 
@@ -124,3 +122,42 @@ Commande de conservation des donnees :
 ```powershell
 python manage.py anonymize_expired_applications
 ```
+
+## Offres
+
+- `GET /api/offers/` : offres visibles selon le rôle ;
+- `POST /api/offers/` : création par Super Admin ou HR ;
+- `PATCH /api/offers/{id}/` : modification par Super Admin ou HR ;
+- `POST /api/offers/{id}/publish/` ;
+- `POST /api/offers/{id}/close/` ;
+- `POST /api/offers/{id}/archive/`.
+
+Les candidats ne voient que les offres publiées.
+
+## Formations et sessions
+
+- `GET|POST /api/trainings/` ;
+- `GET|PATCH|DELETE /api/trainings/{id}/` ;
+- `POST /api/trainings/{id}/publish/` ou `/archive/` ;
+- `GET|POST /api/training-sessions/` ;
+- `POST /api/training-sessions/{id}/open_registration/` ;
+- `POST /api/training-sessions/{id}/close_registration/` ;
+- `POST /api/training-sessions/{id}/cancel/` ou `/complete/`.
+
+Super Admin et HR administrent le catalogue et les sessions. Les autres rôles internes ont une lecture filtrée selon leurs affectations et Business Units.
+
+## Inscriptions
+
+- `POST /api/enrollments/` : demande d'inscription ;
+- `GET /api/enrollments/` : liste filtrée selon le rôle ;
+- `POST /api/enrollments/{id}/manager_approve/` ou `/manager_reject/` ;
+- `POST /api/enrollments/{id}/super_admin_approve/` ou `/super_admin_reject/` ;
+- `POST /api/enrollments/direct_enrollment/` : inscription directe Super Admin ;
+- `POST /api/enrollments/{id}/cancel/` ou `/complete/`.
+
+## Client externe
+
+- `GET /api/client/trainings/` ;
+- `GET /api/client/sessions/`.
+
+Ces endpoints sont strictement limités au profil client connecté.

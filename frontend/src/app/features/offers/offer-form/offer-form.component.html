@@ -1,0 +1,107 @@
+<app-page-header
+  [title]="isEditing ? 'Modifier cette offre' : 'Nouvelle offre'"
+  [showBackButton]="true"
+  backButtonRoute="/offers"
+/>
+
+<mat-card class="form-card">
+  <form [formGroup]="form" (ngSubmit)="onSubmit()" class="form-container">
+    
+    <div class="form-row">
+      <mat-form-field appearance="outline" class="full-width">
+        <mat-label>Titre de l'offre</mat-label>
+        <input matInput formControlName="title" required>
+        <mat-error *ngIf="form.get('title')?.hasError('required')">Ce champ est requis</mat-error>
+      </mat-form-field>
+    </div>
+
+    <div class="form-row">
+      <mat-form-field appearance="outline" class="half-width">
+        <mat-label>Business Unit</mat-label>
+        <mat-select formControlName="business_unit" required>
+          <mat-option *ngFor="let bu of businessUnits" [value]="bu.id">
+            {{ bu.name }}
+          </mat-option>
+        </mat-select>
+        <mat-error *ngIf="form.get('business_unit')?.hasError('required')">Ce champ est requis</mat-error>
+      </mat-form-field>
+
+      <mat-form-field appearance="outline" class="half-width">
+        <mat-label>Type de candidature</mat-label>
+        <mat-select formControlName="application_type" required>
+          <mat-option *ngFor="let type of applicationTypes" [value]="type.value">
+            {{ type.label }}
+          </mat-option>
+        </mat-select>
+        <mat-error *ngIf="form.get('application_type')?.hasError('required')">Ce champ est requis</mat-error>
+      </mat-form-field>
+    </div>
+
+    <div class="form-row">
+      <mat-form-field appearance="outline" class="full-width">
+        <mat-label>Description détaillée</mat-label>
+        <textarea matInput formControlName="description" rows="5" required></textarea>
+        <mat-error *ngIf="form.get('description')?.hasError('required')">Ce champ est requis</mat-error>
+      </mat-form-field>
+    </div>
+
+    <div class="form-row">
+      <mat-form-field appearance="outline" class="half-width">
+        <mat-label>Niveau requis</mat-label>
+        <mat-select formControlName="required_level">
+          <mat-option value="">Non spécifié</mat-option>
+          <mat-option *ngFor="let level of educationLevels" [value]="level.value">
+            {{ level.label }}
+          </mat-option>
+        </mat-select>
+      </mat-form-field>
+
+      <mat-form-field appearance="outline" class="half-width">
+        <mat-label>Compétences requises</mat-label>
+        <input matInput formControlName="required_skills" placeholder="Ex: Python, Angular, SQL">
+      </mat-form-field>
+    </div>
+
+    <div class="form-row">
+      <mat-form-field appearance="outline" class="third-width">
+        <mat-label>Lieu</mat-label>
+        <input matInput formControlName="location">
+      </mat-form-field>
+
+      <mat-form-field appearance="outline" class="third-width">
+        <mat-label>Nombre de postes</mat-label>
+        <input matInput type="number" formControlName="number_of_positions" min="1">
+      </mat-form-field>
+    </div>
+
+    <div class="form-row">
+      <mat-form-field appearance="outline" class="third-width">
+        <mat-label>Date de début</mat-label>
+        <input matInput [matDatepicker]="startPicker" formControlName="start_date">
+        <mat-datepicker-toggle matIconSuffix [for]="startPicker"></mat-datepicker-toggle>
+        <mat-datepicker #startPicker></mat-datepicker>
+      </mat-form-field>
+
+      <mat-form-field appearance="outline" class="third-width">
+        <mat-label>Date de fin</mat-label>
+        <input matInput [matDatepicker]="endPicker" formControlName="end_date">
+        <mat-datepicker-toggle matIconSuffix [for]="endPicker"></mat-datepicker-toggle>
+        <mat-datepicker #endPicker></mat-datepicker>
+      </mat-form-field>
+
+      <mat-form-field appearance="outline" class="third-width">
+        <mat-label>Date limite de candidature</mat-label>
+        <input matInput [matDatepicker]="deadlinePicker" formControlName="application_deadline">
+        <mat-datepicker-toggle matIconSuffix [for]="deadlinePicker"></mat-datepicker-toggle>
+        <mat-datepicker #deadlinePicker></mat-datepicker>
+      </mat-form-field>
+    </div>
+
+    <div class="form-actions">
+      <button mat-button type="button" routerLink="/offers" [disabled]="isLoading">Annuler</button>
+      <button mat-flat-button color="primary" type="submit" [disabled]="isLoading">
+        {{ isLoading ? 'Enregistrement...' : 'Enregistrer' }}
+      </button>
+    </div>
+  </form>
+</mat-card>

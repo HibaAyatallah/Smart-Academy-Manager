@@ -11,4 +11,9 @@ import { Component, Input } from '@angular/core';
 export class PageHeaderComponent {
   @Input({ required: true }) title = '';
   @Input() subtitle = '';
+  @Input() showBackButton = false;
+
+  goBack(): void {
+    window.history.back();
+  }
 }

@@ -19,6 +19,7 @@ from .choices import (
     ApplicationStatus,
     ApplicationType,
     StudyLevel,
+    OfferStatus,
 )
 from .models import (
     Application,
@@ -28,7 +29,9 @@ from .models import (
     EmployeeProfile,
     InternProfile,
     Interview,
+    Offer,
 )
+from apps.business_units.models import BusinessUnit, BusinessUnitMembership
 
 User = get_user_model()
 TEST_MEDIA_ROOT = tempfile.mkdtemp()
@@ -48,6 +51,10 @@ class RecruitmentAPITests(APITestCase):
         # Throttle state is stored outside the test database. Reset it so a
         # public submission made by one test cannot rate-limit another test.
         cache.clear()
+        self.super_admin = User.objects.create_superuser(
+            email="superadmin@example.com",
+            password="StrongPass123!",
+        )
         self.hr = User.objects.create_user(
             email="hr@example.com",
             password="StrongPass123!",
@@ -97,10 +104,10 @@ class RecruitmentAPITests(APITestCase):
 
         self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
 
-    def test_hr_can_list_and_filter_applications(self):
+    def test_super_admin_can_list_and_filter_applications(self):
         self.create_application("candidate@example.com", ApplicationType.PFA_INTERNSHIP)
         self.create_application("hire@example.com", ApplicationType.HIRING)
-        self.client.force_authenticate(user=self.hr)
+        self.client.force_authenticate(user=self.super_admin)
 
         response = self.client.get(
             "/api/applications/",
@@ -112,13 +119,8 @@ class RecruitmentAPITests(APITestCase):
         self.assertEqual(response.data["results"][0]["application_type"], ApplicationType.HIRING)
 
     def test_super_admin_can_list_paginated_applications(self):
-        super_admin = User.objects.create_user(
-            email="superadmin@example.com",
-            password="StrongPass123!",
-            role=UserRole.SUPER_ADMIN,
-        )
         self.create_application("candidate@example.com", ApplicationType.PFA_INTERNSHIP)
-        self.client.force_authenticate(user=super_admin)
+        self.client.force_authenticate(user=self.super_admin)
 
         response = self.client.get("/api/applications/")
 
@@ -130,7 +132,7 @@ class RecruitmentAPITests(APITestCase):
     def test_application_list_returns_the_requested_drf_page(self):
         for index in range(21):
             self.create_application(f"candidate-{index}@example.com")
-        self.client.force_authenticate(user=self.hr)
+        self.client.force_authenticate(user=self.super_admin)
 
         response = self.client.get("/api/applications/", {"page": 2})
 
@@ -168,11 +170,16 @@ class RecruitmentAPITests(APITestCase):
 
     def test_other_roles_cannot_access_application_module(self):
         self.create_application("candidate@example.com")
+        
+        # HR gets 403
+        self.client.force_authenticate(user=self.hr)
+        response_hr = self.client.get("/api/applications/")
+        self.assertEqual(response_hr.status_code, status.HTTP_403_FORBIDDEN)
+        
+        # Employee gets 403
         self.client.force_authenticate(user=self.employee)
-
-        response = self.client.get("/api/applications/")
-
-        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+        response_emp = self.client.get("/api/applications/")
+        self.assertEqual(response_emp.status_code, status.HTTP_403_FORBIDDEN)
 
     def test_candidate_owner_can_download_own_document(self):
         application = self.create_application("candidate@example.com")
@@ -194,50 +201,32 @@ class RecruitmentAPITests(APITestCase):
 
         self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
 
-    def test_hr_can_download_candidate_document(self):
-        application = self.create_application("candidate@example.com")
-        document = self.create_document(application)
-        self.client.force_authenticate(user=self.hr)
-
-        response = self.client.get(f"/api/application-documents/{document.pk}/download/")
-
-        self.assertEqual(response.status_code, status.HTTP_200_OK)
-
     def test_super_admin_can_download_candidate_document(self):
-        super_admin = User.objects.create_user(
-            email="superadmin-document@example.com",
-            password="StrongPass123!",
-            role=UserRole.SUPER_ADMIN,
-        )
         application = self.create_application("candidate@example.com")
         document = self.create_document(application)
-        self.client.force_authenticate(user=super_admin)
+        self.client.force_authenticate(user=self.super_admin)
 
         response = self.client.get(f"/api/application-documents/{document.pk}/download/")
 
         self.assertEqual(response.status_code, status.HTTP_200_OK)
 
-    def test_employee_cannot_download_candidate_document(self):
+    def test_employee_and_hr_cannot_download_candidate_document(self):
         application = self.create_application("candidate@example.com")
         document = self.create_document(application)
+        
         self.client.force_authenticate(user=self.employee)
-
         response = self.client.get(f"/api/application-documents/{document.pk}/download/")
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
 
+        self.client.force_authenticate(user=self.hr)
+        response = self.client.get(f"/api/application-documents/{document.pk}/download/")
         self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
 
     def test_super_admin_can_view_document_from_django_admin(self):
-        super_admin = User.objects.create_user(
-            email="admin-document@example.com",
-            password="StrongPass123!",
-            role=UserRole.SUPER_ADMIN,
-            is_staff=True,
-            is_superuser=True,
-        )
         application = self.create_application("candidate@example.com")
         document = self.create_document(application)
         self.client.force_authenticate(user=None)
-        self.client.force_login(super_admin)
+        self.client.force_login(self.super_admin)
 
         response = self.client.get(
             reverse("admin:recruitment_applicationdocument_view", args=[document.pk])
@@ -247,29 +236,22 @@ class RecruitmentAPITests(APITestCase):
         self.assertEqual(response["Content-Type"], "application/pdf")
 
     def test_candidate_profile_admin_groups_recruitment_dossier(self):
-        super_admin = User.objects.create_user(
-            email="admin@example.com",
-            password="StrongPass123!",
-            role=UserRole.SUPER_ADMIN,
-            is_staff=True,
-            is_superuser=True,
-        )
         application = self.create_application("candidate@example.com")
         document = self.create_document(application)
         ApplicationStatusHistory.objects.create(
             application=application,
-            from_status=ApplicationStatus.SUBMITTED,
+            from_status=ApplicationStatus.RECEIVED,
             to_status=ApplicationStatus.UNDER_REVIEW,
-            changed_by=self.hr,
+            changed_by=self.super_admin,
             comment="Dossier analyse.",
         )
         Interview.objects.create(
             application=application,
             scheduled_at=timezone.now() + timedelta(days=1),
             location="Salle RH",
-            created_by=self.hr,
+            created_by=self.super_admin,
         )
-        self.client.force_login(super_admin)
+        self.client.force_login(self.super_admin)
 
         response = self.client.get(
             reverse(
@@ -294,15 +276,8 @@ class RecruitmentAPITests(APITestCase):
         )
 
     def test_documents_and_status_history_are_hidden_from_admin_menu(self):
-        super_admin = User.objects.create_user(
-            email="admin@example.com",
-            password="StrongPass123!",
-            role=UserRole.SUPER_ADMIN,
-            is_staff=True,
-            is_superuser=True,
-        )
         request = RequestFactory().get("/admin/")
-        request.user = super_admin
+        request.user = self.super_admin
 
         document_admin = admin.site._registry[ApplicationDocument]
         history_admin = admin.site._registry[ApplicationStatusHistory]
@@ -310,9 +285,9 @@ class RecruitmentAPITests(APITestCase):
         self.assertFalse(document_admin.has_module_permission(request))
         self.assertFalse(history_admin.has_module_permission(request))
 
-    def test_hr_can_change_application_status(self):
+    def test_super_admin_can_change_application_status(self):
         application = self.create_application("candidate@example.com")
-        self.client.force_authenticate(user=self.hr)
+        self.client.force_authenticate(user=self.super_admin)
 
         response = self.client.post(f"/api/applications/{application.pk}/preselect/", {})
 
@@ -321,9 +296,9 @@ class RecruitmentAPITests(APITestCase):
         self.assertEqual(application.status, ApplicationStatus.PRESELECTED)
         self.assertEqual(application.status_history.first().to_status, ApplicationStatus.PRESELECTED)
 
-    def test_hr_can_execute_the_complete_application_workflow(self):
+    def test_super_admin_can_execute_the_complete_application_workflow(self):
         application = self.create_application("candidate@example.com")
-        self.client.force_authenticate(user=self.hr)
+        self.client.force_authenticate(user=self.super_admin)
 
         self.assertEqual(
             self.client.post(f"/api/applications/{application.pk}/mark-under-review/", {}).status_code,
@@ -335,14 +310,10 @@ class RecruitmentAPITests(APITestCase):
         )
         self.assertEqual(
             self.client.post(
-                f"/api/applications/{application.pk}/schedule-interview/",
+                f"/api/applications/{application.pk}/mark-interview/",
                 {"scheduled_at": (timezone.now() + timedelta(days=1)).isoformat()},
                 format="json",
             ).status_code,
-            status.HTTP_200_OK,
-        )
-        self.assertEqual(
-            self.client.post(f"/api/applications/{application.pk}/complete-interview/", {}).status_code,
             status.HTTP_200_OK,
         )
         self.assertEqual(
@@ -353,21 +324,37 @@ class RecruitmentAPITests(APITestCase):
         application.refresh_from_db()
         self.assertEqual(application.status, ApplicationStatus.ACCEPTED)
         self.assertEqual(application.interviews.count(), 1)
-        self.assertEqual(application.status_history.count(), 5)
+        self.assertEqual(application.status_history.count(), 4)
 
-    def test_invalid_schedule_does_not_create_an_interview(self):
+    def test_hr_cannot_change_application_status(self):
         application = self.create_application("candidate@example.com")
         self.client.force_authenticate(user=self.hr)
 
+        # HR receives 403 for preselect
+        response = self.client.post(f"/api/applications/{application.pk}/preselect/", {})
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+        
+        # HR receives 403 for accept
+        response_accept = self.client.post(f"/api/applications/{application.pk}/accept/", {})
+        self.assertEqual(response_accept.status_code, status.HTTP_403_FORBIDDEN)
+        
+        # Status has not changed
+        application.refresh_from_db()
+        self.assertEqual(application.status, ApplicationStatus.RECEIVED)
+
+    def test_invalid_schedule_does_not_create_an_interview(self):
+        application = self.create_application("candidate@example.com")
+        self.client.force_authenticate(user=self.super_admin)
+
         response = self.client.post(
-            f"/api/applications/{application.pk}/schedule-interview/",
+            f"/api/applications/{application.pk}/mark-interview/",
             {"scheduled_at": (timezone.now() + timedelta(days=1)).isoformat()},
             format="json",
         )
 
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
         application.refresh_from_db()
-        self.assertEqual(application.status, ApplicationStatus.SUBMITTED)
+        self.assertEqual(application.status, ApplicationStatus.RECEIVED)
         self.assertEqual(application.interviews.count(), 0)
 
     def test_final_application_rejects_an_incoherent_transition(self):
@@ -375,7 +362,7 @@ class RecruitmentAPITests(APITestCase):
             "candidate@example.com",
             status_value=ApplicationStatus.PRESELECTED,
         )
-        self.client.force_authenticate(user=self.hr)
+        self.client.force_authenticate(user=self.super_admin)
         self.client.post(f"/api/applications/{application.pk}/accept/", {})
 
         response = self.client.post(
@@ -387,39 +374,82 @@ class RecruitmentAPITests(APITestCase):
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
         self.assertIn("Transition invalide", str(response.data))
 
-    def test_accepting_internship_transforms_candidate_into_intern(self):
+    def test_accepting_application_does_not_auto_convert_candidate(self):
         application = self.create_application(
             "candidate@example.com",
             ApplicationType.PFE_INTERNSHIP,
             status_value=ApplicationStatus.PRESELECTED,
         )
-        self.client.force_authenticate(user=self.hr)
+        self.client.force_authenticate(user=self.super_admin)
 
         response = self.client.post(f"/api/applications/{application.pk}/accept/", {})
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        application.candidate.refresh_from_db()
+        self.assertEqual(application.candidate.role, UserRole.CANDIDATE)
+        self.assertFalse(InternProfile.objects.filter(user=application.candidate).exists())
+
+    def test_convert_accepted_application_to_intern(self):
+        application = self.create_application(
+            "candidate@example.com",
+            ApplicationType.PFE_INTERNSHIP,
+            status_value=ApplicationStatus.ACCEPTED,
+        )
+        # We need a BU manager for the BU
+        bu_manager = User.objects.create_user(
+            email="manager@example.com",
+            password="pass",
+            role=UserRole.BU_MANAGER,
+        )
+        bu = BusinessUnit.objects.create(
+            name="Tech", code="TECH", manager=bu_manager
+        )
+        self.client.force_authenticate(user=self.super_admin)
+
+        payload = {
+            "conversion_type": "INTERN",
+            "business_unit": bu.id,
+            "supervisor": self.employee.id,
+        }
+        response = self.client.post(f"/api/applications/{application.pk}/convert/", payload)
 
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         application.candidate.refresh_from_db()
         self.assertEqual(application.candidate.role, UserRole.INTERN)
         self.assertTrue(InternProfile.objects.filter(user=application.candidate).exists())
+        self.assertTrue(BusinessUnitMembership.objects.filter(user=application.candidate, business_unit=bu).exists())
 
-    def test_accepting_hiring_transforms_candidate_into_employee(self):
+    def test_convert_accepted_application_to_employee(self):
         application = self.create_application(
-            "candidate@example.com",
+            "candidate2@example.com",
             ApplicationType.HIRING,
-            status_value=ApplicationStatus.PRESELECTED,
+            status_value=ApplicationStatus.ACCEPTED,
         )
-        self.client.force_authenticate(user=self.hr)
+        bu_manager = User.objects.create_user(
+            email="manager2@example.com",
+            password="pass",
+            role=UserRole.BU_MANAGER,
+        )
+        bu = BusinessUnit.objects.create(
+            name="HR Dept", code="HR", manager=bu_manager
+        )
+        self.client.force_authenticate(user=self.super_admin)
 
-        response = self.client.post(f"/api/applications/{application.pk}/accept/", {})
+        payload = {
+            "conversion_type": "EMPLOYEE",
+            "business_unit": bu.id,
+        }
+        response = self.client.post(f"/api/applications/{application.pk}/convert/", payload)
 
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         application.candidate.refresh_from_db()
         self.assertEqual(application.candidate.role, UserRole.EMPLOYEE)
         self.assertTrue(EmployeeProfile.objects.filter(user=application.candidate).exists())
+        self.assertTrue(BusinessUnitMembership.objects.filter(user=application.candidate, business_unit=bu).exists())
 
     def test_rejecting_application_disables_candidate_account(self):
         application = self.create_application("candidate@example.com")
-        self.client.force_authenticate(user=self.hr)
+        self.client.force_authenticate(user=self.super_admin)
 
         response = self.client.post(
             f"/api/applications/{application.pk}/reject/",
@@ -638,7 +668,7 @@ class RecruitmentAPITests(APITestCase):
         self,
         email,
         application_type=ApplicationType.PFA_INTERNSHIP,
-        status_value=ApplicationStatus.SUBMITTED,
+        status_value=ApplicationStatus.RECEIVED,
     ):
         user = User.objects.create_user(
             email=email,
@@ -682,3 +712,95 @@ class RecruitmentAPITests(APITestCase):
             size=uploaded_file.size,
             uploaded_by=application.candidate,
         )
+
+
+class OfferTests(APITestCase):
+    def setUp(self):
+        cache.clear()
+        self.super_admin = User.objects.create_superuser(
+            email="superadmin@example.com",
+            password="StrongPass123!",
+        )
+        self.hr = User.objects.create_user(
+            email="hr@example.com",
+            password="StrongPass123!",
+            role=UserRole.HR,
+        )
+        self.bu_manager = User.objects.create_user(
+            email="bumanager@example.com",
+            password="StrongPass123!",
+            role=UserRole.BU_MANAGER,
+        )
+        self.candidate = User.objects.create_user(
+            email="candidate@example.com",
+            password="StrongPass123!",
+            role=UserRole.CANDIDATE,
+        )
+        self.business_unit = BusinessUnit.objects.create(
+            name="Tech", code="TECH", manager=self.bu_manager
+        )
+        self.offer_payload = {
+            "title": "Software Engineer Intern",
+            "description": "Join our team",
+            "business_unit": self.business_unit.id,
+            "application_type": ApplicationType.PFE_INTERNSHIP,
+        }
+
+    def test_super_admin_can_create_offer(self):
+        self.client.force_authenticate(user=self.super_admin)
+        response = self.client.post("/api/offers/", self.offer_payload)
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(Offer.objects.count(), 1)
+        self.assertEqual(Offer.objects.first().status, OfferStatus.DRAFT)
+
+    def test_hr_can_create_offer(self):
+        self.client.force_authenticate(user=self.hr)
+        response = self.client.post("/api/offers/", self.offer_payload)
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(response.data["created_by_email"], self.hr.email)
+
+    def test_candidate_cannot_create_offer(self):
+        self.client.force_authenticate(user=self.candidate)
+        response = self.client.post("/api/offers/", self.offer_payload)
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+
+    def test_super_admin_can_publish_offer(self):
+        self.client.force_authenticate(user=self.super_admin)
+        response = self.client.post("/api/offers/", self.offer_payload)
+        offer_id = response.data["id"]
+        response_publish = self.client.post(f"/api/offers/{offer_id}/publish/")
+        self.assertEqual(response_publish.status_code, status.HTTP_200_OK)
+        self.assertEqual(Offer.objects.get(id=offer_id).status, OfferStatus.PUBLISHED)
+
+    def test_hr_can_read_all_offers(self):
+        self.client.force_authenticate(user=self.super_admin)
+        response = self.client.post("/api/offers/", self.offer_payload)
+        offer_id = response.data["id"]
+
+        self.client.force_authenticate(user=self.hr)
+        response_get = self.client.get(f"/api/offers/{offer_id}/")
+        self.assertEqual(response_get.status_code, status.HTTP_200_OK)
+
+        response_list = self.client.get("/api/offers/")
+        self.assertEqual(response_list.data["count"], 1)
+
+    def test_candidate_can_read_only_published_offers(self):
+        self.client.force_authenticate(user=self.super_admin)
+        response = self.client.post("/api/offers/", self.offer_payload)
+        offer_id = response.data["id"]
+
+        self.client.force_authenticate(user=self.candidate)
+        response_get_draft = self.client.get(f"/api/offers/{offer_id}/")
+        self.assertEqual(response_get_draft.status_code, status.HTTP_404_NOT_FOUND)
+        response_list_draft = self.client.get("/api/offers/")
+        self.assertEqual(response_list_draft.data["count"], 0)
+
+        self.client.force_authenticate(user=self.super_admin)
+        self.client.post(f"/api/offers/{offer_id}/publish/")
+
+        self.client.force_authenticate(user=self.candidate)
+        response_get_published = self.client.get(f"/api/offers/{offer_id}/")
+        self.assertEqual(response_get_published.status_code, status.HTTP_200_OK)
+        response_list_published = self.client.get("/api/offers/")
+        self.assertEqual(response_list_published.data["count"], 1)
+

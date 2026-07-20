@@ -58,12 +58,18 @@ class BusinessUnitTests(APITestCase):
         with self.assertRaises(Exception):
             BusinessUnit.objects.create(name="BU 3", code="BU1", manager=self.manager1)
 
-    def test_hr_can_see_all_bus(self):
-        """HR/SuperAdmin can see all BUs"""
-        self.client.force_authenticate(user=self.hr)
+    def test_superadmin_can_see_all_bus(self):
+        """SuperAdmin can see all BUs"""
+        self.client.force_authenticate(user=self.superadmin)
         response = self.client.get(reverse("business-unit-list"))
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertEqual(len(response.data["results"]), 2)
+
+    def test_hr_cannot_see_bu_list(self):
+        """HR is blocked from standard BU endpoints (uses /api/hr/ instead)"""
+        self.client.force_authenticate(user=self.hr)
+        response = self.client.get(reverse("business-unit-list"))
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
 
     def test_manager_can_see_only_own_bu(self):
         """Manager can only see their own BU"""
@@ -118,14 +124,10 @@ class BusinessUnitTests(APITestCase):
         self.assertEqual(create_response.status_code, status.HTTP_403_FORBIDDEN)
         self.assertEqual(delete_response.status_code, status.HTTP_403_FORBIDDEN)
 
-    def test_hr_and_super_admin_have_equivalent_bu_access(self):
+    def test_hr_is_blocked_from_bu_endpoints(self):
         self.client.force_authenticate(user=self.hr)
-        hr_response = self.client.get(reverse("business-unit-list"))
-        self.client.force_authenticate(user=self.superadmin)
-        admin_response = self.client.get(reverse("business-unit-list"))
-        self.assertEqual(hr_response.status_code, status.HTTP_200_OK)
-        self.assertEqual(admin_response.status_code, status.HTTP_200_OK)
-        self.assertEqual(hr_response.data, admin_response.data)
+        response = self.client.get(reverse("business-unit-list"))
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
 
     def test_create_bu_need(self):
         """Test creating a BU Need"""
@@ -154,16 +156,16 @@ class BusinessUnitTests(APITestCase):
 
     # === BU Manager Protection Tests ===
 
-    def test_hr_can_reassign_manager(self):
-        """HR can reassign a Business Unit manager"""
+    def test_hr_cannot_reassign_manager(self):
+        """HR cannot reassign a Business Unit manager"""
         self.client.force_authenticate(user=self.hr)
         response = self.client.patch(
             reverse("business-unit-detail", args=[self.bu1.id]),
             {"manager": self.manager2.id},
         )
-        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
         self.bu1.refresh_from_db()
-        self.assertEqual(self.bu1.manager, self.manager2)
+        self.assertEqual(self.bu1.manager, self.manager1)
 
     def test_super_admin_can_reassign_manager(self):
         """Super Admin can reassign a Business Unit manager"""
@@ -280,11 +282,17 @@ class BusinessUnitTests(APITestCase):
         self.client.force_authenticate(user=self.manager1)
         response = self.client.patch(
             reverse("business-unit-need-detail", args=[self.need1.id]),
-            {"status": NeedStatus.CONFIRMED, "training_link": "https://example.com"},
+            {"training_link": "https://example.com"},
         )
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        
+        # Test manager cannot transition via accept endpoint
+        response = self.client.post(
+            f"/api/business-unit-needs/{self.need1.id}/accept/", {}
+        )
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
 
-    def test_hr_can_complete_and_validate_training(self):
+    def test_superadmin_can_complete_and_validate_training(self):
         trainer = User.objects.create_user(
             email="trainer@test.com", password="pwd", role=UserRole.TRAINER_TUTOR
         )
@@ -293,23 +301,31 @@ class BusinessUnitTests(APITestCase):
             title="Formation Python",
             description="Demande manager",
             need_type=NeedType.TRAINING,
+            status=NeedStatus.SUBMITTED,
             created_by=self.manager1,
         )
         self.client.force_authenticate(user=self.superadmin)
-        response = self.client.patch(
+        # Patch the details
+        patch_response = self.client.patch(
             reverse("business-unit-need-detail", args=[training.id]),
             {
                 "training_start_date": "2026-09-10",
                 "training_end_date": "2026-09-12",
                 "training_link": "https://example.com/training",
                 "trainer": trainer.id,
-                "status": NeedStatus.CONFIRMED,
-                "decision_comment": "Formation approuvée.",
             },
+        )
+        self.assertEqual(patch_response.status_code, status.HTTP_200_OK)
+        
+        # Transition via accept endpoint
+        response = self.client.post(
+            f"/api/business-unit-needs/{training.id}/accept/",
+            {"comment": "Formation approuvée."},
+            format="json"
         )
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertEqual(response.data["trainer"], trainer.id)
-        self.assertEqual(response.data["status"], NeedStatus.CONFIRMED)
+        self.assertEqual(response.data["status"], NeedStatus.ACCEPTED)
 
     def test_employee_sees_only_validated_training_from_own_bu(self):
         visible = BusinessUnitNeed.objects.create(
@@ -317,8 +333,8 @@ class BusinessUnitTests(APITestCase):
             title="Formation validée",
             description="Visible",
             need_type=NeedType.TRAINING,
-            status=NeedStatus.CONFIRMED,
-            created_by=self.hr,
+            status=NeedStatus.ACCEPTED,
+            created_by=self.superadmin,
         )
         BusinessUnitNeed.objects.create(
             business_unit=self.bu1,
@@ -326,20 +342,53 @@ class BusinessUnitTests(APITestCase):
             description="Masquée",
             need_type=NeedType.TRAINING,
             status=NeedStatus.SUBMITTED,
-            created_by=self.hr,
+            created_by=self.superadmin,
         )
         self.client.force_authenticate(user=self.employee1)
         response = self.client.get(reverse("business-unit-need-list"))
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertEqual([item["id"] for item in response.data["results"]], [visible.id])
 
-    def test_manager_cannot_write_memberships(self):
+    def test_manager_can_add_and_remove_existing_employee_from_own_bu(self):
+        employee = User.objects.create_user(
+            email="new-member@test.com", password="pwd", role=UserRole.EMPLOYEE
+        )
+        self.client.force_authenticate(user=self.manager1)
+        create_response = self.client.post(
+            reverse("business-unit-membership-list"),
+            {"business_unit": self.bu1.id, "member_email": employee.email, "position": "QA"},
+        )
+        self.assertEqual(create_response.status_code, status.HTTP_201_CREATED, create_response.data)
+        membership = BusinessUnitMembership.objects.get(
+            business_unit=self.bu1, user=employee
+        )
+
+        delete_response = self.client.delete(
+            reverse("business-unit-membership-detail", args=[membership.id])
+        )
+        self.assertEqual(delete_response.status_code, status.HTTP_204_NO_CONTENT)
+        membership.refresh_from_db()
+        self.assertFalse(membership.is_active)
+
+    def test_manager_cannot_add_member_to_another_bu(self):
+        employee = User.objects.create_user(
+            email="other-member@test.com", password="pwd", role=UserRole.EMPLOYEE
+        )
         self.client.force_authenticate(user=self.manager1)
         response = self.client.post(
             reverse("business-unit-membership-list"),
-            {"business_unit": self.bu1.id, "user": self.candidate.id},
+            {"business_unit": self.bu2.id, "member_email": employee.email},
         )
-        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertFalse(BusinessUnitMembership.objects.filter(user=employee).exists())
+
+    def test_manager_cannot_add_non_employee_account(self):
+        self.client.force_authenticate(user=self.manager1)
+        response = self.client.post(
+            reverse("business-unit-membership-list"),
+            {"business_unit": self.bu1.id, "member_email": self.candidate.email},
+        )
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
 
     def test_specific_training_is_visible_only_to_selected_members(self):
         employee2 = User.objects.create_user(
@@ -352,7 +401,7 @@ class BusinessUnitTests(APITestCase):
             description="Ciblée",
             need_type=NeedType.TRAINING,
             training_audience="SPECIFIC",
-            status=NeedStatus.CONFIRMED,
+            status=NeedStatus.ACCEPTED,
             created_by=self.superadmin,
         )
         training.training_recipients.add(self.employee1)
@@ -381,13 +430,23 @@ class BusinessUnitTests(APITestCase):
         )
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
 
-    def test_superadmin_refusal_requires_comment(self):
+    def test_superadmin_refusal_is_supported_via_reject_endpoint(self):
         self.client.force_authenticate(user=self.superadmin)
-        response = self.client.patch(
-            reverse("business-unit-need-detail", args=[self.need1.id]),
-            {"status": NeedStatus.REFUSED, "decision_comment": ""},
+        training = BusinessUnitNeed.objects.create(
+            business_unit=self.bu1,
+            title="Formation Refused",
+            description="Demande",
+            need_type=NeedType.TRAINING,
+            status=NeedStatus.SUBMITTED,
+            created_by=self.manager1,
         )
-        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        response = self.client.post(
+            f"/api/business-unit-needs/{training.id}/reject/",
+            {"comment": "Refusé pour l'instant"},
+            format="json"
+        )
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data["status"], NeedStatus.REJECTED)
 
 
 class BusinessUnitMembershipTests(APITestCase):

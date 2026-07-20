@@ -1,6 +1,25 @@
 import { routes } from './app.routes';
 
 describe('Business Unit routes', () => {
+  it('restricts user management pages to the Super Admin', () => {
+    const privateShell = routes.find((route) => route.canActivate?.length && route.children);
+    for (const path of ['users', 'users/new', 'users/:id/edit']) {
+      const route = privateShell?.children?.find((child) => child.path === path);
+      expect(route?.data?.['roles']).toEqual(['SUPER_ADMIN']);
+      expect(route?.canActivate?.length).toBeGreaterThan(0);
+    }
+  });
+
+  it('exposes role-protected training workflow routes', () => {
+    const privateShell = routes.find((route) => route.canActivate?.length && route.children);
+    const catalogue = privateShell?.children?.find((child) => child.path === 'trainings');
+    const approvals = privateShell?.children?.find((child) => child.path === 'training-enrollments');
+    const client = privateShell?.children?.find((child) => child.path === 'client-trainings');
+    expect(catalogue?.data?.['roles']).toContain('TRAINER_TUTOR');
+    expect(approvals?.data?.['roles']).toContain('BU_MANAGER');
+    expect(client?.data?.['roles']).toEqual(['CLIENT']);
+  });
+
   it('exposes only implemented BU pages and preserves role restrictions', () => {
     const privateShell = routes.find((route) => route.canActivate?.length && route.children);
     const businessUnits = privateShell?.children?.find((route) => route.path === 'business-units');

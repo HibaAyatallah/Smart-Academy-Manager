@@ -7,16 +7,25 @@ from rest_framework.parsers import FormParser, JSONParser, MultiPartParser
 from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
 
+from apps.accounts.roles import is_hr
 from apps.accounts.throttles import PublicSubmissionRateThrottle
 
-from .choices import ApplicationStatus
-from .models import Application, ApplicationDocument, Interview
+from .choices import ApplicationStatus, OfferStatus
+from .models import (
+    Application, ApplicationDocument, Interview, Offer,
+    InternProfile, InternDocument, InternEvaluation
+)
 from .permissions import (
+    CanManageOffersOrReadPublished,
     IsApplicationParticipant,
     IsRecruitmentManager,
     can_access_application_document,
     is_candidate,
     is_recruitment_manager,
+    IsInternshipParticipant,
+    is_bu_manager,
+    is_employee,
+    is_intern,
 )
 from .serializers import (
     ApplicationDocumentSerializer,
@@ -25,10 +34,54 @@ from .serializers import (
     ApplicationSerializer,
     ApplicationStatusHistorySerializer,
     ApplicationTransitionSerializer,
+    AuthenticatedApplicationCreateSerializer,
     InterviewSerializer,
+    OfferSerializer,
     PublicApplicationCreateSerializer,
     ScheduleInterviewSerializer,
+    ApplicationConversionSerializer,
+    InternProfileSerializer,
+    InternDocumentSerializer,
+    InternEvaluationSerializer,
 )
+
+
+class OfferViewSet(viewsets.ModelViewSet):
+    serializer_class = OfferSerializer
+    permission_classes = [CanManageOffersOrReadPublished]
+
+    def get_queryset(self):
+        queryset = Offer.objects.select_related("business_unit", "created_by").all()
+        user = self.request.user
+
+        if is_recruitment_manager(user) or is_hr(user):
+            return queryset
+
+        return queryset.filter(status=OfferStatus.PUBLISHED)
+
+    def perform_create(self, serializer):
+        serializer.save(created_by=self.request.user)
+
+    @action(detail=True, methods=["post"], url_path="publish")
+    def publish(self, request, pk=None):
+        offer = self.get_object()
+        offer.status = OfferStatus.PUBLISHED
+        offer.save(update_fields=["status", "updated_at"])
+        return Response(self.get_serializer(offer).data)
+
+    @action(detail=True, methods=["post"], url_path="close")
+    def close(self, request, pk=None):
+        offer = self.get_object()
+        offer.status = OfferStatus.CLOSED
+        offer.save(update_fields=["status", "updated_at"])
+        return Response(self.get_serializer(offer).data)
+
+    @action(detail=True, methods=["post"], url_path="archive")
+    def archive(self, request, pk=None):
+        offer = self.get_object()
+        offer.status = OfferStatus.ARCHIVED
+        offer.save(update_fields=["status", "updated_at"])
+        return Response(self.get_serializer(offer).data)
 from .services import log_sensitive_action, transition_application
 
 
@@ -44,10 +97,11 @@ class ApplicationViewSet(viewsets.ModelViewSet):
         if self.action in {
             "mark_under_review",
             "preselect",
-            "schedule_interview",
-            "complete_interview",
+            "mark_interview",
             "accept",
             "reject",
+            "archive",
+            "convert",
         }:
             return [IsRecruitmentManager()]
         return super().get_permissions()
@@ -69,11 +123,17 @@ class ApplicationViewSet(viewsets.ModelViewSet):
         application_type = self.request.query_params.get("application_type")
         status_filter = self.request.query_params.get("status")
         search = self.request.query_params.get("search")
+        offer_id = self.request.query_params.get("offer")
+        business_unit_id = self.request.query_params.get("business_unit")
 
         if application_type:
             queryset = queryset.filter(application_type=application_type)
         if status_filter:
             queryset = queryset.filter(status=status_filter)
+        if offer_id:
+            queryset = queryset.filter(offer_id=offer_id)
+        if business_unit_id:
+            queryset = queryset.filter(offer__business_unit_id=business_unit_id)
         if search:
             queryset = queryset.filter(
                 Q(candidate_profile__user__email__icontains=search)
@@ -83,7 +143,21 @@ class ApplicationViewSet(viewsets.ModelViewSet):
         return queryset
 
     def create(self, request, *args, **kwargs):
-        return Response(status=status.HTTP_405_METHOD_NOT_ALLOWED)
+        serializer = AuthenticatedApplicationCreateSerializer(
+            data=request.data, context=self.get_serializer_context()
+        )
+        serializer.is_valid(raise_exception=True)
+        application = serializer.save()
+        log_sensitive_action(
+            request.user,
+            application,
+            "APPLICATION_SUBMITTED",
+            {"candidate_email": application.candidate.email},
+        )
+        return Response(
+            ApplicationSerializer(application, context=self.get_serializer_context()).data,
+            status=status.HTTP_201_CREATED,
+        )
 
     def partial_update(self, request, *args, **kwargs):
         return Response(status=status.HTTP_405_METHOD_NOT_ALLOWED)
@@ -177,14 +251,14 @@ class ApplicationViewSet(viewsets.ModelViewSet):
     def preselect(self, request, pk=None):
         return self._transition(request, ApplicationStatus.PRESELECTED)
 
-    @action(detail=True, methods=["post"], url_path="schedule-interview")
-    def schedule_interview(self, request, pk=None):
+    @action(detail=True, methods=["post"], url_path="mark-interview")
+    def mark_interview(self, request, pk=None):
         application = self.get_object()
         serializer = ScheduleInterviewSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         application = transition_application(
             application,
-            ApplicationStatus.INTERVIEW_SCHEDULED,
+            ApplicationStatus.INTERVIEW,
             request.user,
             "Entretien planifié.",
         )
@@ -192,14 +266,10 @@ class ApplicationViewSet(viewsets.ModelViewSet):
         log_sensitive_action(
             request.user,
             application,
-            "APPLICATION_INTERVIEW_SCHEDULED",
+            "APPLICATION_INTERVIEW",
             {"interview_id": interview.pk},
         )
         return Response(self.get_serializer(application).data)
-
-    @action(detail=True, methods=["post"], url_path="complete-interview")
-    def complete_interview(self, request, pk=None):
-        return self._transition(request, ApplicationStatus.INTERVIEW_COMPLETED)
 
     @action(detail=True, methods=["post"], url_path="accept")
     def accept(self, request, pk=None):
@@ -218,14 +288,14 @@ class ApplicationViewSet(viewsets.ModelViewSet):
         )
         return Response(self.get_serializer(application).data)
 
-    @action(detail=True, methods=["post"], url_path="cancel")
-    def cancel(self, request, pk=None):
+    @action(detail=True, methods=["post"], url_path="archive")
+    def archive(self, request, pk=None):
         application = self.get_object()
         serializer = ApplicationTransitionSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         application = transition_application(
             application,
-            ApplicationStatus.CANCELLED,
+            ApplicationStatus.ARCHIVED,
             request.user,
             serializer.validated_data.get("comment", ""),
         )
@@ -242,6 +312,15 @@ class ApplicationViewSet(viewsets.ModelViewSet):
             serializer.validated_data.get("comment", ""),
         )
         return Response(self.get_serializer(application).data)
+
+    @action(detail=True, methods=["post"], url_path="convert")
+    def convert(self, request, pk=None):
+        application = self.get_object()
+        serializer = ApplicationConversionSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        from .services import convert_accepted_application
+        convert_accepted_application(application, serializer.validated_data, request.user)
+        return Response({"detail": "Candidat converti avec succès."}, status=status.HTTP_200_OK)
 
 
 class ApplicationDocumentViewSet(viewsets.ReadOnlyModelViewSet):
@@ -301,3 +380,65 @@ class InterviewViewSet(viewsets.ModelViewSet):
 
     def perform_create(self, serializer):
         serializer.save(created_by=self.request.user)
+
+
+class InternProfileViewSet(viewsets.ModelViewSet):
+    serializer_class = InternProfileSerializer
+    permission_classes = [IsInternshipParticipant]
+    
+    def get_queryset(self):
+        queryset = InternProfile.objects.select_related(
+            "user", "source_application", "business_unit", "supervisor"
+        ).prefetch_related("documents", "evaluations")
+        user = self.request.user
+        
+        if is_recruitment_manager(user) or is_hr(user):
+            return queryset
+            
+        if is_bu_manager(user):
+            return queryset.filter(business_unit__manager_id=user.id)
+            
+        if is_intern(user):
+            return queryset.filter(user_id=user.id)
+            
+        return queryset.filter(supervisor_id=user.id)
+
+
+class InternDocumentViewSet(viewsets.ModelViewSet):
+    serializer_class = InternDocumentSerializer
+    permission_classes = [IsInternshipParticipant]
+    
+    def get_queryset(self):
+        queryset = InternDocument.objects.select_related("intern__user", "validator")
+        user = self.request.user
+        
+        if is_recruitment_manager(user) or is_hr(user):
+            return queryset
+            
+        if is_bu_manager(user):
+            return queryset.filter(intern__business_unit__manager_id=user.id)
+            
+        if is_intern(user):
+            return queryset.filter(intern__user_id=user.id)
+            
+        return queryset.filter(intern__supervisor_id=user.id)
+
+
+class InternEvaluationViewSet(viewsets.ModelViewSet):
+    serializer_class = InternEvaluationSerializer
+    permission_classes = [IsInternshipParticipant]
+    
+    def get_queryset(self):
+        queryset = InternEvaluation.objects.select_related("intern__user", "evaluator")
+        user = self.request.user
+        
+        if is_recruitment_manager(user) or is_hr(user):
+            return queryset
+            
+        if is_bu_manager(user):
+            return queryset.filter(intern__business_unit__manager_id=user.id)
+            
+        if is_intern(user):
+            return queryset.filter(intern__user_id=user.id)
+            
+        return queryset.filter(intern__supervisor_id=user.id)

@@ -1,5 +1,7 @@
 # Smart Academy Manager — Project Summary
 
+> **Mise à jour 2026-07-20 :** les sections historiques qui qualifient les offres, stages et formations de modules absents sont obsolètes. Le code actuel comprend les offres, les profils/documents/évaluations de stage, ainsi qu'un workflow de formation complet : catalogue, sessions, inscriptions, validation BU Manager puis Super Admin, vues Formateur/Tuteur et Client. Le frontend de production compile et les migrations Django ne présentent aucune dérive. Les prochains modules majeurs restent les projets, la présence, les certificats, les notifications, les rapports/KPI, Moodle, le CI/CD et le déploiement.
+
 ## 1. Project Overview
 
 Smart Academy Manager is an academic and human resources management platform built with Angular, Django REST Framework, and PostgreSQL. It is developed by Finatech to modernize and centralize recruitment, intern onboarding, Business Unit management, training administration, and operational HR workflows.
@@ -228,16 +230,10 @@ Business Unit frontend tests:
 
 ## 10. Missing Modules
 
-The following modules are not yet implemented:
+The following target modules are not yet implemented end to end:
 
-- Offers
 - Projects
-- Internships management
-- Training
-- Training sessions
-- Enrollments
 - Attendance
-- Evaluations
 - Certificates
 - Notifications (notification inbox, preferences, delivery tracking)
 - Reports and KPIs
@@ -246,23 +242,23 @@ The following modules are not yet implemented:
 - CI/CD
 - Production deployment
 
-No code, models, APIs, or frontend components exist for these modules. They are planned for future sprints.
+Offers and the training/session/enrollment workflow are implemented across the backend and Angular frontend. Internship profiles, documents, and evaluations are implemented in the backend but still need a dedicated Angular administration workspace. The modules listed above are planned for future sprints.
 
 ## 11. Current Project Progress
 
-**Overall progress: 30.1%**
+**Overall progress: approximately 55%**
 
 This percentage is calculated from a weighted assessment of backend implementation, frontend implementation, frontend-backend integration, roles and security, tests and validation, and deployment and documentation. The scoring counts working connected behavior, not file presence.
 
 | Category | Weight | Score | Weighted contribution | Basis |
 |---|---|---:|---:|---|
-| Backend implementation | 25% | 32% | 8.00% | Auth, recruitment, and BU foundations exist; most product modules absent |
-| Frontend implementation | 25% | 30% | 7.50% | Public/auth/recruitment substantial; BU functional; other role experiences placeholders |
-| Frontend-backend integration | 20% | 35% | 7.00% | Auth/recruitment/BU mapped and connected; most modules missing |
-| Roles and security | 10% | 42% | 4.20% | Useful backend ownership filters; HR/Admin equivalence complete; token/upload/throttle gaps remain |
-| Tests and validation | 10% | 24% | 2.40% | 73 frontend tests and 73 backend tests pass; major coverage gaps remain |
-| Deployment and documentation | 10% | 10% | 1.00% | Basic docs/env example only; no deployment artifacts/CI |
-| **Total** | **100%** |  | **30.10%** | Weighted sum |
+| Backend implementation | 25% | 70% | 17.50% | Auth, recruitment, offers, BU, internships and training APIs exist |
+| Frontend implementation | 25% | 56% | 14.00% | Public/auth/recruitment/BU/offers/users/training workflows are connected |
+| Frontend-backend integration | 20% | 62% | 12.40% | Main implemented modules have role-aware Angular routes and API services |
+| Roles and security | 10% | 58% | 5.80% | Scoped querysets, permissions, throttling and protected downloads exist |
+| Tests and validation | 10% | 45% | 4.50% | Broad backend and frontend suites exist; newer UI paths need deeper component coverage |
+| Deployment and documentation | 10% | 12% | 1.20% | Local documentation/env example only; no deployment artifacts/CI |
+| **Total** | **100%** |  | **55.40%** | Weighted sum |
 
 The percentage is not higher because:
 - Passing tests validate only the functionality that has been implemented.

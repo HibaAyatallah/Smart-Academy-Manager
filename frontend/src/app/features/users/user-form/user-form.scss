@@ -1,0 +1,1 @@
+.loading { display:flex; justify-content:center; padding:2rem; } .error { color:#b3261e; } form { display:grid; grid-template-columns:repeat(auto-fit,minmax(260px,1fr)); gap:1rem; padding:1.25rem; } .actions { grid-column:1/-1; display:flex; justify-content:flex-end; gap:.75rem; }

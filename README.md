@@ -34,7 +34,18 @@ Smart_Academy_Manager/
   docs/
 ```
 
-Le frontend Angular contient maintenant l'authentification, les dashboards et le module candidatures.
+Le frontend Angular contient l'authentification, les espaces par rôle, le recrutement, les Business Units, les offres, la gestion des utilisateurs et le workflow complet des formations.
+
+## Modules actuellement disponibles
+
+- authentification JWT, profil et changement de mot de passe ;
+- candidatures, documents, entretiens et conversion en stagiaire/collaborateur ;
+- offres rattachées aux Business Units ;
+- Business Units, membres et besoins ;
+- catalogue de formations et gestion des sessions ;
+- demandes d'inscription, validation Manager puis Super Admin et historique ;
+- vues dédiées Formateur/Tuteur et Client externe ;
+- documentation OpenAPI/Swagger.
 
 ## Prochaine etape
 

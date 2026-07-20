@@ -22,15 +22,13 @@ class NeedPriority(models.TextChoices):
 
 
 class NeedStatus(models.TextChoices):
-    SUBMITTED = "SUBMITTED", "Soumis"
-    CONFIRMED = "CONFIRMED", "Confirmé"
-    REFUSED = "REFUSED", "Refusé"
     DRAFT = "DRAFT", "Brouillon"
-    OPEN = "OPEN", "Ouvert"
-    IN_PROGRESS = "IN_PROGRESS", "En cours"
-    VALIDATED = "VALIDATED", "Validé"
-    FULFILLED = "FULFILLED", "Pourvu"
-    CANCELLED = "CANCELLED", "Annulé"
+    SUBMITTED = "SUBMITTED", "Soumis"
+    UNDER_REVIEW = "UNDER_REVIEW", "En cours d'examen"
+    ACCEPTED = "ACCEPTED", "Accepté"
+    REJECTED = "REJECTED", "Refusé"
+    SATISFIED = "SATISFIED", "Satisfait"
+    CLOSED = "CLOSED", "Clôturé"
 
 
 class TrainingAudience(models.TextChoices):

@@ -5,6 +5,7 @@ from django.utils import timezone
 from rest_framework.exceptions import ValidationError
 
 from apps.accounts.choices import UserRole
+from apps.business_units.models import BusinessUnitMembership
 
 from .choices import ApplicationStatus, ApplicationType
 from .emails import send_application_status_email
@@ -19,37 +20,35 @@ from .models import (
 logger = logging.getLogger(__name__)
 
 ALLOWED_TRANSITIONS = {
-    ApplicationStatus.SUBMITTED: {
+    ApplicationStatus.RECEIVED: {
         ApplicationStatus.UNDER_REVIEW,
         ApplicationStatus.PRESELECTED,
         ApplicationStatus.REJECTED,
-        ApplicationStatus.CANCELLED,
+        ApplicationStatus.ARCHIVED,
     },
     ApplicationStatus.UNDER_REVIEW: {
         ApplicationStatus.PRESELECTED,
         ApplicationStatus.REJECTED,
-        ApplicationStatus.CANCELLED,
+        ApplicationStatus.ARCHIVED,
     },
     ApplicationStatus.PRESELECTED: {
-        ApplicationStatus.INTERVIEW_SCHEDULED,
+        ApplicationStatus.INTERVIEW,
         ApplicationStatus.ACCEPTED,
         ApplicationStatus.REJECTED,
-        ApplicationStatus.CANCELLED,
+        ApplicationStatus.ARCHIVED,
     },
-    ApplicationStatus.INTERVIEW_SCHEDULED: {
-        ApplicationStatus.INTERVIEW_COMPLETED,
+    ApplicationStatus.INTERVIEW: {
         ApplicationStatus.ACCEPTED,
         ApplicationStatus.REJECTED,
-        ApplicationStatus.CANCELLED,
+        ApplicationStatus.ARCHIVED,
     },
-    ApplicationStatus.INTERVIEW_COMPLETED: {
-        ApplicationStatus.ACCEPTED,
-        ApplicationStatus.REJECTED,
-        ApplicationStatus.CANCELLED,
+    ApplicationStatus.ACCEPTED: {
+        ApplicationStatus.ARCHIVED,
     },
-    ApplicationStatus.ACCEPTED: set(),
-    ApplicationStatus.REJECTED: set(),
-    ApplicationStatus.CANCELLED: set(),
+    ApplicationStatus.REJECTED: {
+        ApplicationStatus.ARCHIVED,
+    },
+    ApplicationStatus.ARCHIVED: set(),
 }
 
 
@@ -84,19 +83,18 @@ def transition_application(application: Application, new_status: str, actor, com
         if new_status == ApplicationStatus.ACCEPTED:
             locked_application.accepted_at = now
             locked_application.set_retention_deadline()
-            transform_accepted_candidate(locked_application)
         elif new_status == ApplicationStatus.REJECTED:
             locked_application.rejected_at = now
             locked_application.rejection_reason = comment
             locked_application.set_retention_deadline()
             send_application_status_email(locked_application, new_status)
             reject_candidate_account(locked_application)
-        elif new_status == ApplicationStatus.CANCELLED:
+        elif new_status == ApplicationStatus.ARCHIVED:
             locked_application.cancelled_at = now
             locked_application.set_retention_deadline()
         elif new_status in {
             ApplicationStatus.PRESELECTED,
-            ApplicationStatus.INTERVIEW_SCHEDULED,
+            ApplicationStatus.INTERVIEW,
         }:
             send_application_status_email(locked_application, new_status)
 
@@ -120,32 +118,84 @@ def transition_application(application: Application, new_status: str, actor, com
         send_application_status_email(locked_application, new_status)
     return locked_application
 
+def convert_accepted_application(application: Application, payload: dict, actor) -> None:
+    if application.status != ApplicationStatus.ACCEPTED:
+        raise ValidationError("L'application doit être acceptée pour procéder à la conversion.")
 
-def transform_accepted_candidate(application: Application) -> None:
+    conversion_type = payload["conversion_type"]
+    bu = payload["business_unit"]
+    supervisor = payload.get("supervisor")
+
     candidate = application.candidate
-    candidate.is_active = True
-    if application.application_type in {
-        ApplicationType.PFA_INTERNSHIP,
-        ApplicationType.PFE_INTERNSHIP,
-    }:
-        candidate.role = UserRole.INTERN
-        candidate.save(update_fields=["role", "is_active", "updated_at"])
-        InternProfile.objects.get_or_create(
-            user=candidate,
-            defaults={"source_application": application},
-        )
-        return
 
-    candidate.role = UserRole.EMPLOYEE
-    candidate.save(update_fields=["role", "is_active", "updated_at"])
-    EmployeeProfile.objects.get_or_create(
-        user=candidate,
-        defaults={"source_application": application},
-    )
+    with transaction.atomic():
+        candidate.is_active = True
+
+        if conversion_type == "INTERN":
+            candidate.role = UserRole.INTERN
+            candidate.save(update_fields=["role", "is_active", "updated_at"])
+            InternProfile.objects.update_or_create(
+                user=candidate,
+                defaults={
+                    "source_application": application,
+                    "school": payload.get("school", ""),
+                    "specialization": payload.get("specialization", ""),
+                    "internship_type": payload.get("internship_type", ""),
+                    "paid": payload.get("paid", False),
+                    "business_unit": bu,
+                    "supervisor": supervisor,
+                    "subject_title": payload.get("subject_title", ""),
+                    "specification_pdf": payload.get("specification_pdf"),
+                    "internship_start": payload.get("internship_start"),
+                    "internship_end": payload.get("internship_end"),
+                }
+            )
+        else:
+            candidate.role = UserRole.EMPLOYEE
+            candidate.save(update_fields=["role", "is_active", "updated_at"])
+            EmployeeProfile.objects.update_or_create(
+                user=candidate,
+                defaults={"source_application": application}
+            )
+
+        BusinessUnitMembership.objects.update_or_create(
+            user=candidate,
+            business_unit=bu,
+            defaults={"is_active": True}
+        )
+
+        log_sensitive_action(
+            actor,
+            application,
+            f"CANDIDATE_CONVERTED_TO_{conversion_type}",
+            {
+                "business_unit": bu.code,
+                "supervisor_id": supervisor.id if supervisor else None,
+            },
+        )
 
 
 def reject_candidate_account(application: Application) -> None:
+    """Deactivate the candidate account, but only if they are still a CANDIDATE.
+
+    Guard against the edge case where a user has a second application rejected
+    after having already been accepted and promoted to INTERN or EMPLOYEE via
+    a previous application, or if they have other pending applications.
+    """
+    from apps.accounts.choices import UserRole
+
     candidate = application.candidate
-    candidate.is_active = False
-    candidate.save(update_fields=["is_active", "updated_at"])
+    if candidate.role != UserRole.CANDIDATE:
+        # Already promoted — do not deactivate an active employee/intern.
+        return
+        
+    has_active_applications = Application.objects.filter(
+        candidate_profile=application.candidate_profile
+    ).exclude(pk=application.pk).exclude(
+        status__in=[ApplicationStatus.ACCEPTED, ApplicationStatus.REJECTED, ApplicationStatus.ARCHIVED]
+    ).exists()
+    
+    if not has_active_applications:
+        candidate.is_active = False
+        candidate.save(update_fields=["is_active", "updated_at"])
 

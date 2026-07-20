@@ -5,18 +5,32 @@ from rest_framework.routers import DefaultRouter
 from rest_framework_simplejwt.views import TokenRefreshView, TokenVerifyView
 
 from apps.accounts.views import ChangePasswordAPIView, MeAPIView, UserViewSet, SmartAcademyTokenObtainPairView
-from apps.recruitment.views import ApplicationDocumentViewSet, ApplicationViewSet, InterviewViewSet
+from apps.recruitment.views import (
+    ApplicationDocumentViewSet, 
+    ApplicationViewSet, 
+    InterviewViewSet, 
+    OfferViewSet,
+    InternProfileViewSet,
+    InternDocumentViewSet,
+    InternEvaluationViewSet
+)
 
 router = DefaultRouter()
 router.register("users", UserViewSet, basename="user")
+router.register("offers", OfferViewSet, basename="offer")
 router.register("applications", ApplicationViewSet, basename="application")
 router.register("application-documents", ApplicationDocumentViewSet, basename="application-document")
 router.register("interviews", InterviewViewSet, basename="interview")
-
+router.register("interns", InternProfileViewSet, basename="intern")
+router.register("intern-documents", InternDocumentViewSet, basename="intern-document")
+router.register("intern-evaluations", InternEvaluationViewSet, basename="intern-evaluation")
 urlpatterns = [
     path("admin/", admin.site.urls),
     path("api/", include(router.urls)),
     path("api/", include("apps.business_units.urls")),
+    path("api/", include("apps.trainings.urls")),
+    # HR read-only endpoints (restricted scope: interns, collaborators by BU)
+    path("api/", include("apps.accounts.hr_urls")),
     path("api/auth/token/", SmartAcademyTokenObtainPairView.as_view(), name="token_obtain_pair"),
     path("api/auth/token/refresh/", TokenRefreshView.as_view(), name="token_refresh"),
     path("api/auth/token/verify/", TokenVerifyView.as_view(), name="token_verify"),

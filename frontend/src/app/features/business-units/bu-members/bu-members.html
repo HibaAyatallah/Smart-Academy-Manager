@@ -1,5 +1,21 @@
 <app-page-header title="Membres de ma Business Unit" subtitle="Consultez les collaborateurs actifs de votre équipe" />
 
+<mat-card>
+  <form [formGroup]="searchForm" (ngSubmit)="search()">
+    <mat-form-field appearance="outline"><mat-label>Rechercher un membre</mat-label><input matInput formControlName="search" placeholder="Nom, email ou poste"></mat-form-field>
+    <button mat-flat-button color="primary" type="submit">Rechercher</button>
+    <button mat-button type="button" (click)="resetSearch()">Réinitialiser</button>
+  </form>
+</mat-card>
+
+<mat-card>
+  <form [formGroup]="addForm" (ngSubmit)="addMember()">
+    <mat-form-field appearance="outline"><mat-label>Email du collaborateur existant</mat-label><input matInput type="email" formControlName="member_email"><mat-error>Un email valide est obligatoire.</mat-error></mat-form-field>
+    <mat-form-field appearance="outline"><mat-label>Poste</mat-label><input matInput formControlName="position"></mat-form-field>
+    <button mat-flat-button color="primary" type="submit" [disabled]="isSaving">{{ isSaving ? 'Ajout…' : 'Ajouter' }}</button>
+  </form>
+</mat-card>
+
 <div *ngIf="isLoading"><mat-spinner diameter="36" /></div>
 <p *ngIf="!isLoading && errorMessage">{{ errorMessage }}</p>
 
@@ -10,6 +26,7 @@
     <ng-container matColumnDef="email"><th mat-header-cell *matHeaderCellDef>Email</th><td mat-cell *matCellDef="let member">{{ member.user_email }}</td></ng-container>
     <ng-container matColumnDef="position"><th mat-header-cell *matHeaderCellDef>Poste</th><td mat-cell *matCellDef="let member">{{ member.position || 'Non renseigné' }}</td></ng-container>
     <ng-container matColumnDef="joined_at"><th mat-header-cell *matHeaderCellDef>Depuis le</th><td mat-cell *matCellDef="let member">{{ member.joined_at | date:'dd/MM/yyyy' }}</td></ng-container>
+    <ng-container matColumnDef="actions"><th mat-header-cell *matHeaderCellDef></th><td mat-cell *matCellDef="let member"><button mat-button type="button" (click)="removeMember(member)">Retirer</button></td></ng-container>
     <tr mat-header-row *matHeaderRowDef="displayedColumns"></tr>
     <tr mat-row *matRowDef="let row; columns: displayedColumns"></tr>
   </table>

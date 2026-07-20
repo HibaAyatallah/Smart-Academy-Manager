@@ -1,4 +1,5 @@
 <header class="page-header">
+  <button *ngIf="showBackButton" class="back-button" type="button" (click)="goBack()" aria-label="Retour">←</button>
   <div>
     <h1>{{ title }}</h1>
     <p *ngIf="subtitle">{{ subtitle }}</p>

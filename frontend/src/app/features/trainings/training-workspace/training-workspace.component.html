@@ -1,0 +1,61 @@
+<app-page-header title="Formations" subtitle="Catalogue, sessions et inscriptions">
+  <button *ngIf="canManage" mat-flat-button color="primary" (click)="newTraining()"><mat-icon>add</mat-icon> Nouvelle formation</button>
+</app-page-header>
+
+<form class="filters" [formGroup]="filters" (ngSubmit)="load()">
+  <mat-form-field appearance="outline"><mat-label>Recherche</mat-label><input matInput formControlName="search"></mat-form-field>
+  <mat-form-field appearance="outline"><mat-label>Statut</mat-label><mat-select formControlName="status"><mat-option value="">Tous</mat-option><mat-option value="DRAFT">Brouillon</mat-option><mat-option value="PUBLISHED">Publiée</mat-option><mat-option value="ARCHIVED">Archivée</mat-option></mat-select></mat-form-field>
+  <button mat-stroked-button type="submit">Filtrer</button>
+</form>
+
+<p *ngIf="loading">Chargement…</p><p class="error" *ngIf="error">{{ error }}</p>
+
+<mat-card *ngIf="showTrainingForm" class="editor">
+  <mat-card-title>{{ editingTrainingId ? 'Modifier' : 'Créer' }} une formation</mat-card-title>
+  <form [formGroup]="trainingForm" (ngSubmit)="saveTraining()" class="form-grid">
+    <mat-form-field appearance="outline"><mat-label>Titre</mat-label><input matInput formControlName="title"></mat-form-field>
+    <mat-form-field appearance="outline"><mat-label>Catégorie</mat-label><input matInput formControlName="category"></mat-form-field>
+    <mat-form-field appearance="outline"><mat-label>Type</mat-label><mat-select formControlName="training_type"><mat-option value="INTERNAL">Interne</mat-option><mat-option value="CLIENT">Client</mat-option><mat-option value="TECHNICAL">Technique</mat-option><mat-option value="SOFT_SKILLS">Soft skills</mat-option><mat-option value="CERTIFICATION">Certification</mat-option><mat-option value="E_LEARNING">E-learning</mat-option></mat-select></mat-form-field>
+    <mat-form-field appearance="outline"><mat-label>Mode</mat-label><mat-select formControlName="delivery_mode"><mat-option value="ON_SITE">Présentiel</mat-option><mat-option value="REMOTE">Distanciel</mat-option><mat-option value="HYBRID">Hybride</mat-option><mat-option value="E_LEARNING">E-learning</mat-option></mat-select></mat-form-field>
+    <mat-form-field appearance="outline"><mat-label>Niveau</mat-label><input matInput formControlName="level"></mat-form-field>
+    <mat-form-field appearance="outline"><mat-label>Durée (heures)</mat-label><input matInput type="number" formControlName="duration"></mat-form-field>
+    <mat-form-field appearance="outline" class="wide"><mat-label>Description</mat-label><textarea matInput formControlName="description"></textarea></mat-form-field>
+    <mat-form-field appearance="outline" class="wide"><mat-label>Objectifs</mat-label><textarea matInput formControlName="objectives"></textarea></mat-form-field>
+    <mat-form-field appearance="outline" class="wide"><mat-label>Prérequis</mat-label><textarea matInput formControlName="prerequisites"></textarea></mat-form-field>
+    <mat-form-field appearance="outline"><mat-label>ID formateur</mat-label><input matInput type="number" formControlName="trainer"></mat-form-field>
+    <mat-form-field appearance="outline"><mat-label>ID Business Unit</mat-label><input matInput type="number" formControlName="business_unit"></mat-form-field>
+    <mat-form-field appearance="outline"><mat-label>ID client</mat-label><input matInput type="number" formControlName="external_client"></mat-form-field>
+    <mat-form-field appearance="outline"><mat-label>Projet</mat-label><input matInput formControlName="project_name"></mat-form-field>
+    <mat-form-field appearance="outline"><mat-label>Lien associé</mat-label><input matInput formControlName="associated_link"></mat-form-field>
+    <mat-form-field appearance="outline"><mat-label>Lien Moodle</mat-label><input matInput formControlName="moodle_link"></mat-form-field>
+    <div class="wide actions"><button mat-button type="button" (click)="showTrainingForm=false">Annuler</button><button mat-flat-button color="primary" [disabled]="saving">Enregistrer</button></div>
+  </form>
+</mat-card>
+
+<div class="workspace" *ngIf="!loading">
+  <section class="catalog">
+    <mat-card *ngFor="let training of trainings" class="training-card" (click)="select(training)" [class.selected]="selected?.id===training.id">
+      <mat-card-title>{{ training.title }}</mat-card-title><mat-card-subtitle>{{ training.category }} · {{ training.duration }} h</mat-card-subtitle>
+      <p>{{ training.description }}</p><mat-chip>{{ trainingLabels[training.status] || training.status }}</mat-chip>
+    </mat-card><p *ngIf="!trainings.length">Aucune formation disponible.</p>
+  </section>
+
+  <section *ngIf="selected" class="detail">
+    <mat-card><mat-card-title>{{ selected.title }}</mat-card-title><p>{{ selected.objectives }}</p><p><strong>Mode :</strong> {{ selected.delivery_mode }} · <strong>Niveau :</strong> {{ selected.level }}</p>
+      <div class="actions" *ngIf="canManage"><button mat-stroked-button (click)="editTraining(selected)">Modifier</button><button mat-button *ngIf="selected.status==='DRAFT'" (click)="trainingAction(selected,'publish')">Publier</button><button mat-button *ngIf="selected.status!=='ARCHIVED'" (click)="trainingAction(selected,'archive')">Archiver</button><button mat-flat-button color="primary" (click)="newSession()">Nouvelle session</button></div>
+    </mat-card>
+    <mat-card *ngIf="showSessionForm" class="editor"><mat-card-title>{{ editingSessionId ? 'Modifier' : 'Créer' }} une session</mat-card-title>
+      <form [formGroup]="sessionForm" (ngSubmit)="saveSession()" class="form-grid">
+        <mat-form-field appearance="outline"><mat-label>Début</mat-label><input matInput type="date" formControlName="start_date"></mat-form-field><mat-form-field appearance="outline"><mat-label>Fin</mat-label><input matInput type="date" formControlName="end_date"></mat-form-field>
+        <mat-form-field appearance="outline"><mat-label>Heure de début</mat-label><input matInput type="time" formControlName="start_time"></mat-form-field><mat-form-field appearance="outline"><mat-label>Heure de fin</mat-label><input matInput type="time" formControlName="end_time"></mat-form-field>
+        <mat-form-field appearance="outline"><mat-label>Lieu</mat-label><input matInput formControlName="location"></mat-form-field><mat-form-field appearance="outline"><mat-label>Lien en ligne</mat-label><input matInput formControlName="online_link"></mat-form-field>
+        <mat-form-field appearance="outline"><mat-label>Capacité</mat-label><input matInput type="number" formControlName="maximum_participants"></mat-form-field><mat-form-field appearance="outline"><mat-label>ID formateur</mat-label><input matInput type="number" formControlName="trainer"></mat-form-field>
+        <div class="wide actions"><button mat-button type="button" (click)="showSessionForm=false">Annuler</button><button mat-flat-button color="primary" [disabled]="saving">Enregistrer</button></div>
+      </form>
+    </mat-card>
+    <h2>Sessions</h2>
+    <mat-card *ngFor="let session of selected.sessions" class="session-card"><div><strong>{{ session.start_date | date:'dd/MM/yyyy' }}</strong> · {{ session.start_time }}–{{ session.end_time }}<br>{{ session.location || session.online_link || 'Lieu à confirmer' }} · {{ session.remaining_capacity }} place(s)</div><mat-chip>{{ sessionLabels[session.status] || session.status }}</mat-chip>
+      <div class="actions"><button *ngIf="canRequest && session.status==='OPEN'" mat-flat-button color="primary" (click)="enroll(session)">Demander l'inscription</button><ng-container *ngIf="canManage"><button mat-button (click)="editSession(session)">Modifier</button><button mat-button *ngIf="session.status==='PLANNED'" (click)="sessionAction(session,'open_registration')">Ouvrir</button><button mat-button *ngIf="session.status==='OPEN'" (click)="sessionAction(session,'close_registration')">Clôturer</button><button mat-button (click)="sessionAction(session,'complete')">Terminer</button><button mat-button color="warn" (click)="sessionAction(session,'cancel')">Annuler</button></ng-container></div>
+    </mat-card><p *ngIf="!selected.sessions.length">Aucune session planifiée.</p>
+  </section>
+</div>

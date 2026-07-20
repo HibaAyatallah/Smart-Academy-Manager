@@ -131,6 +131,17 @@
             <mat-error *ngIf="apiError('application_type')">{{ apiError('application_type') }}</mat-error>
           </mat-form-field>
 
+          <mat-form-field appearance="outline" class="full-width" *ngIf="publishedOffers.length > 0">
+            <mat-label>Offre spécifique (Optionnel)</mat-label>
+            <mat-select formControlName="offer">
+              <mat-option [value]="null">Candidature spontanée</mat-option>
+              <mat-option *ngFor="let offer of publishedOffers" [value]="offer.id">
+                {{ offer.title }} ({{ offer.business_unit_name }})
+              </mat-option>
+            </mat-select>
+            <mat-error *ngIf="apiError('offer')">{{ apiError('offer') }}</mat-error>
+          </mat-form-field>
+
           <mat-form-field appearance="outline">
             <mat-label>URL LinkedIn (Optionnel)</mat-label>
             <input matInput formControlName="linkedin_url" placeholder="https://linkedin.com/in/vous">

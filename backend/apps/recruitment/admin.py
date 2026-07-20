@@ -18,6 +18,7 @@ from .models import (
     InternProfile,
     Interview,
     SensitiveAuditLog,
+    Offer,
 )
 from .permissions import can_access_application_document
 
@@ -587,3 +588,16 @@ class SensitiveAuditLogAdmin(admin.ModelAdmin):
     list_display = ("action", "actor", "application", "created_at")
     list_filter = ("action",)
     readonly_fields = ("action", "actor", "application", "details", "created_at")
+
+
+@admin.register(Offer)
+class OfferAdmin(admin.ModelAdmin):
+    list_display = ("title", "business_unit", "application_type", "status", "publication_date")
+    list_filter = ("status", "application_type", "business_unit")
+    search_fields = ("title", "description", "business_unit__name")
+    readonly_fields = ("created_by", "created_at", "updated_at")
+
+    def save_model(self, request, obj, form, change):
+        if not obj.pk:
+            obj.created_by = request.user
+        super().save_model(request, obj, form, change)

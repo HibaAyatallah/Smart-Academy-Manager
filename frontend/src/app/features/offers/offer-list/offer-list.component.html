@@ -1,0 +1,145 @@
+<app-page-header
+  title="Offres"
+  subtitle="Liste des offres"
+/>
+
+<div class="actions-bar" *ngIf="isAdmin">
+  <a mat-flat-button color="primary" routerLink="/offers/new">
+    <mat-icon>add</mat-icon>
+    Nouvelle offre
+  </a>
+</div>
+
+<mat-card class="filters-card">
+  <form [formGroup]="filtersForm" class="filters" (ngSubmit)="applyFilters()">
+    <mat-form-field appearance="outline">
+      <mat-label>Recherche</mat-label>
+      <input matInput formControlName="search" placeholder="Titre de l'offre">
+    </mat-form-field>
+
+    <mat-form-field appearance="outline" *ngIf="isAdmin">
+      <mat-label>Statut</mat-label>
+      <mat-select formControlName="status">
+        <mat-option value="">Tous</mat-option>
+        <mat-option *ngFor="let status of statuses" [value]="status.value">
+          {{ status.label }}
+        </mat-option>
+      </mat-select>
+    </mat-form-field>
+
+    <div class="filter-actions">
+      <button mat-stroked-button type="button" (click)="resetFilters()">Réinitialiser</button>
+      <button mat-flat-button color="primary" type="submit">Filtrer</button>
+    </div>
+  </form>
+</mat-card>
+
+<div class="loading" *ngIf="isLoading">
+  <mat-spinner diameter="36"></mat-spinner>
+</div>
+
+<p class="error-state" *ngIf="!isLoading && errorMessage">
+  {{ errorMessage }}
+</p>
+
+<!-- Vue Admin : Tableau -->
+<mat-card class="table-card" *ngIf="!isLoading && !errorMessage && isAdmin">
+  <div class="table-header">
+    <strong>{{ total }} offre(s)</strong>
+  </div>
+
+  <p class="empty-state" *ngIf="!offers.length">
+    Aucune offre trouvée.
+  </p>
+
+  <div class="table-wrapper" *ngIf="offers.length">
+    <table mat-table [dataSource]="offers">
+      <ng-container matColumnDef="title">
+        <th mat-header-cell *matHeaderCellDef>Titre</th>
+        <td mat-cell *matCellDef="let offer">
+          <strong>{{ offer.title }}</strong>
+        </td>
+      </ng-container>
+
+      <ng-container matColumnDef="type">
+        <th mat-header-cell *matHeaderCellDef>Type</th>
+        <td mat-cell *matCellDef="let offer">
+          {{ typeLabel(offer.application_type) }}
+        </td>
+      </ng-container>
+      
+      <ng-container matColumnDef="business_unit">
+        <th mat-header-cell *matHeaderCellDef>Business Unit</th>
+        <td mat-cell *matCellDef="let offer">
+          {{ offer.business_unit_name }}
+        </td>
+      </ng-container>
+
+      <ng-container matColumnDef="status">
+        <th mat-header-cell *matHeaderCellDef>Statut</th>
+        <td mat-cell *matCellDef="let offer">
+          <mat-chip [class]="offer.status.toLowerCase()">
+            {{ statusLabel(offer.status) }}
+          </mat-chip>
+        </td>
+      </ng-container>
+
+      <ng-container matColumnDef="publication_date">
+        <th mat-header-cell *matHeaderCellDef>Date de publication</th>
+        <td mat-cell *matCellDef="let offer">
+          {{ (offer.publication_date | date:'dd/MM/yyyy') || '-' }}
+        </td>
+      </ng-container>
+
+      <ng-container matColumnDef="actions">
+        <th mat-header-cell *matHeaderCellDef></th>
+        <td mat-cell *matCellDef="let offer">
+          <a mat-button [routerLink]="['/offers', offer.id]">Ouvrir</a>
+        </td>
+      </ng-container>
+
+      <tr mat-header-row *matHeaderRowDef="displayedColumns"></tr>
+      <tr mat-row *matRowDef="let row; columns: displayedColumns;"></tr>
+    </table>
+  </div>
+
+  <mat-paginator
+    *ngIf="total > pageSize"
+    [length]="total"
+    [pageIndex]="pageIndex"
+    [pageSize]="pageSize"
+    [pageSizeOptions]="[pageSize]"
+    (page)="onPageChange($event)"
+  />
+</mat-card>
+
+<!-- Vue Candidat : Grille de cartes -->
+<div *ngIf="!isLoading && !errorMessage && !isAdmin">
+  <p class="empty-state" *ngIf="!offers.length">
+    Aucune offre trouvée.
+  </p>
+  <div class="offers-grid" *ngIf="offers.length">
+    <mat-card class="offer-card" *ngFor="let offer of offers">
+      <mat-card-header>
+        <mat-card-title>{{ offer.title }}</mat-card-title>
+        <mat-card-subtitle>{{ typeLabel(offer.application_type) }}</mat-card-subtitle>
+      </mat-card-header>
+      <mat-card-content>
+        <p class="location"><mat-icon>location_on</mat-icon> {{ offer.location || 'Non spécifié' }}</p>
+        <p class="description">{{ offer.description | slice:0:150 }}...</p>
+      </mat-card-content>
+      <mat-card-actions>
+        <a mat-button color="primary" [routerLink]="['/offers', offer.id]">Voir l'offre</a>
+        <a mat-flat-button color="primary" [routerLink]="['/candidature']" [queryParams]="{offer: offer.id}">Postuler</a>
+      </mat-card-actions>
+    </mat-card>
+  </div>
+  <mat-paginator
+    *ngIf="total > pageSize"
+    [length]="total"
+    [pageIndex]="pageIndex"
+    [pageSize]="pageSize"
+    [pageSizeOptions]="[pageSize]"
+    (page)="onPageChange($event)"
+  />
+</div>

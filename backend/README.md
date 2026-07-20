@@ -75,3 +75,7 @@ Commande d'anonymisation :
 ```powershell
 python manage.py anonymize_expired_applications
 ```
+
+## Offres et formations
+
+Les rôles `SUPER_ADMIN` et `HR` administrent les offres, les formations et les sessions. Les collaborateurs et stagiaires peuvent demander une inscription à une session ouverte. Le BU Manager valide la première étape pour les membres de ses Business Units, puis le Super Admin effectue la validation finale. Les formateurs voient leurs formations/sessions affectées et les clients externes disposent d'endpoints isolés pour leurs formations réservées.

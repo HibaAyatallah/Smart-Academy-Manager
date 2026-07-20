@@ -31,6 +31,11 @@ export interface UserProfile {
   full_name: string;
   phone_number: string;
   role: UserRole;
+  is_active?: boolean;
+  is_staff?: boolean;
+  created_at?: string;
+  updated_at?: string;
+  business_units?: Array<{ id: number; name: string; code: string }>;
 }
 
 export const ROLE_LABELS: Record<UserRole, string> = {

@@ -1,0 +1,44 @@
+.form-card {
+  padding: 32px;
+  max-width: 900px;
+  margin: 0 auto;
+}
+
+.form-container {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+
+  .form-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 24px;
+    
+    mat-form-field {
+      flex: 1;
+
+      &.full-width {
+        flex: 1 1 100%;
+      }
+
+      &.half-width {
+        flex: 1 1 calc(50% - 12px);
+        min-width: 250px;
+      }
+
+      &.third-width {
+        flex: 1 1 calc(33.333% - 16px);
+        min-width: 200px;
+      }
+    }
+  }
+
+  .form-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 16px;
+    margin-top: 24px;
+    padding-top: 24px;
+    border-top: 1px solid rgba(0, 0, 0, 0.12);
+  }
+}
