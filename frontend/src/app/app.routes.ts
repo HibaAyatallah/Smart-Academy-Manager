@@ -196,6 +196,18 @@ export const routes: Routes = [
         data: { roles: ['SUPER_ADMIN', 'HR', 'EMPLOYEE', 'INTERN'], title: 'Projets' },
         loadComponent: () => import('./features/projects/project-list/project-list.component').then(m => m.ProjectListComponent),
       },
+      {
+        path: 'notifications',
+        canActivate: [roleGuard],
+        data: { roles: ['SUPER_ADMIN','HR','BU_MANAGER','TRAINER_TUTOR','EMPLOYEE','INTERN','CANDIDATE','CLIENT'], title: 'Notifications' },
+        loadComponent: () => import('./features/notifications/notification-center/notification-center.component').then(m => m.NotificationCenterComponent),
+      },
+      {
+        path: 'audit-logs',
+        canActivate: [roleGuard],
+        data: { roles: ['SUPER_ADMIN','HR'], title: "Journal d'audit" },
+        loadComponent: () => import('./features/notifications/audit-log/audit-log.component').then(m => m.AuditLogComponent),
+      },
       // Business Units Routes
       {
         path: 'business-units',

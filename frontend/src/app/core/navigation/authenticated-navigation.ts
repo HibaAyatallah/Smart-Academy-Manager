@@ -22,6 +22,10 @@ const ADMIN_ROLES: readonly UserRole[] = ['SUPER_ADMIN', 'HR'];
 const ADMIN_BU_ROLES: readonly UserRole[] = ['SUPER_ADMIN', 'HR'];
 
 export const AUTHENTICATED_NAVIGATION: readonly NavigationSection[] = [
+  { label: 'Activité', items: [
+    { label: 'Notifications', icon: 'notifications', route: '/notifications', roles: ALL_ROLES },
+    { label: "Journal d'audit", icon: 'history', route: '/audit-logs', roles: ADMIN_ROLES },
+  ] },
   {
     label: 'Vue d’ensemble',
     items: [

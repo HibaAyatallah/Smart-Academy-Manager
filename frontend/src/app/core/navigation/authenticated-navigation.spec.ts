@@ -10,13 +10,13 @@ describe('authenticated navigation', () => {
   });
 
   it('limits candidate navigation to implemented candidate pages', () => {
-    expect(labelsFor('CANDIDATE')).toEqual(['Tableau de bord', 'Offres', 'Mes candidatures']);
+    expect(labelsFor('CANDIDATE')).toEqual(['Notifications', 'Tableau de bord', 'Offres', 'Mes candidatures']);
     expect(labelsFor('CANDIDATE')).not.toContain('Business Units');
   });
 
   it('gives BU Managers BU and training approval destinations', () => {
     expect(labelsFor('BU_MANAGER')).toEqual([
-      'Tableau de bord', 'Besoins de ma BU', 'Membres de ma BU',
+      'Notifications', 'Tableau de bord', 'Besoins de ma BU', 'Membres de ma BU',
       'Catalogue et sessions', 'Inscriptions et validations',
       'Gestion des stagiaires',
     ]);
@@ -25,8 +25,8 @@ describe('authenticated navigation', () => {
 
   it('gives interns access to the training catalogue and their enrollments', () => {
     const sections = navigationForRole('INTERN');
-    expect(sections.length).toBe(4);
-    expect(sections[0].items[0].label).toBe('Tableau de bord');
+    expect(sections.length).toBe(5);
+    expect(sections[0].items[0].label).toBe('Notifications');
     expect(labelsFor('INTERN')).toContain('Catalogue et sessions');
     expect(labelsFor('INTERN')).toContain('Inscriptions et validations');
     expect(labelsFor('INTERN')).toContain('Mon stage');
@@ -49,6 +49,12 @@ describe('authenticated navigation', () => {
   });
 
   it('isolates the client training view', () => {
-    expect(labelsFor('CLIENT')).toEqual(['Tableau de bord', 'Mes formations client']);
+    expect(labelsFor('CLIENT')).toEqual(['Notifications', 'Tableau de bord', 'Mes formations client']);
+  });
+
+  it('limits audit navigation to Super Admin and HR', () => {
+    expect(labelsFor('SUPER_ADMIN')).toContain("Journal d'audit");
+    expect(labelsFor('HR')).toContain("Journal d'audit");
+    expect(labelsFor('EMPLOYEE')).not.toContain("Journal d'audit");
   });
 });

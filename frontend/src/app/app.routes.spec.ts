@@ -42,6 +42,14 @@ describe('Business Unit routes', () => {
     expect(create?.data?.['roles']).toEqual(['SUPER_ADMIN', 'EMPLOYEE']);
   });
 
+  it('exposes notifications to all roles and audit logs only to administrators', () => {
+    const privateShell = routes.find((route) => route.canActivate?.length && route.children);
+    const notifications = privateShell?.children?.find((child) => child.path === 'notifications');
+    const audit = privateShell?.children?.find((child) => child.path === 'audit-logs');
+    expect(notifications?.data?.['roles'].length).toBe(8);
+    expect(audit?.data?.['roles']).toEqual(['SUPER_ADMIN', 'HR']);
+  });
+
   it('exposes only implemented BU pages and preserves role restrictions', () => {
     const privateShell = routes.find((route) => route.canActivate?.length && route.children);
     const businessUnits = privateShell?.children?.find((route) => route.path === 'business-units');

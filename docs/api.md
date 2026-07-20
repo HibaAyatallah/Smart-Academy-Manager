@@ -173,6 +173,15 @@ Ces endpoints sont strictement limités au profil client connecté.
 
 Les présences `PRESENT` et `LATE` validées complètent l'inscription et génèrent automatiquement un certificat. RH dispose d'une lecture globale, les formateurs voient leurs sessions et chaque participant voit uniquement son historique et ses certificats.
 
+## Notifications et audit
+
+- `GET /api/notifications/` : notifications de l'utilisateur connecté, filtrables par catégorie et statut non lu ;
+- `POST /api/notifications/{id}/mark_read/` et `POST /api/notifications/mark_all_read/` ;
+- `GET|PATCH /api/notification-preferences/1/` : préférences par catégorie ;
+- `GET /api/audit-logs/` : journal global en lecture seule pour Super Admin et RH.
+
+Les notifications couvrent les approbations, affectations, changements de session, évaluations, documents et certificats. Le journal conserve l'acteur, l'action, la cible, le résultat HTTP, l'adresse IP et l'heure, sans enregistrer les corps de requête ni les secrets.
+
 ## Stages
 
 - `GET /api/interns/` et `GET /api/interns/{id}/` : dossiers filtrés selon le rôle ;

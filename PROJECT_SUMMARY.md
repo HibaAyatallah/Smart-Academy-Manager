@@ -1,6 +1,6 @@
 # Smart Academy Manager — Project Summary
 
-> **Mise à jour 2026-07-20 :** les sections historiques qui qualifient les offres, stages et formations de modules absents sont obsolètes. Le code actuel comprend les offres, un workflow Angular complet de gestion des stages (affectations, dates, statut, progression, documents et évaluations), ainsi que le workflow de formation : catalogue, sessions, inscriptions, validation BU Manager puis Super Admin, vues Formateur/Tuteur et Client. Le frontend de production compile et les migrations Django ne présentent aucune dérive. Les prochains modules majeurs restent les projets, la présence, les certificats, les notifications, les rapports/KPI, Moodle, le CI/CD et le déploiement.
+> **Mise à jour 2026-07-20 :** le code actuel comprend les offres, stages, projets, formations, présences, certificats, notifications internes et journal d'audit. Le frontend de production compile et les migrations Django ne présentent aucune dérive. Les prochains modules majeurs restent les rapports/KPI, Moodle, le CI/CD et le déploiement.
 
 ## 1. Project Overview
 
@@ -221,7 +221,7 @@ Latest verified results from the stabilization sprint (2026-07-14):
 
 Note: Running all backend tests together occasionally causes a PostgreSQL database lock. This is a pre-existing test infrastructure issue, not a code issue. Individual app test suites run successfully.
 
-Total automated test count: 276 tests (152 backend + 124 frontend), all passing.
+Total automated test count: 285 tests (157 backend + 128 frontend), all passing.
 
 Business Unit frontend tests:
 - `bu-list.spec.ts`: 4 tests covering create, load, empty state, pagination, error state
@@ -232,7 +232,6 @@ Business Unit frontend tests:
 
 The following target modules are not yet implemented end to end:
 
-- Notifications (notification inbox, preferences, delivery tracking)
 - Reports and KPIs
 - Moodle integration
 - AI features
@@ -243,23 +242,23 @@ Offers, training/session/enrollment, internship management, and project manageme
 
 ## 11. Current Project Progress
 
-**Overall progress: approximately 70%**
+**Overall progress: approximately 74%**
 
 This percentage is calculated from a weighted assessment of backend implementation, frontend implementation, frontend-backend integration, roles and security, tests and validation, and deployment and documentation. The scoring counts working connected behavior, not file presence.
 
 | Category | Weight | Score | Weighted contribution | Basis |
 |---|---|---:|---:|---|
-| Backend implementation | 25% | 84% | 21.00% | Core APIs include training attendance, completion and generated certificates |
-| Frontend implementation | 25% | 74% | 18.50% | Implemented workflows include internships, projects, attendance and certificates |
-| Frontend-backend integration | 20% | 80% | 16.00% | Role-aware routes, services and protected document/certificate downloads exist |
-| Roles and security | 10% | 76% | 7.60% | Scoped querysets, trainer validation, object permissions and protected downloads exist |
-| Tests and validation | 10% | 57% | 5.70% | 276 passing tests include attendance, completion and certificate security coverage |
+| Backend implementation | 25% | 87% | 21.75% | Core APIs include notifications, preferences and append-only audit records |
+| Frontend implementation | 25% | 78% | 19.50% | Implemented workflows include notification and audit administration workspaces |
+| Frontend-backend integration | 20% | 84% | 16.80% | Role-aware routes and services connect all implemented core workflows |
+| Roles and security | 10% | 82% | 8.20% | Private notifications and Super Admin/HR audit boundaries are enforced server-side |
+| Tests and validation | 10% | 65% | 6.50% | 285 passing tests include notification privacy, preferences and audit redaction |
 | Deployment and documentation | 10% | 12% | 1.20% | Local documentation/env example only; no deployment artifacts/CI |
-| **Total** | **100%** |  | **70.00%** | Weighted sum |
+| **Total** | **100%** |  | **73.95%** | Weighted sum |
 
 The percentage is not higher because:
 - Passing tests validate only the functionality that has been implemented.
-- Several planned modules (notifications, reports, Moodle and AI) are still absent.
+- Several planned modules (reports, Moodle and AI) are still absent.
 - Production deployment, CI/CD, and infrastructure are not implemented.
 - The project is assessed against the final multi-module application scope, not an MVP.
 
@@ -330,7 +329,7 @@ What already works:
 What remains to be developed:
 - Complete Business Unit CRUD forms and membership management
 - Offers, projects, internships, training, sessions, enrollments, attendance, evaluations, certificates
-- Notifications, reports, KPIs, and general audit logs
+- Reports and KPIs
 - Moodle integration, AI features, CI/CD, and production deployment
 - Security hardening for production (JWT rotation, malware scanning, HTTPS, media storage)
 
