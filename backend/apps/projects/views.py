@@ -18,8 +18,10 @@ from .serializers import ProjectCommentSerializer, ProjectDeliverableSerializer,
 
 def visible_projects(user):
     qs = Project.objects.select_related("business_unit", "supervisor", "created_by").prefetch_related("assignees", "deliverables", "comments__author", "documents__uploaded_by")
-    if is_super_admin(user) or is_hr(user):
+    if is_super_admin(user):
         return qs
+    if is_hr(user):
+        return qs.none()
     if user.role == UserRole.EMPLOYEE:
         return qs.filter(Q(supervisor=user) | Q(assignees=user)).distinct()
     return qs.filter(assignees=user)

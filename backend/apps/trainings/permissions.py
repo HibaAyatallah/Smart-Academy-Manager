@@ -11,7 +11,7 @@ class IsSuperAdminOrReadOnly(permissions.BasePermission):
             return False
         if request.method in permissions.SAFE_METHODS:
             return True
-        return request.user.role in [UserRole.SUPER_ADMIN, UserRole.HR]
+        return request.user.role == UserRole.SUPER_ADMIN
 
 
 class IsClientProfile(permissions.BasePermission):
@@ -33,8 +33,13 @@ class IsNotClientProfile(permissions.BasePermission):
             return False
         return request.user.role != UserRole.CLIENT
 
-class IsSuperAdmin(permissions.BasePermission):
+
+class IsTrainingOperationsUser(permissions.BasePermission):
+    """Allow operational training APIs while excluding HR and clients."""
+
     def has_permission(self, request, view):
-        if not request.user or not request.user.is_authenticated:
-            return False
-        return request.user.role == UserRole.SUPER_ADMIN
+        return bool(
+            request.user
+            and request.user.is_authenticated
+            and request.user.role not in [UserRole.CLIENT, UserRole.HR]
+        )

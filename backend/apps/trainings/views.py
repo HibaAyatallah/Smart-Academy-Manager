@@ -19,7 +19,8 @@ from .serializers import (
     ManagerDecisionSerializer, SuperAdminDecisionSerializer,
     DirectEnrollmentSerializer, SessionAttendanceSerializer, TrainingCertificateSerializer
 )
-from .permissions import IsSuperAdminOrReadOnly, IsClientProfile, IsNotClientProfile, IsSuperAdmin
+from .permissions import IsSuperAdminOrReadOnly, IsClientProfile, IsNotClientProfile, IsTrainingOperationsUser
+from apps.accounts.permissions import IsSuperAdminOnly
 from apps.accounts.choices import UserRole
 from .choices import TrainingStatus, SessionStatus, EnrollmentStatus
 
@@ -75,9 +76,17 @@ class TrainingViewSet(viewsets.ModelViewSet):
             
         qs = Training.objects.all().select_related("trainer", "business_unit", "external_client").prefetch_related("sessions")
         
-        if user.role in [UserRole.SUPER_ADMIN, UserRole.HR]:
+        if user.role == UserRole.SUPER_ADMIN:
             return qs
-            
+
+        # HR: read-only access to the published internal catalogue only.
+        # HR must NOT see DRAFT or ARCHIVED trainings, nor client-reserved trainings.
+        if user.role == UserRole.HR:
+            return qs.filter(
+                status=TrainingStatus.PUBLISHED,
+                external_client__isnull=True,
+            )
+
         if user.role == UserRole.BU_MANAGER:
             bu_ids = user.managed_business_units.values_list("id", flat=True)
             return qs.filter(
@@ -126,9 +135,18 @@ class TrainingSessionViewSet(viewsets.ModelViewSet):
             
         qs = TrainingSession.objects.all().select_related("training", "trainer", "external_client")
         
-        if user.role in [UserRole.SUPER_ADMIN, UserRole.HR]:
+        if user.role == UserRole.SUPER_ADMIN:
             return qs
-            
+
+        # HR: read-only access to open/planned/full sessions of published internal trainings.
+        # HR must NOT see sessions of client-reserved trainings or cancelled/completed sessions.
+        if user.role == UserRole.HR:
+            return qs.filter(
+                status__in=[SessionStatus.OPEN, SessionStatus.PLANNED, SessionStatus.FULL],
+                external_client__isnull=True,
+                training__status=TrainingStatus.PUBLISHED,
+            )
+
         if user.role == UserRole.BU_MANAGER:
             bu_ids = user.managed_business_units.values_list("id", flat=True)
             return qs.filter(
@@ -230,7 +248,7 @@ class ClientTrainingSessionViewSet(viewsets.ReadOnlyModelViewSet):
 
 
 class TrainingEnrollmentViewSet(viewsets.ModelViewSet):
-    permission_classes = [IsNotClientProfile]
+    permission_classes = [IsTrainingOperationsUser]
     filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
     filterset_fields = ["status", "training", "session"]
     search_fields = ["user__email", "user__first_name", "user__last_name", "training__title"]
@@ -242,9 +260,6 @@ class TrainingEnrollmentViewSet(viewsets.ModelViewSet):
         qs = TrainingEnrollment.objects.select_related("user", "training", "session").prefetch_related("history")
         
         if user.role == UserRole.SUPER_ADMIN:
-            return qs
-            
-        if user.role == UserRole.HR:
             return qs
             
         if user.role == UserRole.BU_MANAGER:
@@ -280,7 +295,7 @@ class TrainingEnrollmentViewSet(viewsets.ModelViewSet):
             comment=comment
         )
 
-    @action(detail=True, methods=["post"], permission_classes=[IsNotClientProfile])
+    @action(detail=True, methods=["post"], permission_classes=[IsTrainingOperationsUser])
     def manager_approve(self, request, pk=None):
         enrollment = self.get_object()
         
@@ -315,7 +330,7 @@ class TrainingEnrollmentViewSet(viewsets.ModelViewSet):
 
 
 
-    @action(detail=True, methods=["post"], permission_classes=[IsNotClientProfile])
+    @action(detail=True, methods=["post"], permission_classes=[IsTrainingOperationsUser])
     def manager_reject(self, request, pk=None):
         enrollment = self.get_object()
         
@@ -346,7 +361,7 @@ class TrainingEnrollmentViewSet(viewsets.ModelViewSet):
             
         return Response(self.get_serializer(enrollment).data)
 
-    @action(detail=True, methods=["post"], permission_classes=[IsSuperAdmin])
+    @action(detail=True, methods=["post"], permission_classes=[IsSuperAdminOnly])
     def super_admin_approve(self, request, pk=None):
         enrollment = self.get_object()
         
@@ -379,7 +394,7 @@ class TrainingEnrollmentViewSet(viewsets.ModelViewSet):
             
         return Response(self.get_serializer(enrollment).data)
 
-    @action(detail=True, methods=["post"], permission_classes=[IsSuperAdmin])
+    @action(detail=True, methods=["post"], permission_classes=[IsSuperAdminOnly])
     def super_admin_reject(self, request, pk=None):
         enrollment = self.get_object()
         
@@ -402,7 +417,7 @@ class TrainingEnrollmentViewSet(viewsets.ModelViewSet):
             
         return Response(self.get_serializer(enrollment).data)
 
-    @action(detail=False, methods=["post"], permission_classes=[IsSuperAdmin])
+    @action(detail=False, methods=["post"], permission_classes=[IsSuperAdminOnly])
     def direct_enrollment(self, request):
         serializer = DirectEnrollmentSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
@@ -432,7 +447,7 @@ class TrainingEnrollmentViewSet(viewsets.ModelViewSet):
                 
         return Response(self.get_serializer(enrollment).data, status=status.HTTP_201_CREATED)
 
-    @action(detail=True, methods=["post"], permission_classes=[IsSuperAdmin])
+    @action(detail=True, methods=["post"], permission_classes=[IsSuperAdminOnly])
     def cancel(self, request, pk=None):
         enrollment = self.get_object()
         
@@ -456,7 +471,7 @@ class TrainingEnrollmentViewSet(viewsets.ModelViewSet):
                     
         return Response(self.get_serializer(enrollment).data)
 
-    @action(detail=True, methods=["post"], permission_classes=[IsSuperAdmin])
+    @action(detail=True, methods=["post"], permission_classes=[IsSuperAdminOnly])
     def complete(self, request, pk=None):
         enrollment = self.get_object()
         

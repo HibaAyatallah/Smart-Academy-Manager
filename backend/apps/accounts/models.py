@@ -13,7 +13,9 @@ class User(AbstractUser):
         choices=UserRole.choices,
         default=UserRole.CANDIDATE,
     )
+    contact_email = models.EmailField("email de contact", blank=True, null=True)
     phone_number = models.CharField(max_length=32, blank=True)
+    must_change_password = models.BooleanField(default=False)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 

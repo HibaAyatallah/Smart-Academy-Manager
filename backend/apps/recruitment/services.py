@@ -128,41 +128,41 @@ def convert_accepted_application(application: Application, payload: dict, actor)
 
     candidate = application.candidate
 
+    from apps.accounts.services.account_generation import generate_account_for_user
+    from apps.accounts.choices import UserRole
+
+    payload_for_generation = {
+        "contact_email": candidate.email,
+        "first_name": candidate.first_name,
+        "last_name": candidate.last_name,
+        "phone_number": candidate.phone_number,
+        "role": UserRole.INTERN if conversion_type == "INTERN" else UserRole.EMPLOYEE,
+        "business_unit": bu,
+        "supervisor": supervisor,
+        "school": payload.get("school", ""),
+        "specialization": payload.get("specialization", ""),
+        "internship_type": payload.get("internship_type", ""),
+        "paid": payload.get("paid", False),
+        "internship_start": payload.get("internship_start"),
+        "internship_end": payload.get("internship_end"),
+        "subject_title": payload.get("subject_title", ""),
+    }
+
     with transaction.atomic():
-        candidate.is_active = True
+        result = generate_account_for_user(payload_for_generation, actor=actor)
+        user = result["user"]
 
+        # Link the source application
         if conversion_type == "INTERN":
-            candidate.role = UserRole.INTERN
-            candidate.save(update_fields=["role", "is_active", "updated_at"])
-            InternProfile.objects.update_or_create(
-                user=candidate,
-                defaults={
-                    "source_application": application,
-                    "school": payload.get("school", ""),
-                    "specialization": payload.get("specialization", ""),
-                    "internship_type": payload.get("internship_type", ""),
-                    "paid": payload.get("paid", False),
-                    "business_unit": bu,
-                    "supervisor": supervisor,
-                    "subject_title": payload.get("subject_title", ""),
-                    "specification_pdf": payload.get("specification_pdf"),
-                    "internship_start": payload.get("internship_start"),
-                    "internship_end": payload.get("internship_end"),
-                }
-            )
+            profile = InternProfile.objects.get(user=user)
+            profile.source_application = application
+            if "specification_pdf" in payload:
+                profile.specification_pdf = payload["specification_pdf"]
+            profile.save(update_fields=["source_application", "specification_pdf"])
         else:
-            candidate.role = UserRole.EMPLOYEE
-            candidate.save(update_fields=["role", "is_active", "updated_at"])
-            EmployeeProfile.objects.update_or_create(
-                user=candidate,
-                defaults={"source_application": application}
-            )
-
-        BusinessUnitMembership.objects.update_or_create(
-            user=candidate,
-            business_unit=bu,
-            defaults={"is_active": True}
-        )
+            profile = EmployeeProfile.objects.get(user=user)
+            profile.source_application = application
+            profile.save(update_fields=["source_application"])
 
         log_sensitive_action(
             actor,
@@ -171,6 +171,7 @@ def convert_accepted_application(application: Application, payload: dict, actor)
             {
                 "business_unit": bu.code,
                 "supervisor_id": supervisor.id if supervisor else None,
+                "generated_email": result["email"],
             },
         )
 

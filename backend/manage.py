@@ -6,6 +6,10 @@ import sys
 
 def main() -> None:
     os.environ.setdefault("DJANGO_SETTINGS_MODULE", "config.settings.local")
+
+    if len(sys.argv) > 1 and sys.argv[1] == "runserver" and len(sys.argv) == 2:
+        sys.argv.append("0.0.0.0:8001")
+
     try:
         from django.core.management import execute_from_command_line
     except ImportError as exc:

@@ -42,6 +42,8 @@ class AttendanceCertificateTests(APITestCase):
         self.client.force_authenticate(self.hr)
         denied = self.client.post("/api/attendance/", {"enrollment": self.enrollment.id, "status": "PRESENT"})
         self.assertEqual(denied.status_code, status.HTTP_403_FORBIDDEN)
+        self.assertEqual(self.client.get("/api/attendance/").status_code, status.HTTP_403_FORBIDDEN)
+        self.assertEqual(self.client.get("/api/certificates/").status_code, status.HTTP_403_FORBIDDEN)
 
     def test_participant_sees_only_own_attendance(self):
         SessionAttendance.objects.create(enrollment=self.enrollment, status="PRESENT", recorded_by=self.admin)

@@ -46,9 +46,9 @@ class ProjectWorkflowTests(APITestCase):
         forbidden=self.client.patch(f"/api/projects/{project.id}/",{"business_unit":self.other_bu.id},format="json")
         self.assertEqual(forbidden.status_code,status.HTTP_403_FORBIDDEN)
 
-    def test_hr_has_global_read_only_access(self):
+    def test_hr_cannot_access_projects(self):
         project=self.create_project();self.client.force_authenticate(self.hr)
-        self.assertEqual(self.client.get("/api/projects/").data["count"],1)
+        self.assertEqual(self.client.get("/api/projects/").status_code,status.HTTP_403_FORBIDDEN)
         response=self.client.patch(f"/api/projects/{project.id}/",{"progress":50},format="json")
         self.assertEqual(response.status_code,status.HTTP_403_FORBIDDEN)
 

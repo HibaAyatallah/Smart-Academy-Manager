@@ -87,6 +87,39 @@ class RecruitmentAPITests(APITestCase):
         self.assertNotIn("file", response.data["documents"][0])
         self.assertIn("download_url", response.data["documents"][0])
 
+    def test_public_application_creation_links_offer_to_application(self):
+        bu_manager = User.objects.create_user(
+            email="bumanager@example.com",
+            password="StrongPass123!",
+            role=UserRole.BU_MANAGER,
+        )
+        business_unit = BusinessUnit.objects.create(
+            name="Tech",
+            code="TECH",
+            manager=bu_manager,
+        )
+        offer = Offer.objects.create(
+            title="Software Engineer Intern",
+            description="Join our team",
+            business_unit=business_unit,
+            application_type=ApplicationType.PFE_INTERNSHIP,
+            status=OfferStatus.PUBLISHED,
+        )
+
+        payload = self.public_application_payload(email="candidate-offer@example.com")
+        payload["offer"] = offer.id
+
+        response = self.client.post(
+            "/api/applications/public-submit/",
+            payload,
+            format="multipart",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        application = Application.objects.get(candidate_profile__user__email="candidate-offer@example.com")
+        self.assertEqual(application.offer_id, offer.id)
+        self.assertEqual(response.data["offer"], offer.id)
+
     def test_candidate_can_access_only_own_application(self):
         own_application = self.create_application("candidate@example.com")
         self.client.force_authenticate(user=own_application.candidate)
@@ -755,11 +788,10 @@ class OfferTests(APITestCase):
         self.assertEqual(Offer.objects.count(), 1)
         self.assertEqual(Offer.objects.first().status, OfferStatus.DRAFT)
 
-    def test_hr_can_create_offer(self):
+    def test_hr_cannot_create_offer(self):
         self.client.force_authenticate(user=self.hr)
         response = self.client.post("/api/offers/", self.offer_payload)
-        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
-        self.assertEqual(response.data["created_by_email"], self.hr.email)
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
 
     def test_candidate_cannot_create_offer(self):
         self.client.force_authenticate(user=self.candidate)
@@ -774,17 +806,17 @@ class OfferTests(APITestCase):
         self.assertEqual(response_publish.status_code, status.HTTP_200_OK)
         self.assertEqual(Offer.objects.get(id=offer_id).status, OfferStatus.PUBLISHED)
 
-    def test_hr_can_read_all_offers(self):
+    def test_hr_cannot_read_offers(self):
         self.client.force_authenticate(user=self.super_admin)
         response = self.client.post("/api/offers/", self.offer_payload)
         offer_id = response.data["id"]
 
         self.client.force_authenticate(user=self.hr)
         response_get = self.client.get(f"/api/offers/{offer_id}/")
-        self.assertEqual(response_get.status_code, status.HTTP_200_OK)
+        self.assertEqual(response_get.status_code, status.HTTP_403_FORBIDDEN)
 
         response_list = self.client.get("/api/offers/")
-        self.assertEqual(response_list.data["count"], 1)
+        self.assertEqual(response_list.status_code, status.HTTP_403_FORBIDDEN)
 
     def test_candidate_can_read_only_published_offers(self):
         self.client.force_authenticate(user=self.super_admin)
@@ -821,17 +853,14 @@ class InternshipWorkflowTests(APITestCase):
         self.profile = InternProfile.objects.create(user=self.intern_user, business_unit=self.bu, supervisor=self.supervisor)
         self.other_profile = InternProfile.objects.create(user=self.other_intern_user, business_unit=self.bu, supervisor=self.other_supervisor)
 
-    def test_hr_can_assign_bu_supervisor_dates_and_status(self):
+    def test_hr_cannot_manage_intern_profile(self):
         self.client.force_authenticate(self.hr)
         response = self.client.patch(f"/api/interns/{self.profile.id}/", {
             "business_unit": self.bu.id, "supervisor": self.other_supervisor.id,
             "internship_start": "2026-08-01", "internship_end": "2026-12-01",
             "current_status": "ACTIVE", "progress": 15,
         })
-        self.assertEqual(response.status_code, status.HTTP_200_OK)
-        self.profile.refresh_from_db()
-        self.assertEqual(self.profile.supervisor, self.other_supervisor)
-        self.assertEqual(self.profile.progress, 15)
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
 
     def test_supervisor_can_update_progress_but_not_assignment(self):
         self.client.force_authenticate(self.supervisor)
@@ -852,14 +881,14 @@ class InternshipWorkflowTests(APITestCase):
         forbidden = self.client.post("/api/intern-documents/", {"intern": self.other_profile.id, "document_type": "OTHER", "file": other_upload}, format="multipart")
         self.assertEqual(forbidden.status_code, status.HTTP_403_FORBIDDEN)
 
-    def test_hr_can_validate_document(self):
+    def test_hr_cannot_validate_document(self):
         document = InternDocument.objects.create(intern=self.profile, document_type="NDA", file=SimpleUploadedFile("nda.pdf", b"nda"))
         self.client.force_authenticate(self.hr)
         response = self.client.post(f"/api/intern-documents/{document.id}/validate/", {"comment": "Conforme"})
-        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
         document.refresh_from_db()
-        self.assertTrue(document.is_validated)
-        self.assertEqual(document.validator, self.hr)
+        self.assertFalse(document.is_validated)
+        self.assertIsNone(document.validator)
 
     def test_assigned_supervisor_can_create_evaluation_only_for_assigned_intern(self):
         payload = {"intern": self.profile.id, "evaluation_type": "MIDTERM", "technical_skills": 4, "autonomy": 4, "communication": 4, "teamwork": 5, "deadline_respect": 4, "work_quality": 4, "professionalism": 5, "overall_score": 4.3, "comments": "Bon progrès"}

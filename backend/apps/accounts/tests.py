@@ -7,6 +7,7 @@ from rest_framework_simplejwt.tokens import AccessToken
 
 from .choices import UserRole
 from apps.business_units.models import BusinessUnit, BusinessUnitMembership
+from apps.recruitment.models import InternProfile
 
 User = get_user_model()
 
@@ -331,6 +332,18 @@ class HREndpointTests(APITestCase):
             email="intern@example.com", password="StrongPass123!",
             first_name="Ali", last_name="Hassan", role=UserRole.INTERN, is_active=True
         )
+        self.intern_profile = InternProfile.objects.create(
+            user=self.intern,
+            school="École Nationale",
+            specialization="Informatique",
+            internship_type="PFE",
+            paid=True,
+            business_unit=self.bu,
+            supervisor=self.employee,
+            subject_title="Plateforme RH",
+            internship_start="2026-02-01",
+            internship_end="2026-07-31",
+        )
         BusinessUnitMembership.objects.create(
             business_unit=self.bu, user=self.employee, is_active=True, position="Developer"
         )
@@ -349,12 +362,24 @@ class HREndpointTests(APITestCase):
 
     def test_hr_can_retrieve_intern_detail(self):
         self.client.force_authenticate(user=self.hr)
-        response = self.client.get(reverse("hr-intern-detail", kwargs={"pk": self.intern.pk}))
+        response = self.client.get(reverse("hr-intern-detail", kwargs={"pk": self.intern_profile.pk}))
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertEqual(response.data["email"], "intern@example.com")
         # Sensitive management fields must not appear
         self.assertNotIn("password", response.data)
         self.assertNotIn("is_staff", response.data)
+        self.assertEqual(response.data["school"], "École Nationale")
+        self.assertEqual(response.data["business_unit"]["code"], "DEV")
+        self.assertEqual(response.data["supervisor"]["email"], self.employee.email)
+        self.assertEqual(response.data["subject_title"], "Plateforme RH")
+        self.assertIn("document_submission_status", response.data)
+
+    def test_hr_endpoints_reject_unsafe_methods(self):
+        self.client.force_authenticate(user=self.hr)
+        self.assertEqual(self.client.post(reverse("hr-intern-list"), {}).status_code, status.HTTP_403_FORBIDDEN)
+        self.assertEqual(self.client.patch(reverse("hr-intern-detail", kwargs={"pk": self.intern_profile.pk}), {}).status_code, status.HTTP_403_FORBIDDEN)
+        self.assertEqual(self.client.delete(reverse("hr-intern-detail", kwargs={"pk": self.intern_profile.pk})).status_code, status.HTTP_403_FORBIDDEN)
+        self.assertEqual(self.client.post(reverse("hr-collaborators-by-bu"), {}).status_code, status.HTTP_403_FORBIDDEN)
 
     def test_hr_intern_list_excludes_non_interns(self):
         """Candidates, employees, and managers must not appear in the intern list."""

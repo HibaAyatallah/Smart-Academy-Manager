@@ -75,18 +75,67 @@ class TrainingsAPITestCase(APITestCase):
         self.assertEqual(res.status_code, status.HTTP_201_CREATED)
         self.assertEqual(Training.objects.count(), 1)
 
-    def test_hr_can_manage_training_catalogue(self):
-        Training.objects.create(**self.training_data)
+    def test_hr_can_only_read_training_catalogue(self):
+        """HR can GET the training list, but cannot create/update/delete trainings."""
+        # Create a PUBLISHED training so HR can see it
+        published_training = Training.objects.create(
+            **{**self.training_data, "title": "Published Python", "status": TrainingStatus.PUBLISHED}
+        )
         self.client.force_authenticate(user=self.hr)
-        
-        # HR can read
+
+        # HR can read the catalogue
         res = self.client.get("/api/trainings/")
         self.assertEqual(res.status_code, status.HTTP_200_OK)
-        self.assertEqual(len(res.data['results']), 1)
-        
-        # HR administrates the catalogue alongside Super Admin.
+        titles = [r["title"] for r in res.data["results"]]
+        self.assertIn("Published Python", titles)
+
+        # HR cannot create trainings
         res = self.client.post("/api/trainings/", self.training_data)
-        self.assertEqual(res.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(res.status_code, status.HTTP_403_FORBIDDEN)
+
+        # HR cannot update trainings
+        res = self.client.patch(f"/api/trainings/{published_training.id}/", {"title": "Changed"})
+        self.assertEqual(res.status_code, status.HTTP_403_FORBIDDEN)
+
+        # HR cannot delete trainings
+        res = self.client.delete(f"/api/trainings/{published_training.id}/")
+        self.assertEqual(res.status_code, status.HTTP_403_FORBIDDEN)
+
+    def test_hr_only_sees_published_trainings_not_draft_or_archived(self):
+        """HR queryset is restricted to PUBLISHED internal trainings.
+
+        HR must NOT see DRAFT or ARCHIVED trainings — those are internal
+        Super-Admin management states that HR has no business viewing.
+        Only PUBLISHED, non-client-reserved trainings are exposed to HR.
+        """
+        # DRAFT (default from training_data) — HR must NOT see this
+        draft = Training.objects.create(**self.training_data)
+        # PUBLISHED — HR must see this
+        published = Training.objects.create(
+            **{**self.training_data, "title": "Published Course", "status": TrainingStatus.PUBLISHED}
+        )
+        # ARCHIVED — HR must NOT see this
+        archived = Training.objects.create(
+            **{**self.training_data, "title": "Archived Course", "status": TrainingStatus.ARCHIVED}
+        )
+
+        self.client.force_authenticate(user=self.hr)
+        res = self.client.get("/api/trainings/")
+        self.assertEqual(res.status_code, status.HTTP_200_OK)
+        titles = {r["title"] for r in res.data["results"]}
+        self.assertIn("Published Course", titles, "HR must see published trainings.")
+        self.assertNotIn("Python Basics", titles, "HR must NOT see DRAFT trainings.")
+        self.assertNotIn("Archived Course", titles, "HR must NOT see ARCHIVED trainings.")
+
+        # Super Admin sees everything
+        self.client.force_authenticate(user=self.super_admin)
+        res_admin = self.client.get("/api/trainings/")
+        self.assertEqual(res_admin.status_code, status.HTTP_200_OK)
+        all_titles = {r["title"] for r in res_admin.data["results"]}
+        self.assertIn("Python Basics", all_titles, "Super Admin must see DRAFT trainings.")
+        self.assertIn("Published Course", all_titles)
+        self.assertIn("Archived Course", all_titles, "Super Admin must see ARCHIVED trainings.")
+
 
     def test_bu_manager_visibility(self):
         # Create training without BU
@@ -340,9 +389,9 @@ class TrainingEnrollmentAPITestCase(APITestCase):
         enr = TrainingEnrollment.objects.create(user=self.employee1, training=self.training, session=self.session)
         self.client.force_authenticate(user=self.hr)
         
-        # Read allowed
+        # HR has no access to enrollment operations.
         res = self.client.get("/api/enrollments/")
-        self.assertEqual(res.status_code, status.HTTP_200_OK)
+        self.assertEqual(res.status_code, status.HTTP_403_FORBIDDEN)
         
         # Write forbidden
         res = self.client.post(f"/api/enrollments/{enr.id}/super_admin_approve/", {"approved": True})

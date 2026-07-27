@@ -34,9 +34,9 @@ python manage.py runserver
 
 Apres lancement du serveur :
 
-- Swagger UI : http://127.0.0.1:8000/api/docs/
-- ReDoc : http://127.0.0.1:8000/api/redoc/
-- Schema OpenAPI : http://127.0.0.1:8000/api/schema/
+- Swagger UI : http://127.0.0.1:8001/api/docs/
+- ReDoc : http://127.0.0.1:8001/api/redoc/
+- Schema OpenAPI : http://127.0.0.1:8001/api/schema/
 
 ## Tests
 

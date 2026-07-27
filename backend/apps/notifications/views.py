@@ -37,8 +37,8 @@ class AuditLogViewSet(viewsets.ReadOnlyModelViewSet):
     search_fields = ["actor_email", "path", "action", "target_type", "target_id"]
     ordering = ["-created_at"]
     def get_queryset(self):
-        if self.request.user.role not in [UserRole.SUPER_ADMIN, UserRole.HR]: return AuditLog.objects.none()
+        if self.request.user.role != UserRole.SUPER_ADMIN: return AuditLog.objects.none()
         return AuditLog.objects.all()
     def list(self, request, *args, **kwargs):
-        if request.user.role not in [UserRole.SUPER_ADMIN, UserRole.HR]: return Response({"detail":"Access denied."}, status=status.HTTP_403_FORBIDDEN)
+        if request.user.role != UserRole.SUPER_ADMIN: return Response({"detail":"Access denied."}, status=status.HTTP_403_FORBIDDEN)
         return super().list(request, *args, **kwargs)

@@ -79,7 +79,7 @@ def is_employee(user) -> bool:
 class IsInternshipParticipant(BasePermission):
     """
     Super Admin: Full CRUD.
-    HR: Full internship administration access.
+    HR: no access; HR uses the dedicated read-only endpoints.
     BU Manager: Read-only access to interns assigned to their BU.
     Supervisor: Read-only access to interns they supervise.
     Intern: Read-only access to their own profile.
@@ -89,7 +89,7 @@ class IsInternshipParticipant(BasePermission):
         user = request.user
         if not user or not user.is_authenticated:
             return False
-        if is_recruitment_manager(user) or is_hr(user):
+        if is_recruitment_manager(user):
             return True
         if is_intern(user) and view.basename == "intern-document":
             return request.method in SAFE_METHODS or request.method == "POST"
@@ -105,7 +105,7 @@ class IsInternshipParticipant(BasePermission):
 
     def has_object_permission(self, request, view, obj) -> bool:
         user = request.user
-        if is_recruitment_manager(user) or is_hr(user):
+        if is_recruitment_manager(user):
             return True
 
         if hasattr(obj, "intern"):
@@ -133,18 +133,22 @@ class IsInternshipParticipant(BasePermission):
 
 class CanManageOffersOrReadPublished(BasePermission):
     """
-    Super Admin and HR: full access.
+    Super Admin: full access. HR: no access.
     Public/Candidate/BU Manager: Read-only (list/retrieve) depending on queryset scoping.
     """
 
     def has_permission(self, request, view) -> bool:
         user = request.user
-        if is_super_admin(user) or is_hr(user):
+        if is_super_admin(user):
             return True
+        if is_hr(user):
+            return False
         return request.method in SAFE_METHODS
 
     def has_object_permission(self, request, view, obj) -> bool:
         user = request.user
-        if is_super_admin(user) or is_hr(user):
+        if is_super_admin(user):
             return True
+        if is_hr(user):
+            return False
         return request.method in SAFE_METHODS

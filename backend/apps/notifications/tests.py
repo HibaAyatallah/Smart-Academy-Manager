@@ -43,12 +43,11 @@ class NotificationAuditTests(APITestCase):
         log=AuditLog.objects.filter(actor=self.user,path="/api/notifications/mark_all_read/").latest("created_at")
         self.assertEqual(log.method,"POST"); self.assertNotIn("secret",str(log.metadata)); self.assertEqual(log.metadata["query"],"source=test")
 
-    def test_audit_interface_is_admin_hr_read_only(self):
+    def test_audit_interface_is_super_admin_only(self):
         AuditLog.objects.create(actor=self.user,actor_email=self.user.email,method="PATCH",path="/api/projects/1/",action="PATCH projects",status_code=200)
         self.client.force_authenticate(self.user)
         self.assertEqual(self.client.get("/api/audit-logs/").status_code,status.HTTP_403_FORBIDDEN)
         self.client.force_authenticate(self.hr)
-        self.assertEqual(self.client.get("/api/audit-logs/").status_code,status.HTTP_200_OK)
-        self.assertEqual(self.client.post("/api/audit-logs/",{}).status_code,status.HTTP_405_METHOD_NOT_ALLOWED)
+        self.assertEqual(self.client.get("/api/audit-logs/").status_code,status.HTTP_403_FORBIDDEN)
         self.client.force_authenticate(self.admin)
         self.assertGreaterEqual(self.client.get("/api/audit-logs/").data["count"],1)

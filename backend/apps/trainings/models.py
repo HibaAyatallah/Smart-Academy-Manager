@@ -74,6 +74,9 @@ class Training(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
+    class Meta:
+        ordering = ['-created_at']
+
     def __str__(self):
         return self.title
 
@@ -122,6 +125,9 @@ class TrainingSession(models.Model):
     )
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['-created_at']
 
     def __str__(self):
         return f"{self.training.title} - {self.start_date}"
@@ -201,6 +207,7 @@ class TrainingEnrollment(models.Model):
     updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
+        ordering = ['-created_at']
         constraints = [
             models.UniqueConstraint(
                 fields=['user', 'session'],

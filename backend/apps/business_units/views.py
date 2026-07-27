@@ -15,13 +15,11 @@ from .serializers import (
 )
 from .permissions import (
     CanViewBUData,
-    IsHROrSuperAdmin,
     IsHRSuperAdminOrManager,
-    IsSuperAdminOnly,
     is_bu_manager,
     is_collaborator,
-    is_hr_or_superadmin,
 )
+from apps.accounts.permissions import IsSuperAdminOnly
 from apps.accounts.roles import is_super_admin
 
 

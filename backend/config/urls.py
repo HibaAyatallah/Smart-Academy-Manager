@@ -4,7 +4,7 @@ from drf_spectacular.views import SpectacularAPIView, SpectacularRedocView, Spec
 from rest_framework.routers import DefaultRouter
 from rest_framework_simplejwt.views import TokenRefreshView, TokenVerifyView
 
-from apps.accounts.views import ChangePasswordAPIView, MeAPIView, UserViewSet, SmartAcademyTokenObtainPairView
+from apps.accounts.views import ChangePasswordAPIView, MeAPIView, UserViewSet, SmartAcademyTokenObtainPairView, UserImportViewSet
 from apps.recruitment.views import (
     ApplicationDocumentViewSet, 
     ApplicationViewSet, 
@@ -17,6 +17,7 @@ from apps.recruitment.views import (
 
 router = DefaultRouter()
 router.register("users", UserViewSet, basename="user")
+router.register("import", UserImportViewSet, basename="import")
 router.register("offers", OfferViewSet, basename="offer")
 router.register("applications", ApplicationViewSet, basename="application")
 router.register("application-documents", ApplicationDocumentViewSet, basename="application-document")
@@ -31,6 +32,7 @@ urlpatterns = [
     path("api/", include("apps.trainings.urls")),
     path("api/", include("apps.projects.urls")),
     path("api/", include("apps.notifications.urls")),
+    path("api/", include("apps.reports.urls")),
     # HR read-only endpoints (restricted scope: interns, collaborators by BU)
     path("api/", include("apps.accounts.hr_urls")),
     path("api/auth/token/", SmartAcademyTokenObtainPairView.as_view(), name="token_obtain_pair"),

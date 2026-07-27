@@ -9,10 +9,12 @@ from rest_framework.response import Response
 from apps.accounts.choices import UserRole
 from .models import AttendanceHistory, SessionAttendance, TrainingCertificate
 from .serializers import SessionAttendanceSerializer, TrainingCertificateSerializer
+from .permissions import IsTrainingOperationsUser
 
 
 class SessionAttendanceViewSet(viewsets.ModelViewSet):
     serializer_class = SessionAttendanceSerializer
+    permission_classes = [IsTrainingOperationsUser]
     filter_backends = [DjangoFilterBackend, filters.OrderingFilter]
     filterset_fields = ["enrollment__session", "status", "validated"]
     ordering = ["enrollment__user__email"]
@@ -20,7 +22,7 @@ class SessionAttendanceViewSet(viewsets.ModelViewSet):
     def get_queryset(self):
         user = self.request.user
         qs = SessionAttendance.objects.select_related("enrollment__user", "enrollment__training", "enrollment__session").prefetch_related("history")
-        if user.role in [UserRole.SUPER_ADMIN, UserRole.HR]:
+        if user.role == UserRole.SUPER_ADMIN:
             return qs
         if user.role == UserRole.TRAINER_TUTOR:
             return qs.filter(enrollment__session__trainer=user)
@@ -56,6 +58,7 @@ class SessionAttendanceViewSet(viewsets.ModelViewSet):
 
 class TrainingCertificateViewSet(viewsets.ReadOnlyModelViewSet):
     serializer_class = TrainingCertificateSerializer
+    permission_classes = [IsTrainingOperationsUser]
     filter_backends = [DjangoFilterBackend, filters.OrderingFilter]
     filterset_fields = ["enrollment__session", "enrollment__training"]
     ordering = ["-issued_at"]
@@ -63,7 +66,7 @@ class TrainingCertificateViewSet(viewsets.ReadOnlyModelViewSet):
     def get_queryset(self):
         user = self.request.user
         qs = TrainingCertificate.objects.select_related("enrollment__user", "enrollment__training", "enrollment__session", "issued_by")
-        if user.role in [UserRole.SUPER_ADMIN, UserRole.HR]:
+        if user.role == UserRole.SUPER_ADMIN:
             return qs
         if user.role == UserRole.TRAINER_TUTOR:
             return qs.filter(enrollment__session__trainer=user)

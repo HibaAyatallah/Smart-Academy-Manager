@@ -268,6 +268,11 @@ class PublicApplicationCreateSerializer(serializers.Serializer):
             validate_application_file(document, ApplicationDocumentType.OTHER)
         return value
 
+    def validate_offer(self, value):
+        if value in (None, ""):
+            return None
+        return value
+
     def validate(self, attrs):
         study_level = attrs.get("study_level")
         study_level_other = attrs.get("study_level_other", "").strip()
@@ -292,6 +297,7 @@ class PublicApplicationCreateSerializer(serializers.Serializer):
         first_name = validated_data.pop("first_name")
         last_name = validated_data.pop("last_name")
         phone_number = validated_data.get("phone_number", "")
+        offer = validated_data.pop("offer", None)
 
         user = User.objects.create_user(
             email=email,
@@ -301,8 +307,8 @@ class PublicApplicationCreateSerializer(serializers.Serializer):
             phone_number=phone_number,
             role=UserRole.CANDIDATE,
         )
-        profile = CandidateProfile.objects.create(user=user, **validated_data)
-        offer = validated_data.pop("offer", None)
+        profile_data = dict(validated_data)
+        profile = CandidateProfile.objects.create(user=user, **profile_data)
         application = Application.objects.create(
             candidate_profile=profile,
             offer=offer,

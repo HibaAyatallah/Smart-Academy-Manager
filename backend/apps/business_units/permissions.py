@@ -18,33 +18,8 @@ def is_collaborator(user) -> bool:
 
 
 # ---------------------------------------------------------------------------
-# Legacy helpers — kept so existing imports in views.py continue to work.
-# Do NOT rely on these for new permission logic.
-# ---------------------------------------------------------------------------
-
-def is_hr_or_superadmin(user) -> bool:
-    """Deprecated: now means Super Admin only for write, HR read-only.
-    Use is_super_admin() or is_hr() directly in new code.
-    """
-    return is_super_admin(user)
-
-
-# ---------------------------------------------------------------------------
 # Permission classes
 # ---------------------------------------------------------------------------
-
-class IsSuperAdminOnly(BasePermission):
-    """Allow only Super Administrators — write and read."""
-
-    def has_permission(self, request, view) -> bool:
-        return is_super_admin(request.user)
-
-    def has_object_permission(self, request, view, obj) -> bool:
-        return is_super_admin(request.user)
-
-
-# Alias used in views that import IsHROrSuperAdmin
-IsHROrSuperAdmin = IsSuperAdminOnly
 
 
 class IsHRSuperAdminOrManager(BasePermission):

@@ -417,14 +417,16 @@ class CandidateProfileAdmin(admin.ModelAdmin):
             
         status_label = application.get_status_display()
         color = "inherit"
-        if application.status == ApplicationStatus.SUBMITTED:
+        if application.status == ApplicationStatus.RECEIVED:
             color = "#1f6feb"
-        elif application.status in [ApplicationStatus.UNDER_REVIEW, ApplicationStatus.PRESELECTED, ApplicationStatus.INTERVIEW_SCHEDULED, ApplicationStatus.INTERVIEW_COMPLETED]:
+        elif application.status in [ApplicationStatus.UNDER_REVIEW, ApplicationStatus.PRESELECTED, ApplicationStatus.INTERVIEW]:
             color = "#d29922"
         elif application.status == ApplicationStatus.ACCEPTED:
             color = "#238636"
-        elif application.status in [ApplicationStatus.REJECTED, ApplicationStatus.CANCELLED]:
+        elif application.status == ApplicationStatus.REJECTED:
             color = "#da3633"
+        elif application.status == ApplicationStatus.ARCHIVED:
+            color = "#6e7781"
             
         return format_html('<strong style="color: {};">{}</strong>', color, status_label)
 

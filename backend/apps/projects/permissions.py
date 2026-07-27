@@ -11,7 +11,7 @@ class IsProjectParticipant(BasePermission):
         if is_super_admin(user):
             return True
         if is_hr(user):
-            return request.method in SAFE_METHODS
+            return False
         if user.role == UserRole.EMPLOYEE:
             if view.basename == "project":
                 return request.method in SAFE_METHODS or request.method in {"POST", "PATCH"}
@@ -28,7 +28,7 @@ class IsProjectParticipant(BasePermission):
 
     def has_object_permission(self, request, view, obj):
         user = request.user
-        if is_super_admin(user) or (is_hr(user) and request.method in SAFE_METHODS):
+        if is_super_admin(user):
             return True
         project = getattr(obj, "project", obj)
         if user.role == UserRole.EMPLOYEE and project.supervisor_id == user.id:

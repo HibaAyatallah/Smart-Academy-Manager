@@ -16,6 +16,7 @@ from rest_framework.views import APIView
 from apps.accounts.choices import UserRole
 from apps.accounts.permissions import IsHROnly
 from apps.business_units.models import BusinessUnit, BusinessUnitMembership
+from apps.recruitment.models import InternProfile
 
 User = get_user_model()
 
@@ -26,13 +27,17 @@ User = get_user_model()
 
 class HRInternProfileSerializer(serializers.ModelSerializer):
     """Intern personal and administrative data visible to HR."""
-    full_name = serializers.CharField(read_only=True)
-    business_units = serializers.SerializerMethodField()
+    email = serializers.EmailField(source="user.email", read_only=True)
+    first_name = serializers.CharField(source="user.first_name", read_only=True)
+    last_name = serializers.CharField(source="user.last_name", read_only=True)
+    full_name = serializers.CharField(source="user.full_name", read_only=True)
+    phone_number = serializers.CharField(source="user.phone_number", read_only=True)
+    business_unit = serializers.SerializerMethodField()
     supervisor = serializers.SerializerMethodField()
-    internship_dates = serializers.SerializerMethodField()
+    document_submission_status = serializers.SerializerMethodField()
 
     class Meta:
-        model = User
+        model = InternProfile
         fields = [
             "id",
             "email",
@@ -40,58 +45,36 @@ class HRInternProfileSerializer(serializers.ModelSerializer):
             "last_name",
             "full_name",
             "phone_number",
-            "role",
-            "is_active",
-            "created_at",
-            "business_units",
+            "school",
+            "specialization",
+            "internship_type",
+            "paid",
+            "internship_start",
+            "internship_end",
+            "business_unit",
             "supervisor",
-            "internship_dates",
+            "subject_title",
+            "document_submission_status",
         ]
 
-    def get_business_units(self, obj):
-        return list(
-            BusinessUnit.objects.filter(
-                memberships__user=obj, memberships__is_active=True
-            ).distinct().values("id", "name", "code")
-        )
+    def get_business_unit(self, obj):
+        if not obj.business_unit:
+            return None
+        return {"id": obj.business_unit_id, "name": obj.business_unit.name, "code": obj.business_unit.code}
 
     def get_supervisor(self, obj):
-        """Return supervisor info if the intern has a supervised internship record.
+        if not obj.supervisor:
+            return None
+        return {"id": obj.supervisor_id, "full_name": obj.supervisor.full_name, "email": obj.supervisor.email}
 
-        The Internship model will be created in Phase 4. For now we return None
-        and this field will be populated once that model exists.
-        """
-        try:
-            from apps.internships.models import Internship  # Phase 4
-            internship = obj.internships.filter(
-                status__in=["PLANNED", "ACTIVE"]
-            ).select_related("supervisor").first()
-            if internship and internship.supervisor:
-                return {
-                    "id": internship.supervisor.id,
-                    "full_name": internship.supervisor.full_name,
-                    "email": internship.supervisor.email,
-                }
-        except ImportError:
-            pass
-        return None
-
-    def get_internship_dates(self, obj):
-        """Return internship dates from the Internship model (Phase 4)."""
-        try:
-            from apps.internships.models import Internship  # Phase 4
-            internship = obj.internships.filter(
-                status__in=["PLANNED", "ACTIVE"]
-            ).first()
-            if internship:
-                return {
-                    "start_date": internship.start_date,
-                    "end_date": internship.end_date,
-                    "status": internship.status,
-                }
-        except ImportError:
-            pass
-        return None
+    def get_document_submission_status(self, obj):
+        documents = list(obj.documents.all())
+        return {
+            "submitted_count": len(documents),
+            "validated_count": sum(1 for document in documents if document.is_validated),
+            "has_documents": bool(documents),
+            "all_validated": bool(documents) and all(document.is_validated for document in documents),
+        }
 
 
 class HRCollaboratorSerializer(serializers.ModelSerializer):
@@ -156,10 +139,10 @@ class HRInternListView(ListAPIView):
     serializer_class = HRInternProfileSerializer
 
     def get_queryset(self):
-        return (
-            User.objects.filter(role=UserRole.INTERN, is_active=True)
-            .order_by("last_name", "first_name")
-        )
+        return InternProfile.objects.filter(
+            user__role=UserRole.INTERN,
+            user__is_active=True,
+        ).select_related("user", "business_unit", "supervisor").prefetch_related("documents").order_by("user__last_name", "user__first_name")
 
 
 class HRInternDetailView(RetrieveAPIView):
@@ -172,7 +155,10 @@ class HRInternDetailView(RetrieveAPIView):
     serializer_class = HRInternProfileSerializer
 
     def get_queryset(self):
-        return User.objects.filter(role=UserRole.INTERN)
+        return InternProfile.objects.filter(
+            user__role=UserRole.INTERN,
+            user__is_active=True,
+        ).select_related("user", "business_unit", "supervisor").prefetch_related("documents")
 
 
 class HRCollaboratorsByBUView(APIView):

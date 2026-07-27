@@ -3,12 +3,11 @@ from django.http import FileResponse, Http404
 from rest_framework import filters, status, viewsets
 from django_filters.rest_framework import DjangoFilterBackend
 from rest_framework.decorators import action
-from rest_framework.exceptions import PermissionDenied
+from rest_framework.exceptions import PermissionDenied, ValidationError as DRFValidationError
 from rest_framework.parsers import FormParser, JSONParser, MultiPartParser
 from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
 
-from apps.accounts.roles import is_hr
 from apps.accounts.throttles import PublicSubmissionRateThrottle
 
 from .choices import ApplicationStatus, OfferStatus
@@ -55,7 +54,7 @@ class OfferViewSet(viewsets.ModelViewSet):
         queryset = Offer.objects.select_related("business_unit", "created_by").all()
         user = self.request.user
 
-        if is_recruitment_manager(user) or is_hr(user):
+        if is_recruitment_manager(user):
             return queryset
 
         return queryset.filter(status=OfferStatus.PUBLISHED)
@@ -175,8 +174,17 @@ class ApplicationViewSet(viewsets.ModelViewSet):
     )
     def public_submit(self, request):
         serializer = PublicApplicationCreateSerializer(data=request.data)
-        serializer.is_valid(raise_exception=True)
-        application = serializer.save()
+        try:
+            serializer.is_valid(raise_exception=True)
+            application = serializer.save()
+        except DRFValidationError as exc:
+            return Response(exc.detail, status=status.HTTP_400_BAD_REQUEST)
+        except Exception as exc:  # pragma: no cover - defensive guard for unexpected API failures
+            return Response(
+                {"detail": "Impossible de traiter votre candidature. Veuillez réessayer plus tard."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
         log_sensitive_action(
             None,
             application,
@@ -398,7 +406,7 @@ class InternProfileViewSet(viewsets.ModelViewSet):
         ).prefetch_related("documents", "evaluations")
         user = self.request.user
         
-        if is_recruitment_manager(user) or is_hr(user):
+        if is_recruitment_manager(user):
             return queryset
             
         if is_bu_manager(user):
@@ -411,7 +419,7 @@ class InternProfileViewSet(viewsets.ModelViewSet):
 
     def perform_update(self, serializer):
         user = self.request.user
-        if is_employee(user) and not (is_recruitment_manager(user) or is_hr(user)):
+        if is_employee(user) and not is_recruitment_manager(user):
             forbidden = set(serializer.validated_data) - {"progress", "current_status", "final_decision"}
             if forbidden:
                 raise PermissionDenied("Le superviseur peut uniquement mettre à jour la progression et le statut.")
@@ -426,7 +434,7 @@ class InternDocumentViewSet(viewsets.ModelViewSet):
         queryset = InternDocument.objects.select_related("intern__user", "validator")
         user = self.request.user
         
-        if is_recruitment_manager(user) or is_hr(user):
+        if is_recruitment_manager(user):
             return queryset
             
         if is_bu_manager(user):
@@ -442,7 +450,7 @@ class InternDocumentViewSet(viewsets.ModelViewSet):
         user = self.request.user
         if is_intern(user) and intern.user_id != user.id:
             raise PermissionDenied("Vous pouvez uniquement ajouter vos propres documents.")
-        if is_employee(user) and not (is_recruitment_manager(user) or is_hr(user)) and intern.supervisor_id != user.id:
+        if is_employee(user) and not is_recruitment_manager(user) and intern.supervisor_id != user.id:
             raise PermissionDenied("Ce stagiaire ne vous est pas affecté.")
         serializer.save()
 
@@ -455,8 +463,8 @@ class InternDocumentViewSet(viewsets.ModelViewSet):
 
     @action(detail=True, methods=["post"], url_path="validate")
     def validate_document(self, request, pk=None):
-        if not (is_recruitment_manager(request.user) or is_hr(request.user)):
-            raise PermissionDenied("Seuls le Super Admin et RH peuvent valider un document.")
+        if not is_recruitment_manager(request.user):
+            raise PermissionDenied("Seul le Super Admin peut valider un document.")
         document = self.get_object()
         from django.utils import timezone
         document.is_validated = True
@@ -475,7 +483,7 @@ class InternEvaluationViewSet(viewsets.ModelViewSet):
         queryset = InternEvaluation.objects.select_related("intern__user", "evaluator")
         user = self.request.user
         
-        if is_recruitment_manager(user) or is_hr(user):
+        if is_recruitment_manager(user):
             return queryset
             
         if is_bu_manager(user):
@@ -489,14 +497,14 @@ class InternEvaluationViewSet(viewsets.ModelViewSet):
     def perform_create(self, serializer):
         intern = serializer.validated_data["intern"]
         user = self.request.user
-        if is_employee(user) and not (is_recruitment_manager(user) or is_hr(user)) and intern.supervisor_id != user.id:
+        if is_employee(user) and not is_recruitment_manager(user) and intern.supervisor_id != user.id:
             raise PermissionDenied("Ce stagiaire ne vous est pas affecté.")
         serializer.save(evaluator=user)
 
     def perform_update(self, serializer):
         evaluation = self.get_object()
         user = self.request.user
-        if is_employee(user) and not (is_recruitment_manager(user) or is_hr(user)) and evaluation.evaluator_id != user.id:
+        if is_employee(user) and not is_recruitment_manager(user) and evaluation.evaluator_id != user.id:
             raise PermissionDenied("Vous pouvez uniquement modifier vos propres évaluations.")
         if "intern" in serializer.validated_data and serializer.validated_data["intern"].id != evaluation.intern_id:
             raise PermissionDenied("Une évaluation ne peut pas être réaffectée à un autre stagiaire.")

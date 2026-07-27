@@ -8,8 +8,25 @@ APPS_DIR = BASE_DIR / "apps"
 
 env = environ.Env(
     DJANGO_DEBUG=(bool, False),
-    DJANGO_ALLOWED_HOSTS=(list, ["localhost", "127.0.0.1"]),
-    DJANGO_CORS_ALLOWED_ORIGINS=(list, ["http://localhost:4200"]),
+    DJANGO_ALLOWED_HOSTS=(list, ["localhost", "127.0.0.1", "0.0.0.0"]),
+    DJANGO_CORS_ALLOWED_ORIGINS=(
+        list,
+        [
+            "http://localhost:4200",
+            "http://127.0.0.1:4200",
+            "http://localhost:8001",
+            "http://127.0.0.1:8001",
+        ],
+    ),
+    DJANGO_CSRF_TRUSTED_ORIGINS=(
+        list,
+        [
+            "http://localhost:4200",
+            "http://127.0.0.1:4200",
+            "http://localhost:8001",
+            "http://127.0.0.1:8001",
+        ],
+    ),
     ACCESS_TOKEN_LIFETIME_MINUTES=(int, 15),
     REFRESH_TOKEN_LIFETIME_DAYS=(int, 7),
     RECRUITMENT_RETENTION_DAYS=(int, 730),
@@ -41,6 +58,7 @@ INSTALLED_APPS = [
     "apps.trainings",
     "apps.projects",
     "apps.notifications",
+    "apps.reports",
 ]
 
 MIDDLEWARE = [
@@ -117,6 +135,8 @@ DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 AUTH_USER_MODEL = "accounts.User"
 
 CORS_ALLOWED_ORIGINS = env("DJANGO_CORS_ALLOWED_ORIGINS")
+CSRF_TRUSTED_ORIGINS = env("DJANGO_CSRF_TRUSTED_ORIGINS")
+CORS_ALLOW_CREDENTIALS = True
 
 REST_FRAMEWORK = {
     "DEFAULT_AUTHENTICATION_CLASSES": (
