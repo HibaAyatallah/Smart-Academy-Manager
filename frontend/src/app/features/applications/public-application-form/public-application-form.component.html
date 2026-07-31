@@ -12,7 +12,7 @@
     <span>{{ generalError }}</span>
   </div>
 
-  <mat-stepper [linear]="true" #stepper class="application-stepper">
+  <mat-stepper [linear]="true" #stepper="matStepper" class="application-stepper">
     
     <!-- ÉTAPE 1 : Informations personnelles -->
     <mat-step [stepControl]="form.controls.personal">
@@ -169,10 +169,14 @@
     </mat-step>
 
     <!-- ÉTAPE 4 : Documents -->
-    <mat-step>
+    <mat-step [stepControl]="documentsForm">
       <ng-template matStepLabel>Documents</ng-template>
       <div class="step-content">
         <p class="mb-lg">Veuillez télécharger les documents requis. Formats acceptés : PDF, DOC, DOCX pour les documents. JPG, PNG pour la photo.</p>
+        <div *ngIf="documentsForm.invalid && documentsForm.touched" class="alert alert-error mb-lg">
+          <mat-icon>error_outline</mat-icon>
+          <span>Vous devez télécharger tous les documents requis avant de passer à l’étape suivante.</span>
+        </div>
         
         <div class="documents-grid">
           
@@ -258,7 +262,7 @@
 
         <div class="stepper-actions mt-lg">
           <button mat-button type="button" matStepperPrevious class="btn btn-outline">Retour</button>
-          <button mat-button type="button" matStepperNext class="btn btn-primary">Suivant</button>
+          <button mat-button type="button" class="btn btn-primary" (click)="goToNextStep(stepper)" [disabled]="documentsForm.invalid">Suivant</button>
         </div>
       </div>
     </mat-step>

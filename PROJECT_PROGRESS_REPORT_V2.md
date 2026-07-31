@@ -115,7 +115,7 @@ Result:  Ran 173 tests in 253.248s   OK
          System check identified no issues (0 silenced).
 ```
 
-Additional reference: `backend/backend_test_output.txt` — prior run showing 171 tests OK.
+The historical 171-test run was superseded by the complete live verification documented above.
 
 ### What failed in the unactivated runs (tasks task-49 and task-83)
 

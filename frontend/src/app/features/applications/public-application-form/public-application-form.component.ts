@@ -8,7 +8,7 @@ import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatIconModule } from '@angular/material/icon';
 import { MatInputModule } from '@angular/material/input';
 import { MatSelectModule } from '@angular/material/select';
-import { MatStepperModule } from '@angular/material/stepper';
+import { MatStepperModule, MatStepper } from '@angular/material/stepper';
 import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
 import { Router, RouterLink } from '@angular/router';
 import { finalize } from 'rxjs/operators';
@@ -141,7 +141,13 @@ export class PublicApplicationFormComponent {
       linkedin_url: [''],
       portfolio_url: [''],
       motivation_message: [''],
-    })
+    }),
+  });
+
+  readonly documentsForm = this.formBuilder.group({
+    cv: [null as File | null, Validators.required],
+    cover: [null as File | null, Validators.required],
+    photo: [null as File | null, Validators.required],
   });
 
   cvFile: File | null = null;
@@ -190,16 +196,19 @@ export class PublicApplicationFormComponent {
     this.fileErrors[target] = error;
     if (error) {
       this.setFile(target, null);
+      this.documentsForm.controls[target].setValue(null);
       input.value = '';
       return;
     }
 
     this.setFile(target, file);
+    this.documentsForm.controls[target].setValue(file);
   }
 
   removeFile(target: RequiredFileTarget, input: HTMLInputElement): void {
     this.setFile(target, null);
     this.fileErrors[target] = '';
+    this.documentsForm.controls[target].setValue(null);
     input.value = '';
   }
 
@@ -208,6 +217,13 @@ export class PublicApplicationFormComponent {
     this.validateRequiredFiles();
     if (this.form.invalid || this.hasFileErrors() || this.isSubmitting) {
       this.form.markAllAsTouched();
+      if (this.hasFileErrors()) {
+        this.snackBar.open(
+          'Veuillez télécharger tous les documents requis avant de poursuivre.',
+          'Fermer',
+          { duration: 5000 },
+        );
+      }
       return;
     }
 
@@ -265,6 +281,24 @@ export class PublicApplicationFormComponent {
     this.fileErrors.photo = this.personalPhotoFile
       ? this.fileErrors.photo
       : this.requiredFileMessage('photo');
+  }
+
+  private isDocumentStepValid(): boolean {
+    this.validateRequiredFiles();
+    this.documentsForm.markAllAsTouched();
+    return !this.hasFileErrors() && this.documentsForm.valid;
+  }
+
+  goToNextStep(stepper: MatStepper): void {
+    if (this.isDocumentStepValid()) {
+      stepper.next();
+    } else {
+      this.snackBar.open(
+        'Veuillez télécharger tous les documents requis avant de passer à l’étape suivante.',
+        'Fermer',
+        { duration: 5000 },
+      );
+    }
   }
 
   private async validateFile(file: File | null, target: RequiredFileTarget): Promise<string> {

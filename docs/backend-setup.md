@@ -83,7 +83,10 @@ Modifie au minimum :
 DJANGO_SECRET_KEY=une-cle-secrete-aleatoire-d-au-moins-32-caracteres
 DJANGO_CORS_ALLOWED_ORIGINS=http://localhost:4200,http://127.0.0.1:4200
 DATABASE_URL=postgres://smart_academy_user:change_this_password@localhost:5432/smart_academy_db
+EMAIL_BACKEND=django.core.mail.backends.console.EmailBackend
 ```
+
+> Pour le développement local, utiliser `django.core.mail.backends.console.EmailBackend` permet de voir les emails directement dans la sortie du serveur Django.
 
 ## 6. Lancer les migrations et creer le super administrateur
 

@@ -9,9 +9,30 @@ from .models import EmailDeliveryLog, Notification, NotificationCategory, Notifi
 logger = logging.getLogger(__name__)
 PREFERENCE_FIELDS={NotificationCategory.APPROVAL:"approvals",NotificationCategory.ASSIGNMENT:"assignments",NotificationCategory.SESSION:"sessions",NotificationCategory.EVALUATION:"evaluations",NotificationCategory.DOCUMENT:"documents",NotificationCategory.CERTIFICATE:"certificates"}
 EMAIL_TEXT={
- "fr":{"account.created":"Votre compte Smart Academy","password.changed":"Votre mot de passe a été modifié","email.changed":"Votre adresse e-mail a été modifiée","notification":"Nouvelle notification Smart Academy"},
- "en":{"account.created":"Your Smart Academy account","password.changed":"Your password was changed","email.changed":"Your email address was changed","notification":"New Smart Academy notification"},
- "ar":{"account.created":"حسابك في Smart Academy","password.changed":"تم تغيير كلمة المرور","email.changed":"تم تغير البريد الإلكتروني","notification":"إشعار جديد من Smart Academy"},
+ "fr":{
+  "account.created":"Votre compte Smart Academy",
+  "password.changed":"Votre mot de passe a été modifié",
+  "email.changed":"Votre adresse e-mail a été modifiée",
+  "application.submitted":"Candidature reçue",
+  "application.confirmed":"Inscription confirmée",
+  "notification":"Nouvelle notification Smart Academy",
+ },
+ "en":{
+  "account.created":"Your Smart Academy account",
+  "password.changed":"Your password was changed",
+  "email.changed":"Your email address was changed",
+  "application.submitted":"Application received",
+  "application.confirmed":"Registration confirmed",
+  "notification":"New Smart Academy notification",
+ },
+ "ar":{
+  "account.created":"حسابك في Smart Academy",
+  "password.changed":"تم تغيير كلمة المرور",
+  "email.changed":"تم تغير البريد الإلكتروني",
+  "application.submitted":"تم استلام طلبك",
+  "application.confirmed":"تم تأكيد التسجيل",
+  "notification":"إشعار جديد من Smart Academy",
+ },
 }
 
 def send_templated_email(*,recipient,event,event_key,context=None,subject=None):
@@ -30,7 +51,11 @@ def send_templated_email(*,recipient,event,event_key,context=None,subject=None):
         message=EmailMultiAlternatives(resolved_subject,text,settings.DEFAULT_FROM_EMAIL,[recipient.email]);message.attach_alternative(html,"text/html");message.send(fail_silently=False)
         log.status="SENT";log.sent_at=timezone.now();log.save(update_fields=["status","sent_at"])
     except Exception as exc: # no sensitive payload is logged
-        log.status="FAILED";log.error_code=exc.__class__.__name__;log.save(update_fields=["status","error_code"]);logger.warning("Email delivery failed event=%s code=%s",event,exc.__class__.__name__)
+        error_message=f"{exc.__class__.__name__}: {exc}"
+        log.status="FAILED";
+        log.error_code=error_message[:120]
+        log.save(update_fields=["status","error_code"])
+        logger.warning("Email delivery failed event=%s code=%s message=%s", event, exc.__class__.__name__, str(exc))
     return log
 
 def queue_email(**kwargs):

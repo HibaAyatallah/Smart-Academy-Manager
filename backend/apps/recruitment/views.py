@@ -160,6 +160,7 @@ class ApplicationViewSet(viewsets.ModelViewSet):
             {"candidate_email": application.candidate.email},
         )
         queue_email(recipient=application.candidate,event="application.submitted",event_key=f"application:{application.pk}:submitted",subject="Candidature reçue",context={"message":"Votre candidature a bien été enregistrée."})
+        queue_email(recipient=application.candidate,event="application.confirmed",event_key=f"application:{application.pk}:confirmed",subject="Inscription confirmée",context={"message":"Votre inscription sur notre plateforme a bien été prise en compte. Nous vous remercions pour votre candidature."})
         return Response(
             ApplicationSerializer(application, context=self.get_serializer_context()).data,
             status=status.HTTP_201_CREATED,
@@ -184,6 +185,7 @@ class ApplicationViewSet(viewsets.ModelViewSet):
             serializer.is_valid(raise_exception=True)
             application = serializer.save()
             queue_email(recipient=application.candidate,event="application.submitted",event_key=f"application:{application.pk}:submitted",subject="Candidature reçue",context={"message":"Votre candidature a bien été enregistrée."})
+            queue_email(recipient=application.candidate,event="application.confirmed",event_key=f"application:{application.pk}:confirmed",subject="Inscription confirmée",context={"message":"Votre inscription sur notre plateforme a bien été prise en compte. Nous vous remercions pour votre candidature."})
         except DRFValidationError as exc:
             return Response(exc.detail, status=status.HTTP_400_BAD_REQUEST)
         except Exception:  # pragma: no cover - defensive guard for unexpected API failures
@@ -446,7 +448,6 @@ class InternProfileViewSet(viewsets.ModelViewSet):
 
 
 class InternDocumentViewSet(viewsets.ModelViewSet):
-    queryset = InternDocument.objects.none()
     serializer_class = InternDocumentSerializer
     permission_classes = [IsInternshipParticipant]
     
