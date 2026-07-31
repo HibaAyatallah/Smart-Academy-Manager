@@ -1,46 +1,87 @@
 <app-page-header
   title="Formations de ma BU"
-  subtitle="Consultez les formations confirmées qui vous concernent"
+  subtitle="Vos formations et vos déclarations de présence"
 />
 
-<div class="loading" *ngIf="isLoading"><mat-spinner diameter="36" /></div>
-<p class="error-state" *ngIf="!isLoading && errorMessage">{{ errorMessage }}</p>
+<div class="state" *ngIf="isLoading">
+  <mat-spinner diameter="40" />
+  <span>Chargement des formations…</span>
+</div>
 
-<mat-card *ngIf="!isLoading && !errorMessage">
-  <p class="empty-state" *ngIf="!trainings.length">Aucune formation confirmée ne vous concerne.</p>
+<div class="state error-state" *ngIf="!isLoading && errorMessage">
+  <mat-icon>error_outline</mat-icon>
+  <p>{{ errorMessage }}</p>
+  <button mat-stroked-button (click)="load()">Réessayer</button>
+</div>
 
-  <div class="table-wrapper" *ngIf="trainings.length">
-    <table mat-table [dataSource]="trainings">
-      <ng-container matColumnDef="title">
-        <th mat-header-cell *matHeaderCellDef>Titre</th>
-        <td mat-cell *matCellDef="let training"><strong>{{ training.title || 'À définir' }}</strong></td>
-      </ng-container>
+<div class="state" *ngIf="!isLoading && !errorMessage && !trainings.length">
+  <mat-icon>event_busy</mat-icon>
+  <p>Aucune formation disponible pour votre Business Unit.</p>
+</div>
 
-      <ng-container matColumnDef="type">
-        <th mat-header-cell *matHeaderCellDef>Type</th>
-        <td mat-cell *matCellDef="let training">{{ training.need_type_label || 'À définir' }}</td>
-      </ng-container>
+<section class="training-grid" *ngIf="!isLoading && !errorMessage && trainings.length">
+  <mat-card class="training-card" *ngFor="let training of trainings">
+    <div class="card-heading">
+      <div class="training-icon"><mat-icon>school</mat-icon></div>
+      <span class="status" [attr.data-status]="status(training)">{{ status(training) }}</span>
+    </div>
+    <mat-card-header>
+      <mat-card-title>{{ training.training_title }}</mat-card-title>
+      <mat-card-subtitle *ngIf="training.project_name">
+        Projet : {{ training.project_name }}
+      </mat-card-subtitle>
+    </mat-card-header>
+    <mat-card-content>
+      <div class="dates">
+        <span><mat-icon>calendar_today</mat-icon> {{ training.session_start_date | date:'dd MMM yyyy' }}</span>
+        <mat-icon class="arrow">arrow_forward</mat-icon>
+        <span>{{ training.session_end_date | date:'dd MMM yyyy' }}</span>
+      </div>
+      <div class="presence-count">
+        <strong>{{ presentDays(training) }}</strong>
+        <span>jour{{ presentDays(training) > 1 ? 's' : '' }} déclaré{{ presentDays(training) > 1 ? 's' : '' }} présent</span>
+      </div>
+    </mat-card-content>
+    <mat-card-actions align="end">
+      <button mat-flat-button color="primary" (click)="openCalendar(training)">
+        <mat-icon>calendar_month</mat-icon>
+        Voir mon calendrier
+      </button>
+    </mat-card-actions>
+  </mat-card>
+</section>
 
-      <ng-container matColumnDef="training_start_date">
-        <th mat-header-cell *matHeaderCellDef>Date de début</th>
-        <td mat-cell *matCellDef="let training">{{ training.training_start_date ? (training.training_start_date | date:'dd/MM/yyyy') : 'À définir' }}</td>
-      </ng-container>
-
-      <ng-container matColumnDef="training_end_date">
-        <th mat-header-cell *matHeaderCellDef>Date de fin</th>
-        <td mat-cell *matCellDef="let training">{{ training.training_end_date ? (training.training_end_date | date:'dd/MM/yyyy') : 'À définir' }}</td>
-      </ng-container>
-
-      <ng-container matColumnDef="training_link">
-        <th mat-header-cell *matHeaderCellDef>Lien</th>
-        <td mat-cell *matCellDef="let training">
-          <a *ngIf="training.training_link; else undefinedLink" [href]="training.training_link" target="_blank" rel="noopener noreferrer">Ouvrir la formation</a>
-          <ng-template #undefinedLink>À définir</ng-template>
-        </td>
-      </ng-container>
-
-      <tr mat-header-row *matHeaderRowDef="displayedColumns"></tr>
-      <tr mat-row *matRowDef="let row; columns: displayedColumns"></tr>
-    </table>
+<ng-template #calendarDialog>
+  <div class="dialog-heading">
+    <div>
+      <span class="eyebrow">Calendrier de présence</span>
+      <h2 mat-dialog-title>{{ selected?.training_title }}</h2>
+    </div>
+    <button mat-icon-button mat-dialog-close aria-label="Fermer le calendrier"><mat-icon>close</mat-icon></button>
   </div>
-</mat-card>
+  <mat-dialog-content>
+    <div class="legend" aria-label="Légende des présences">
+      <span><i class="empty"></i>Absent / non renseigné</span>
+      <span><i class="pending"></i>Présent, en attente</span>
+      <span><i class="validated"></i>Validé</span>
+      <span><i class="future"></i>Jour futur</span>
+    </div>
+    <p class="calendar-help">Sélectionnez un jour passé ou aujourd’hui. Un second clic le marque absent.</p>
+    <div class="calendar-grid">
+      <button
+        type="button"
+        class="calendar-day"
+        *ngFor="let day of days"
+        [class]="dayState(day)"
+        [class.future]="day.future"
+        [disabled]="day.future || day.attendance?.validated || savingDate === day.date"
+        [attr.aria-label]="day.label + ' - ' + dayState(day)"
+        (click)="toggle(day)">
+        <span>{{ day.label }}</span>
+        <mat-icon *ngIf="day.attendance?.validated">verified</mat-icon>
+        <mat-icon *ngIf="!day.attendance?.validated && day.attendance?.status === 'PRESENT'">schedule</mat-icon>
+        <mat-icon *ngIf="!day.attendance || day.attendance.status === 'ABSENT'">close</mat-icon>
+      </button>
+    </div>
+  </mat-dialog-content>
+</ng-template>

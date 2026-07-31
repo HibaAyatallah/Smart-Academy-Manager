@@ -4,12 +4,338 @@
     [subtitle]="'Bienvenue dans votre espace ' + roleLabels[user.role].toLowerCase() + '.'"
   />
 
+  <!-- Premium Super Admin Dashboard -->
+  <ng-container *ngIf="user.role === 'SUPER_ADMIN'">
+    <div class="loading" *ngIf="reportLoading">
+      <mat-spinner diameter="36"></mat-spinner>
+    </div>
+    
+    <p class="error-state" *ngIf="!reportLoading && reportError">
+      {{ reportError }}
+    </p>
+
+    <section class="super-admin-dashboard" *ngIf="!reportLoading && !reportError && reportData as report">
+    <div class="dashboard-toolbar" aria-label="Filtrer le tableau de bord par période">
+      <div><span class="toolbar-label">Période d’analyse</span><strong>Données consolidées</strong></div>
+      <div class="period-filter" role="group" aria-label="Période">
+        <button *ngFor="let period of periods" type="button"
+          [class.active]="selectedPeriod === period.value"
+          [attr.aria-pressed]="selectedPeriod === period.value"
+          (click)="selectPeriod(period.value)">{{ period.label }}</button>
+      </div>
+    </div>
+    <!-- Row 1: KPI Cards -->
+    <div class="kpi-grid animate-on-scroll is-visible">
+      <a class="kpi-card hover-lift glass-panel kpi-link" routerLink="/applications" aria-label="Voir toutes les candidatures">
+        <div class="kpi-icon"><mat-icon>description</mat-icon></div>
+        <div class="kpi-content">
+          <span class="kpi-value">{{ report.cards['applications'] || 0 }}</span>
+          <span class="kpi-label">Total des candidatures</span>
+        </div>
+        <mat-icon class="kpi-arrow">arrow_forward</mat-icon>
+      </a>
+      <a class="kpi-card hover-lift glass-panel kpi-link" routerLink="/internships" aria-label="Voir les stagiaires actifs">
+        <div class="kpi-icon"><mat-icon>person</mat-icon></div>
+        <div class="kpi-content">
+          <span class="kpi-value">{{ report.cards['active_interns'] || 0 }}</span>
+          <span class="kpi-label">Stagiaires actifs</span>
+        </div>
+        <mat-icon class="kpi-arrow">arrow_forward</mat-icon>
+      </a>
+      <a class="kpi-card hover-lift glass-panel kpi-link" routerLink="/users" aria-label="Voir les collaborateurs actifs">
+        <div class="kpi-icon"><mat-icon>work</mat-icon></div>
+        <div class="kpi-content">
+          <span class="kpi-value">{{ report.cards['active_collaborators'] || 0 }}</span>
+          <span class="kpi-label">Collaborateurs actifs</span>
+        </div>
+        <mat-icon class="kpi-arrow">arrow_forward</mat-icon>
+      </a>
+      <a class="kpi-card highlight hover-lift kpi-link" routerLink="/business-units/needs" [queryParams]="{ status: 'SUBMITTED' }" aria-label="Voir les besoins Business Unit ouverts">
+        <div class="kpi-icon highlight"><mat-icon>business_center</mat-icon></div>
+        <div class="kpi-content">
+          <span class="kpi-value">{{ report.cards['open_bu_needs'] || 0 }}</span>
+          <span class="kpi-label">Besoins BU ouverts</span>
+        </div>
+        <mat-icon class="kpi-arrow">arrow_forward</mat-icon>
+      </a>
+    </div>
+
+    <!-- Row 2, 3, 4: BI Grid -->
+    <div class="dashboard-grid animate-on-scroll is-visible mt-4">
+      
+      <!-- Évolution Mensuelle -->
+      <div class="premium-panel glass-panel monthly-chart-panel">
+        <div class="panel-header">
+          <h3>Évolution mensuelle des candidatures</h3>
+        </div>
+        <div class="panel-content">
+          <div class="chart-container">
+            <canvas id="monthlyChart" #chartCanvas></canvas>
+          </div>
+        </div>
+      </div>
+
+      <!-- Candidatures Récentes Table -->
+      <div class="premium-panel glass-panel recent-apps-panel">
+        <div class="panel-header">
+          <h3>Candidatures récentes</h3>
+          <button mat-button color="primary">Voir tout</button>
+        </div>
+        <div class="panel-content p-0">
+          <div class="table-responsive">
+            <table>
+              <thead>
+                <tr>
+                  <th>Candidat</th>
+                  <th>Offre</th>
+                  <th>Date</th>
+                  <th>Statut</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr *ngFor="let app of report.recent_applications">
+                  <td>{{ app.candidate_name }}</td>
+                  <td>
+                    <strong>{{ app.offer_title }}</strong>
+                    <div class="text-muted" style="font-size: 0.75rem;">{{ app.business_unit }}</div>
+                  </td>
+                  <td>{{ app.submitted_at | date:'dd/MM/yyyy' }}</td>
+                  <td>
+                    <span class="status-chip" [ngClass]="getStatusClass(app.status)">
+                      {{ getStatusLabel(app.status) }}
+                    </span>
+                  </td>
+                </tr>
+                <tr *ngIf="!report.recent_applications?.length">
+                  <td colspan="4" class="text-center text-muted">Aucune candidature récente.</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <!-- Répartition Statuts -->
+      <div class="premium-panel glass-panel status-donut-panel">
+        <div class="panel-header">
+          <h3>Répartition des statuts</h3>
+        </div>
+        <div class="panel-content">
+          <div class="chart-container">
+            <canvas id="statusChart" #chartCanvas></canvas>
+          </div>
+        </div>
+      </div>
+
+      <!-- Candidatures par BU -->
+      <div class="premium-panel glass-panel apps-bu-panel">
+        <div class="panel-header">
+          <h3>Évolution des stages par mois</h3>
+          <mat-icon matTooltip="Nécessite une série mensuelle fournie par l’API de rapports">info_outline</mat-icon>
+        </div>
+        <div class="panel-content">
+          <div class="chart-container">
+            <div class="internship-data-gap">
+              <div class="data-gap-icon"><mat-icon>query_stats</mat-icon></div>
+              <div>
+                <strong>Données mensuelles non disponibles</strong>
+                <p>L’API actuelle ne fournit pas de série mensuelle distinguant stages à venir, stagiaires actifs et stages terminés. Le graphique sera activé lorsque cette série sera disponible.</p>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Effectifs par BU -->
+      <div class="premium-panel glass-panel workforce-bu-panel">
+        <div class="panel-header">
+          <h3>Répartition des effectifs par Business Unit</h3>
+        </div>
+        <div class="panel-content">
+          <div class="chart-container">
+            <canvas id="workforceChart" #chartCanvas></canvas>
+          </div>
+        </div>
+      </div>
+
+      <!-- Training Overview -->
+      <div class="premium-panel glass-panel training-panel">
+        <div class="panel-header">
+          <h3>Résumé des Formations</h3>
+        </div>
+        <div class="panel-content">
+          <div class="training-stats">
+            <div class="training-item">
+              <span class="label">Formations planifiées</span>
+              <span class="value">{{ report.cards['trainings'] || 0 }}</span>
+            </div>
+            <div class="training-item">
+              <span class="label">Sessions à venir</span>
+              <span class="value">{{ report.cards['sessions'] || 0 }}</span>
+            </div>
+            <div class="training-item">
+              <span class="label">Inscriptions</span>
+              <span class="value">{{ report.cards['enrollments'] || 0 }}</span>
+            </div>
+            <div class="training-item">
+              <span class="label">Présences validées</span>
+              <span class="value">{{ report.cards['attendance_records'] || 0 }}</span>
+            </div>
+            <div class="training-item">
+              <span class="label">Certificats délivrés</span>
+              <span class="value">{{ report.cards['certificates'] || 0 }}</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Actions rapides -->
+      <div class="premium-panel glass-panel activities-panel quick-actions-panel">
+        <div class="panel-header">
+          <h3>Actions rapides</h3>
+          <span class="panel-kicker">Raccourcis administrateur</span>
+        </div>
+        <div class="panel-content quick-actions-grid">
+          <a routerLink="/offers/new"><span class="quick-icon violet"><mat-icon>add_business</mat-icon></span><span><strong>Créer une offre</strong><small>Publier une nouvelle opportunité</small></span><mat-icon>chevron_right</mat-icon></a>
+          <a routerLink="/users/new"><span class="quick-icon blue"><mat-icon>person_add</mat-icon></span><span><strong>Ajouter un utilisateur</strong><small>Créer et affecter un compte</small></span><mat-icon>chevron_right</mat-icon></a>
+          <a routerLink="/applications"><span class="quick-icon emerald"><mat-icon>assignment_ind</mat-icon></span><span><strong>Affecter un candidat</strong><small>Traiter les candidatures acceptées</small></span><mat-icon>chevron_right</mat-icon></a>
+          <a routerLink="/trainings"><span class="quick-icon amber"><mat-icon>event_available</mat-icon></span><span><strong>Planifier une formation</strong><small>Gérer le catalogue et les sessions</small></span><mat-icon>chevron_right</mat-icon></a>
+        </div>
+      </div>
+
+    </div>
+    </section>
+  </ng-container>
+
+  <!-- Premium HR Dashboard -->
+  <ng-container *ngIf="user.role === 'HR'">
+    <div class="loading" *ngIf="hrReportLoading">
+      <mat-spinner diameter="36"></mat-spinner>
+    </div>
+    
+    <p class="error-state" *ngIf="!hrReportLoading && hrReportError">
+      {{ hrReportError }}
+    </p>
+
+    <section class="hr-dashboard" *ngIf="!hrReportLoading && !hrReportError && hrReportData as hrData">
+      <div class="kpi-grid animate-on-scroll is-visible">
+        <div class="kpi-card highlight hover-lift glass-panel">
+          <div class="kpi-icon highlight"><mat-icon>people</mat-icon></div>
+          <div class="kpi-content">
+            <span class="kpi-value">{{ hrData.active_interns }}</span>
+            <span class="kpi-label">Stagiaires Actifs</span>
+          </div>
+        </div>
+        <div class="kpi-card hover-lift glass-panel">
+          <div class="kpi-icon"><mat-icon>attach_money</mat-icon></div>
+          <div class="kpi-content">
+            <span class="kpi-value">{{ hrData.paid_interns }}</span>
+            <span class="kpi-label">Rémunérés</span>
+          </div>
+        </div>
+        <div class="kpi-card hover-lift glass-panel">
+          <div class="kpi-icon"><mat-icon>money_off</mat-icon></div>
+          <div class="kpi-content">
+            <span class="kpi-value">{{ hrData.unpaid_interns }}</span>
+            <span class="kpi-label">Non Rémunérés</span>
+          </div>
+        </div>
+        <div class="kpi-card hover-lift glass-panel" [class.alert]="hrData.missing_documents > 0">
+          <div class="kpi-icon"><mat-icon>warning</mat-icon></div>
+          <div class="kpi-content">
+            <span class="kpi-value">{{ hrData.missing_documents }}</span>
+            <span class="kpi-label">Dossiers Incomplets</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="dashboard-grid animate-on-scroll is-visible mt-4">
+        <div class="dashboard-main">
+          <div class="premium-panel glass-panel">
+            <div class="panel-header">
+              <h3>Répartition par École</h3>
+            </div>
+            <div class="panel-content">
+              <mat-chip-set>
+                <mat-chip *ngFor="let item of hrData.interns_by_school">
+                  {{ item.label }}: {{ item.value }}
+                </mat-chip>
+              </mat-chip-set>
+            </div>
+          </div>
+          
+          <div class="premium-panel glass-panel mt-4">
+            <div class="panel-header">
+              <h3>Collaborateurs par BU</h3>
+            </div>
+            <div class="panel-content">
+              <mat-chip-set>
+                <mat-chip *ngFor="let item of hrData.collaborators_by_bu">
+                  {{ item.label }}: {{ item.value }}
+                </mat-chip>
+              </mat-chip-set>
+            </div>
+          </div>
+        </div>
+
+        <div class="dashboard-side">
+          <div class="premium-panel glass-panel">
+            <div class="panel-header border-light">
+              <h3>Échéances Proches</h3>
+            </div>
+            <div class="panel-content activity-list">
+              <h4 class="mt-2">Prochaines arrivées</h4>
+              <div class="activity-item" *ngFor="let start of hrData.internship_timeline.starts">
+                <mat-icon>login</mat-icon>
+                <div class="activity-details">
+                  <span class="activity-action">{{ start.name }} ({{ start.bu }})</span>
+                  <span class="activity-date">{{ start.date | date:'dd/MM/yyyy' }}</span>
+                </div>
+              </div>
+              <p *ngIf="!hrData.internship_timeline.starts.length" class="text-muted">Aucune arrivée.</p>
+              
+              <h4 class="mt-4">Prochains départs</h4>
+              <div class="activity-item" *ngFor="let end of hrData.internship_timeline.ends">
+                <mat-icon>logout</mat-icon>
+                <div class="activity-details">
+                  <span class="activity-action">{{ end.name }} ({{ end.bu }})</span>
+                  <span class="activity-date">{{ end.date | date:'dd/MM/yyyy' }}</span>
+                </div>
+              </div>
+              <p *ngIf="!hrData.internship_timeline.ends.length" class="text-muted">Aucun départ.</p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+  </ng-container>
+
   <app-empty-state
-    *ngIf="user.role !== 'CANDIDATE'"
+    *ngIf="user.role !== 'CANDIDATE' && user.role !== 'INTERN' && user.role !== 'SUPER_ADMIN' && user.role !== 'HR'"
     icon="dashboard"
     title="Aucune donnée opérationnelle à afficher"
     message="Votre espace est prêt. Utilisez la navigation pour accéder aux fonctionnalités disponibles pour votre rôle."
   />
+
+  <section class="intern-dashboard" *ngIf="user.role === 'INTERN'">
+    <div class="loading" *ngIf="internLoading"><mat-spinner diameter="36"></mat-spinner></div>
+    <p class="error-state" *ngIf="internError">{{internError}}</p>
+    <app-empty-state *ngIf="!internLoading && !internError && !internProfile" icon="assignment" title="Aucun stage affecté" message="Votre dossier de stage n’est pas encore disponible." />
+    <ng-container *ngIf="internProfile as intern">
+      <div class="kpi-grid">
+        <mat-card class="kpi-card"><div class="kpi-icon"><mat-icon>person</mat-icon></div><div class="kpi-content"><span class="kpi-label">Identité</span><strong>{{intern.user_full_name}}</strong></div></mat-card>
+        <mat-card class="kpi-card"><div class="kpi-icon"><mat-icon>domain</mat-icon></div><div class="kpi-content"><span class="kpi-label">Business Unit</span><strong>{{intern.business_unit_name||'Non affectée'}}</strong></div></mat-card>
+        <mat-card class="kpi-card"><div class="kpi-icon"><mat-icon>event</mat-icon></div><div class="kpi-content"><span class="kpi-value">{{daysRemaining(intern)}}</span><span class="kpi-label">Jours restants</span></div></mat-card>
+        <mat-card class="kpi-card"><div class="kpi-icon"><mat-icon>description</mat-icon></div><div class="kpi-content"><span class="kpi-value">{{documentProgress(intern).done}}/{{documentProgress(intern).total}}</span><span class="kpi-label">Documents validés</span></div></mat-card>
+      </div>
+      <mat-card class="intern-overview">
+        <div><span class="eyebrow">Votre stage</span><h2>{{intern.subject_title||'Sujet à définir'}}</h2><mat-chip>{{internshipStatuses[intern.current_status]}}</mat-chip></div>
+        <div class="application-grid"><p><strong>Manager BU</strong><span>{{intern.manager_name||'Non affecté'}}</span></p><p><strong>Encadrant</strong><span>{{intern.supervisor_email||'Non affecté'}}</span></p><p><strong>Début</strong><span>{{intern.internship_start|date:'dd/MM/yyyy'}}</span></p><p><strong>Fin</strong><span>{{intern.internship_end|date:'dd/MM/yyyy'}}</span></p></div>
+        <strong>Progression : {{intern.progress}}%</strong><div class="intern-progress"><span [style.width.%]="intern.progress"></span></div>
+        <a mat-flat-button color="primary" routerLink="/internships/me">Consulter mon stage</a>
+      </mat-card>
+    </ng-container>
+  </section>
 
   <section class="candidate-space" *ngIf="user.role === 'CANDIDATE'">
     <div class="loading" *ngIf="candidateApplicationsLoading">
@@ -59,6 +385,7 @@
           <p><strong>Email</strong><span>{{ application.candidate_profile.email }}</span></p>
           <p><strong>Téléphone</strong><span>{{ application.candidate_profile.phone_number }}</span></p>
           <p><strong>Type de candidature</strong><span>{{ typeLabel(application.application_type) }}</span></p>
+          <p><strong>Offre concernée</strong><span>{{ application.offer_title || 'Candidature spontanée' }}</span></p>
           <p><strong>Statut</strong><span>{{ statusLabel(application.status) }}</span></p>
           <p><strong>Référence</strong><span>#{{ application.id }}</span></p>
           <p><strong>École / Université</strong><span>{{ application.candidate_profile.current_school }}</span></p>
@@ -143,6 +470,8 @@
         </div>
 
         <div class="details">
+          <p *ngIf="application.rejection_reason"><strong>Décision :</strong> {{application.rejection_reason}}</p>
+          <p *ngFor="let event of application.status_history"><strong>Message :</strong> {{event.comment}}</p>
           <ng-container *ngIf="latestInterview(application) as interview">
             <p *ngIf="interview.location">Lieu : {{ interview.location }}</p>
             <p *ngIf="interview.meeting_link">

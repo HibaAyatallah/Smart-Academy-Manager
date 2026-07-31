@@ -1,6 +1,7 @@
 from rest_framework import serializers
 from .models import ClientProfile, Training, TrainingSession, TrainingEnrollment, EnrollmentHistory, SessionAttendance, AttendanceHistory, TrainingCertificate
 from .choices import EnrollmentStatus, SessionStatus
+from apps.accounts.choices import UserRole
 
 class ClientProfileSerializer(serializers.ModelSerializer):
     email = serializers.EmailField(source="user.email", read_only=True)
@@ -33,6 +34,22 @@ class TrainingSessionSerializer(serializers.ModelSerializer):
         return max(0, obj.maximum_participants - count)
         
     def validate(self, attrs):
+        from django.utils import timezone
+        today = timezone.localdate()
+        errors = {}
+        start = attrs.get("start_date", getattr(self.instance, "start_date", None))
+        end = attrs.get("end_date", getattr(self.instance, "end_date", None))
+        old_start = getattr(self.instance, "start_date", None) if self.instance else None
+        old_end = getattr(self.instance, "end_date", None) if self.instance else None
+        if "start_date" in attrs and start and start != old_start and start < today:
+            errors["start_date"] = "La date ne peut pas être antérieure à aujourd’hui."
+        if "end_date" in attrs and end and end != old_end and end < today:
+            errors["end_date"] = "La date ne peut pas être antérieure à aujourd’hui."
+        if start and end and end < start:
+            errors.setdefault("end_date", "La date de fin doit être postérieure ou égale à la date de début.")
+        if errors:
+            raise serializers.ValidationError(errors)
+
         # Merge with existing instance data if it's an update
         instance = TrainingSession(**attrs) if not self.instance else self.instance
         for attr, value in attrs.items():
@@ -57,7 +74,7 @@ class TrainingSerializer(serializers.ModelSerializer):
             "id", "title", "description", "training_type", "category",
             "objectives", "prerequisites", "duration", "delivery_mode", "level",
             "trainer", "business_unit", "external_client", "project_name",
-            "associated_link", "moodle_course_id", "moodle_link", "status", "image",
+            "associated_link", "status", "image",
             "sessions", "created_by", "created_at", "updated_at"
         ]
         read_only_fields = ["id", "status", "created_by", "created_at", "updated_at"]
@@ -78,7 +95,7 @@ class ClientTrainingSerializer(serializers.ModelSerializer):
     class Meta:
         model = Training
         fields = [
-            "id", "title", "project_name", "associated_link", "moodle_link", "sessions"
+            "id", "title", "project_name", "associated_link", "sessions"
         ]
 
 
@@ -94,16 +111,30 @@ class TrainingEnrollmentSerializer(serializers.ModelSerializer):
     history = EnrollmentHistorySerializer(many=True, read_only=True)
     user_email = serializers.EmailField(source='user.email', read_only=True)
     training_title = serializers.CharField(source='training.title', read_only=True)
+    user_name = serializers.SerializerMethodField()
+    project_name = serializers.CharField(source='training.project_name', read_only=True)
+    business_unit = serializers.IntegerField(source='training.business_unit_id', read_only=True)
+    session_start_date = serializers.DateField(source='session.start_date', read_only=True)
+    session_end_date = serializers.DateField(source='session.end_date', read_only=True)
+    present_days = serializers.SerializerMethodField()
     
     class Meta:
         model = TrainingEnrollment
         fields = [
-            "id", "user", "user_email", "training", "training_title", "session",
+            "id", "user", "user_email", "user_name", "training", "training_title",
+            "project_name", "business_unit", "session", "session_start_date",
+            "session_end_date", "present_days",
             "requested_at", "status", "manager_decision", "manager_comment",
             "manager_decided_by", "manager_decided_at", "super_admin_decision",
             "super_admin_comment", "super_admin_decided_by", "super_admin_decided_at",
             "final_status", "created_at", "updated_at", "history"
         ]
+
+    def get_user_name(self, obj):
+        return obj.user.get_full_name() or obj.user.email
+
+    def get_present_days(self, obj):
+        return obj.attendances.filter(status__in=["PRESENT", "LATE"]).count()
         read_only_fields = [
             "requested_at", "status", "manager_decision", "manager_decided_by",
             "manager_decided_at", "super_admin_decision", "super_admin_decided_by",
@@ -125,6 +156,14 @@ class TrainingEnrollmentCreateSerializer(serializers.ModelSerializer):
         if session.training != attrs['training']:
             raise serializers.ValidationError("La session ne correspond pas à la formation.")
             
+        if user.role == UserRole.EMPLOYEE and not user.bu_memberships.filter(
+            is_active=True,
+            business_unit_id=attrs["training"].business_unit_id,
+        ).exists():
+            raise serializers.ValidationError(
+                "Vous ne pouvez pas accéder aux formations d'une autre Business Unit."
+            )
+
         if session.status in [SessionStatus.COMPLETED, SessionStatus.CANCELLED, SessionStatus.FULL]:
             raise serializers.ValidationError("La session n'est pas disponible pour l'inscription.")
             
@@ -188,16 +227,31 @@ class SessionAttendanceSerializer(serializers.ModelSerializer):
     user_email = serializers.EmailField(source="enrollment.user.email", read_only=True)
     training_title = serializers.CharField(source="enrollment.training.title", read_only=True)
     session = serializers.IntegerField(source="enrollment.session_id", read_only=True)
+    user_name = serializers.SerializerMethodField()
+    validated_by_email = serializers.EmailField(source="validated_by.email", read_only=True)
 
     class Meta:
         model = SessionAttendance
-        fields = ["id", "enrollment", "session", "user_email", "training_title", "status", "note", "validated", "recorded_by", "validated_by", "validated_at", "created_at", "updated_at", "history"]
+        fields = ["id", "enrollment", "session", "user_email", "user_name", "training_title", "date", "status", "note", "validated", "recorded_by", "validated_by", "validated_by_email", "validated_at", "created_at", "updated_at", "history"]
         read_only_fields = ["validated", "recorded_by", "validated_by", "validated_at", "created_at", "updated_at"]
 
     def validate_enrollment(self, enrollment):
         if enrollment.status not in [EnrollmentStatus.ENROLLED, EnrollmentStatus.COMPLETED]:
             raise serializers.ValidationError("Attendance is limited to enrolled participants.")
         return enrollment
+
+    def get_user_name(self, obj):
+        return obj.enrollment.user.get_full_name() or obj.enrollment.user.email
+
+    def validate(self, attrs):
+        attrs = super().validate(attrs)
+        enrollment = attrs.get("enrollment", getattr(self.instance, "enrollment", None))
+        attendance_date = attrs.get("date", getattr(self.instance, "date", None))
+        if enrollment and attendance_date:
+            session = enrollment.session
+            if attendance_date < session.start_date or attendance_date > session.end_date:
+                raise serializers.ValidationError({"date": "La date doit être comprise dans la période de la formation."})
+        return attrs
 
 
 class TrainingCertificateSerializer(serializers.ModelSerializer):

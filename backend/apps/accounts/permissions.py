@@ -1,7 +1,6 @@
 from rest_framework.permissions import BasePermission, SAFE_METHODS
 
-from .choices import UserRole
-from .roles import is_super_admin, is_hr, is_super_admin_or_hr_readonly
+from .roles import is_super_admin, is_hr
 
 
 # ---------------------------------------------------------------------------

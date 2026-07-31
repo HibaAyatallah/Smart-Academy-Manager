@@ -1,31 +1,7 @@
-from django.core.mail import send_mail
-
+from apps.notifications.services import queue_email
 from .choices import ApplicationStatus
-
-
-EMAIL_SUBJECTS = {
-    ApplicationStatus.PRESELECTED: "Votre candidature a été présélectionnée",
-    ApplicationStatus.INTERVIEW: "Votre entretien est planifié",
-    ApplicationStatus.ACCEPTED: "Votre candidature est acceptée",
-    ApplicationStatus.REJECTED: "Votre candidature est refusée",
-}
-
-
-def send_application_status_email(application, status: str, message: str = "") -> None:
-    subject = EMAIL_SUBJECTS.get(status)
-    if not subject:
-        return
-
-    candidate = application.candidate
-    body = message or (
-        f"Bonjour {candidate.full_name},\n\n"
-        f"Le statut de votre candidature est maintenant : {application.get_status_display()}.\n\n"
-        "Cordialement,\nSmart Academy Manager"
-    )
-    send_mail(
-        subject=subject,
-        message=body,
-        from_email=None,
-        recipient_list=[candidate.email],
-        fail_silently=True,
-    )
+EMAIL_SUBJECTS={ApplicationStatus.PRESELECTED:"Candidature présélectionnée",ApplicationStatus.INTERVIEW:"Entretien planifié",ApplicationStatus.ACCEPTED:"Candidature acceptée",ApplicationStatus.REJECTED:"Candidature refusée"}
+def send_application_status_email(application,status,message=""):
+    subject=EMAIL_SUBJECTS.get(status)
+    if not subject:return
+    queue_email(recipient=application.candidate,event="application.status",event_key=f"application:{application.pk}:status:{status}",subject=subject,context={"message":message or f"Le statut de votre candidature est maintenant : {application.get_status_display()}."})

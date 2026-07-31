@@ -8,7 +8,7 @@ import { AuthService } from '../services/auth.service';
 const canAccessRole = (
   role: UserRole,
   requiredRoles: UserRole[] | undefined,
-): boolean => !requiredRoles?.length || requiredRoles.includes(role);
+): boolean => requiredRoles === undefined || requiredRoles.includes(role);
 
 export const roleGuard: CanActivateFn = (route) => {
   const authService = inject(AuthService);

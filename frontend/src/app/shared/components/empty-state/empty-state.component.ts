@@ -13,9 +13,9 @@ import { MatIconModule } from '@angular/material/icon';
     </section>
   `,
   styles: [`
-    .empty { display: grid; min-height: 220px; place-items: center; align-content: center; gap: 8px; padding: 32px; border: 1px dashed var(--app-border); border-radius: var(--app-radius-lg); background: var(--app-surface); color: var(--app-text-muted); text-align: center; }
-    mat-icon { width: 36px; height: 36px; color: var(--app-primary); font-size: 36px; }
-    h2 { margin: 4px 0 0; color: var(--app-text); font-size: 1rem; }
+    .empty { display: grid; min-height: 240px; place-items: center; align-content: center; gap: 9px; padding: 32px; border: 1px dashed #cbd5e1; border-radius: 18px; background: linear-gradient(145deg,#fff,#f8faff); color: var(--app-text-muted); text-align: center; }
+    mat-icon { display: grid; width: 52px; height: 52px; margin-bottom: 4px; place-items: center; border-radius: 16px; background: #eef2ff; color: #4f46e5; font-size: 27px; }
+    h2 { margin: 4px 0 0; color: var(--app-text); font-size: 1rem; font-weight: 720; }
     p { max-width: 520px; margin: 0; font-size: .86rem; line-height: 1.5; }
   `],
 })

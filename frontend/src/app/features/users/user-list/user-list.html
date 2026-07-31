@@ -1,5 +1,8 @@
 <app-page-header title="Gestion des utilisateurs" subtitle="Créez, recherchez et administrez les comptes" />
-<div class="page-actions"><a mat-flat-button color="primary" routerLink="/users/new">Nouvel utilisateur</a></div>
+<div class="page-actions">
+  <a mat-stroked-button routerLink="/users/bulk-import" class="mr-2">Importer des utilisateurs</a>
+  <a mat-flat-button color="primary" routerLink="/users/new">Nouvel utilisateur</a>
+</div>
 <mat-card><form [formGroup]="filters" (ngSubmit)="loadUsers()">
   <mat-form-field appearance="outline"><mat-label>Recherche</mat-label><input matInput formControlName="search" placeholder="Nom ou email"></mat-form-field>
   <mat-form-field appearance="outline"><mat-label>Rôle</mat-label><mat-select formControlName="role"><mat-option value="">Tous</mat-option><mat-option *ngFor="let role of roles" [value]="role">{{ roleLabels[role] }}</mat-option></mat-select></mat-form-field>

@@ -91,22 +91,20 @@ class IsInternshipParticipant(BasePermission):
             return False
         if is_recruitment_manager(user):
             return True
+        if is_hr(user) and view.basename == "intern-document":
+            return request.method in SAFE_METHODS
         if is_intern(user) and view.basename == "intern-document":
             return request.method in SAFE_METHODS or request.method == "POST"
-        if is_employee(user) and view.basename == "intern":
-            return request.method in SAFE_METHODS or request.method == "PATCH"
-        if is_employee(user) and view.basename == "intern-evaluation":
-            return request.method in SAFE_METHODS or request.method in {"POST", "PATCH"}
-        if is_employee(user) and view.basename == "intern-document":
-            return request.method in SAFE_METHODS or request.method == "POST"
         return request.method in SAFE_METHODS and (
-            is_bu_manager(user) or is_intern(user) or is_employee(user)
+            is_bu_manager(user) or is_intern(user)
         )
 
     def has_object_permission(self, request, view, obj) -> bool:
         user = request.user
         if is_recruitment_manager(user):
             return True
+        if is_hr(user) and view.basename == "intern-document":
+            return request.method in SAFE_METHODS
 
         if hasattr(obj, "intern"):
             intern_profile = obj.intern
@@ -124,11 +122,17 @@ class IsInternshipParticipant(BasePermission):
                 and intern_profile.business_unit.manager_id == user.id
             )
 
-        if is_employee(user) and intern_profile.supervisor_id == user.id:
-            if view.basename == "intern-document":
-                return request.method in SAFE_METHODS
-            return request.method in SAFE_METHODS or request.method in {"POST", "PATCH"}
         return False
+
+
+class IsInternDocumentRequirementUser(BasePermission):
+    def has_permission(self, request, view):
+        user = request.user
+        if not user or not user.is_authenticated:
+            return False
+        if is_recruitment_manager(user):
+            return True
+        return request.method in SAFE_METHODS and (is_hr(user) or is_intern(user))
 
 
 class CanManageOffersOrReadPublished(BasePermission):
@@ -142,6 +146,8 @@ class CanManageOffersOrReadPublished(BasePermission):
         if is_super_admin(user):
             return True
         if is_hr(user):
+            return False
+        if is_candidate(user):
             return False
         return request.method in SAFE_METHODS
 

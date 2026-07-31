@@ -18,12 +18,6 @@ class IsProjectParticipant(BasePermission):
             if view.basename == "project-deliverable":
                 return request.method in SAFE_METHODS or request.method in {"POST", "PATCH", "DELETE"}
             return request.method in SAFE_METHODS or request.method == "POST"
-        if user.role == UserRole.INTERN:
-            if view.basename == "project-deliverable":
-                return request.method in SAFE_METHODS or request.method == "PATCH"
-            if view.basename in {"project-comment", "project-document"}:
-                return request.method in SAFE_METHODS or request.method == "POST"
-            return request.method in SAFE_METHODS
         return False
 
     def has_object_permission(self, request, view, obj):

@@ -18,7 +18,7 @@
       <mat-label>Statut</mat-label>
       <mat-select formControlName="status">
         <mat-option value="">Tous</mat-option>
-        <mat-option *ngFor="let status of statuses" [value]="status">{{ status }}</mat-option>
+        <mat-option *ngFor="let status of statuses" [value]="status">{{ statusLabels[status] }}</mat-option>
       </mat-select>
     </mat-form-field>
 

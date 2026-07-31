@@ -3,14 +3,13 @@ import { UserRole } from './auth.models';
 export type ApplicationType = 'PFA_INTERNSHIP' | 'PFE_INTERNSHIP' | 'HIRING';
 
 export type ApplicationStatus =
-  | 'SUBMITTED'
+  | 'RECEIVED'
   | 'UNDER_REVIEW'
   | 'PRESELECTED'
-  | 'INTERVIEW_SCHEDULED'
-  | 'INTERVIEW_COMPLETED'
+  | 'INTERVIEW'
   | 'ACCEPTED'
   | 'REJECTED'
-  | 'CANCELLED';
+  | 'ARCHIVED';
 
 export type ApplicationDocumentType = 'CV' | 'COVER_LETTER' | 'PERSONAL_PHOTO' | 'OTHER';
 
@@ -84,6 +83,8 @@ export interface ApplicationStatusHistory {
 export interface Application {
   id: number;
   candidate_profile: CandidateProfile;
+  offer?: number | null;
+  offer_title?: string;
   application_type: ApplicationType;
   application_type_label: string;
   status: ApplicationStatus;
@@ -122,14 +123,13 @@ export const APPLICATION_TYPE_LABELS: Record<ApplicationType, string> = {
 };
 
 export const APPLICATION_STATUS_LABELS: Record<ApplicationStatus, string> = {
-  SUBMITTED: 'T0 - Candidature déposée',
+  RECEIVED: 'T0 - Candidature déposée',
   UNDER_REVIEW: 'En cours d’étude',
   PRESELECTED: 'T1 - Présélectionné',
-  INTERVIEW_SCHEDULED: 'T1 - Entretien planifié',
-  INTERVIEW_COMPLETED: 'Entretien réalisé',
+  INTERVIEW: 'T1 - Entretien',
   ACCEPTED: 'T2 - Accepté',
   REJECTED: 'Refusé',
-  CANCELLED: 'Annulé',
+  ARCHIVED: 'Archivé',
 };
 
 export const EDUCATION_LEVEL_LABELS: Record<EducationLevel, string> = {

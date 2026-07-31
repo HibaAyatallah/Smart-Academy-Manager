@@ -139,13 +139,9 @@ export class ApplicationService {
     },
   ): Observable<Application> {
     return this.http.post<Application>(
-      `${this.apiBaseUrl}applications/${id}/schedule-interview/`,
+      `${this.apiBaseUrl}applications/${id}/mark-interview/`,
       payload,
     );
-  }
-
-  completeInterview(id: number): Observable<Application> {
-    return this.http.post<Application>(`${this.apiBaseUrl}applications/${id}/complete-interview/`, {});
   }
 
   accept(id: number): Observable<Application> {

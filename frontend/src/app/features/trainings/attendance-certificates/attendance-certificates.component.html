@@ -1,6 +1,69 @@
-<app-page-header title="Présences et certificats" subtitle="Suivi des sessions, validation et attestations"></app-page-header>
-<div class="filters"><mat-form-field appearance="outline"><mat-label>Session</mat-label><input matInput [(ngModel)]="session" placeholder="Identifiant"></mat-form-field><button mat-stroked-button (click)="load()">Filtrer</button></div>
-<p *ngIf="loading">Chargement…</p><p class="error" *ngIf="error">{{error}}</p>
-<section *ngIf="canManage"><h2>Participants inscrits</h2><mat-card *ngFor="let enrollment of enrollments"><div><strong>{{enrollment.user_email}}</strong><span>{{enrollment.training_title}} · session {{enrollment.session}}</span></div><mat-form-field appearance="outline"><mat-label>Présence</mat-label><mat-select [value]="attendanceFor(enrollment.id)?.status" (selectionChange)="save(enrollment,$event.value)"><mat-option *ngFor="let value of statuses" [value]="value">{{labels[value]}}</mat-option></mat-select></mat-form-field><button mat-flat-button color="primary" *ngIf="attendanceFor(enrollment.id) as item" [disabled]="item.validated" (click)="validate(item)">{{item.validated?'Validée':'Valider'}}</button></mat-card><button mat-flat-button color="primary" *ngIf="session" (click)="completeSession(+session)">Terminer la session</button></section>
-<section><h2>Historique des présences</h2><p *ngIf="!attendances.length">Aucune présence enregistrée.</p><mat-card *ngFor="let item of attendances"><strong>{{item.user_email}} — {{labels[item.status]}}</strong><span>{{item.training_title}} · session {{item.session}} · {{item.validated?'Validée':'À valider'}}</span><details *ngIf="item.history.length"><summary>Historique</summary><p *ngFor="let event of item.history">{{event.timestamp|date:'dd/MM/yyyy HH:mm'}} — {{labels[event.status]}} <span *ngIf="event.validated">(validée)</span></p></details></mat-card></section>
-<section><h2>Certificats</h2><p *ngIf="!certificates.length">Aucun certificat disponible.</p><mat-card *ngFor="let item of certificates"><div><strong>{{item.training_title}}</strong><span>{{item.user_email}} · {{item.certificate_number}} · {{item.issued_at|date:'dd/MM/yyyy'}}</span></div><button mat-stroked-button (click)="download(item)">Télécharger</button></mat-card></section>
+<app-page-header title="Présences et certificats" subtitle="Suivi journalier et validation des formations"></app-page-header>
+
+<div class="filters">
+  <mat-form-field appearance="outline">
+    <mat-label>Identifiant de session</mat-label>
+    <input matInput [(ngModel)]="session" inputmode="numeric">
+  </mat-form-field>
+  <button mat-flat-button color="primary" (click)="load()">Afficher</button>
+</div>
+
+<p class="state" *ngIf="loading">Chargement…</p>
+<p class="state error" *ngIf="error">{{error}}</p>
+
+<section *ngIf="!loading && canManage">
+  <div class="section-title">
+    <div><span class="eyebrow">Formation</span><h2>Tableau de présence</h2></div>
+    <button mat-stroked-button *ngIf="session && enrollments.length" (click)="completeSession(+session)">Terminer la session</button>
+  </div>
+  <p class="state" *ngIf="!session">Saisissez une session pour afficher sa grille journalière.</p>
+  <p class="state" *ngIf="session && !enrollments.length">Aucun collaborateur inscrit à cette session.</p>
+  <div class="matrix-wrapper" *ngIf="session && enrollments.length">
+    <table class="attendance-matrix">
+      <thead><tr><th class="person">Collaborateur</th><th *ngFor="let day of days">{{day|date:'dd/MM'}}</th><th>Prés.</th><th>Abs.</th><th>Taux</th></tr></thead>
+      <tbody>
+        <tr *ngFor="let enrollment of enrollments">
+          <th class="person"><strong>{{enrollment.user_name}}</strong><small>{{enrollment.user_email}}</small></th>
+          <td *ngFor="let day of days">
+            <button
+              type="button"
+              class="attendance-cell"
+              [class.present]="attendanceFor(enrollment.id,day)?.status==='PRESENT'"
+              [class.absent]="attendanceFor(enrollment.id,day)?.status==='ABSENT'"
+              [class.validated]="attendanceFor(enrollment.id,day)?.validated"
+              [disabled]="saving===enrollment.id+'-'+day"
+              (click)="save(enrollment,day)"
+              [attr.aria-label]="'Corriger la présence de '+enrollment.user_name+' le '+day">
+              <mat-icon>{{attendanceFor(enrollment.id,day)?.validated?'verified':attendanceFor(enrollment.id,day)?.status==='PRESENT'?'check':'close'}}</mat-icon>
+            </button>
+            <button
+              mat-icon-button
+              class="validate-button"
+              *ngIf="attendanceFor(enrollment.id,day) as item"
+              [disabled]="item.validated"
+              (click)="validate(item)"
+              [attr.aria-label]="'Valider la présence du '+day">
+              <mat-icon>approval</mat-icon>
+            </button>
+          </td>
+          <td class="total present-text">{{totals(enrollment.id).present}}</td>
+          <td class="total absent-text">{{totals(enrollment.id).absent}}</td>
+          <td class="total">{{totals(enrollment.id).rate}}%</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+  <div class="legend"><span><i class="pending"></i>À valider</span><span><i class="validated"></i>Validé</span><span><i class="absent"></i>Absent / non renseigné</span></div>
+</section>
+
+<section>
+  <div class="section-title"><div><span class="eyebrow">Documents</span><h2>Certificats</h2></div></div>
+  <p class="state" *ngIf="!certificates.length">Aucun certificat disponible.</p>
+  <div class="certificate-grid">
+    <mat-card *ngFor="let item of certificates">
+      <mat-icon>workspace_premium</mat-icon>
+      <div><strong>{{item.training_title}}</strong><span>{{item.user_email}} · {{item.certificate_number}} · {{item.issued_at|date:'dd/MM/yyyy'}}</span></div>
+      <button mat-stroked-button (click)="download(item)">Télécharger</button>
+    </mat-card>
+  </div>
+</section>

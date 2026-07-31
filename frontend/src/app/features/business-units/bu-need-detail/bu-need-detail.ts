@@ -15,6 +15,7 @@ import { UserProfile } from '../../../core/models/auth.models';
 import { BusinessUnitService } from '../../../core/services/business-unit.service';
 import { AuthService } from '../../../core/services/auth.service';
 import { PageHeaderComponent } from '../../../shared/components/page-header/page-header.component';
+import { minTodayValidator, dateRangeValidator } from '../../../core/utils/date-validators';
 
 @Component({
   selector: 'app-bu-need-detail',
@@ -30,12 +31,21 @@ export class BuNeedDetail implements OnInit {
   private readonly formBuilder = inject(FormBuilder);
   readonly canManageNeeds = this.authService?.currentUserSnapshot?.role === 'BU_MANAGER';
   readonly canDecide = this.authService?.currentUserSnapshot?.role === 'SUPER_ADMIN';
+  readonly todayStr = (() => {
+    const d = new Date();
+    const year = d.getFullYear();
+    const month = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+  })();
   readonly decisionForm = this.formBuilder.nonNullable.group({
     decision_comment: ['', Validators.required],
-    training_start_date: [''],
-    training_end_date: [''],
+    training_start_date: ['', [minTodayValidator()]],
+    training_end_date: ['', [minTodayValidator()]],
     training_link: [''],
     trainer: [0],
+  }, {
+    validators: [dateRangeValidator('training_start_date', 'training_end_date')]
   });
   trainers: UserProfile[] = [];
   need: BusinessUnitNeed | null = null;
@@ -76,7 +86,7 @@ export class BuNeedDetail implements OnInit {
     });
   }
 
-  decide(status: 'CONFIRMED' | 'REFUSED'): void {
+  decide(status: 'ACCEPTED' | 'REJECTED'): void {
     if (!this.need || this.decisionForm.controls.decision_comment.invalid) {
       this.decisionForm.markAllAsTouched();
       return;
@@ -86,7 +96,7 @@ export class BuNeedDetail implements OnInit {
       status: status as any,
       decision_comment: values.decision_comment,
     };
-    if (status === 'CONFIRMED' && this.need.need_type === 'TRAINING') {
+    if (status === 'ACCEPTED' && this.need.need_type === 'TRAINING') {
       Object.assign(payload, {
         training_start_date: values.training_start_date || null,
         training_end_date: values.training_end_date || null,

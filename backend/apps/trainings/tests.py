@@ -1,12 +1,10 @@
-from datetime import date, time
 from rest_framework.test import APITestCase
 from rest_framework import status
 from apps.accounts.models import User
 from apps.accounts.choices import UserRole
 from apps.business_units.models import BusinessUnit, BusinessUnitMembership
-from .models import ClientProfile, Training, TrainingSession, TrainingEnrollment, EnrollmentHistory
+from .models import ClientProfile, Training, TrainingSession, TrainingEnrollment
 from .choices import TrainingType, DeliveryMode, TrainingStatus, SessionStatus, EnrollmentStatus
-from django.utils import timezone
 
 class TrainingsAPITestCase(APITestCase):
     def setUp(self):
@@ -109,7 +107,7 @@ class TrainingsAPITestCase(APITestCase):
         Only PUBLISHED, non-client-reserved trainings are exposed to HR.
         """
         # DRAFT (default from training_data) — HR must NOT see this
-        draft = Training.objects.create(**self.training_data)
+        Training.objects.create(**self.training_data)
         # PUBLISHED — HR must see this
         published = Training.objects.create(
             **{**self.training_data, "title": "Published Course", "status": TrainingStatus.PUBLISHED}
@@ -139,7 +137,7 @@ class TrainingsAPITestCase(APITestCase):
 
     def test_bu_manager_visibility(self):
         # Create training without BU
-        t1 = Training.objects.create(**self.training_data)
+        Training.objects.create(**self.training_data)
         # Create training restricted to BU
         t2 = Training.objects.create(**{**self.training_data, "title": "T2", "business_unit": self.bu})
         # Create training restricted to another BU
@@ -153,8 +151,7 @@ class TrainingsAPITestCase(APITestCase):
         self.assertIn("T2", titles)
         self.assertNotIn("T3", titles)
 
-    def test_employee_visibility_and_published_status(self):
-        # Employee should only see PUBLISHED trainings that are available to their BU
+    def test_employee_cannot_access_administrative_catalogue(self):
         # Currently DRAFT
         t1 = Training.objects.create(**self.training_data)
         t1.status = TrainingStatus.PUBLISHED
@@ -165,9 +162,7 @@ class TrainingsAPITestCase(APITestCase):
         
         self.client.force_authenticate(user=self.employee)
         res = self.client.get("/api/trainings/")
-        titles = [r['title'] for r in res.data['results']]
-        self.assertIn("Python Basics", titles)
-        self.assertNotIn("Draft Training", titles)
+        self.assertEqual(res.status_code, status.HTTP_403_FORBIDDEN)
 
     def test_trainer_visibility(self):
         t1 = Training.objects.create(**self.training_data, trainer=self.trainer)
@@ -217,10 +212,14 @@ class TrainingsAPITestCase(APITestCase):
         t1 = Training.objects.create(**self.training_data)
         self.client.force_authenticate(user=self.super_admin)
         
+        from django.utils import timezone
+        from datetime import timedelta
+        today = timezone.localdate()
+        
         session_data = {
             "training": t1.id,
-            "start_date": "2026-01-01",
-            "end_date": "2026-01-05",
+            "start_date": (today + timedelta(days=1)).isoformat(),
+            "end_date": (today + timedelta(days=5)).isoformat(),
             "start_time": "09:00:00",
             "end_time": "17:00:00",
             "location": "Room A",
@@ -231,12 +230,12 @@ class TrainingsAPITestCase(APITestCase):
         self.assertEqual(res.status_code, status.HTTP_201_CREATED)
         
         # Validation: start date after end date
-        session_data["start_date"] = "2026-01-06"
+        session_data["start_date"] = (today + timedelta(days=6)).isoformat()
         res = self.client.post("/api/training-sessions/", session_data)
         self.assertEqual(res.status_code, status.HTTP_400_BAD_REQUEST)
         
         # Validation: capacity zero
-        session_data["start_date"] = "2026-01-01"
+        session_data["start_date"] = (today + timedelta(days=1)).isoformat()
         session_data["maximum_participants"] = 0
         res = self.client.post("/api/training-sessions/", session_data)
         self.assertEqual(res.status_code, status.HTTP_400_BAD_REQUEST)
@@ -322,21 +321,10 @@ class TrainingEnrollmentAPITestCase(APITestCase):
             location="Room A"
         )
         
-    def test_employee_submit_and_duplicate(self):
+    def test_employee_cannot_submit_through_admin_enrollment_workflow(self):
         self.client.force_authenticate(user=self.employee1)
         res = self.client.post("/api/enrollments/", {"training": self.training.id, "session": self.session.id})
-        self.assertEqual(res.status_code, status.HTTP_201_CREATED)
-        self.assertEqual(res.data['status'], EnrollmentStatus.PENDING_MANAGER)
-        
-        # Duplicate block
-        res2 = self.client.post("/api/enrollments/", {"training": self.training.id, "session": self.session.id})
-        self.assertEqual(res2.status_code, status.HTTP_400_BAD_REQUEST)
-        
-        # Session state blocks
-        self.session.status = SessionStatus.COMPLETED
-        self.session.save()
-        res3 = self.client.post("/api/enrollments/", {"training": self.training.id, "session": self.session.id})
-        self.assertEqual(res3.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertEqual(res.status_code, status.HTTP_403_FORBIDDEN)
 
     def test_workflow_approve(self):
         enr = TrainingEnrollment.objects.create(user=self.employee1, training=self.training, session=self.session)

@@ -152,16 +152,6 @@ export class ApplicationDetailComponent implements OnInit {
       });
   }
 
-  completeInterview(): void {
-    this.confirmAndRun(
-      {
-        title: 'Entretien realise',
-        message: 'Confirmer que l entretien est termine ?',
-      },
-      () => this.applicationService.completeInterview(this.requireApplicationId()),
-      'L’entretien a été marqué comme réalisé.',
-    );
-  }
 
   accept(): void {
     this.confirmAndRun(
@@ -203,11 +193,11 @@ export class ApplicationDetailComponent implements OnInit {
   }
 
   canMarkUnderReview(statusValue: ApplicationStatus): boolean {
-    return statusValue === 'SUBMITTED';
+    return statusValue === 'RECEIVED';
   }
 
   canPreselect(statusValue: ApplicationStatus): boolean {
-    return statusValue === 'SUBMITTED' || statusValue === 'UNDER_REVIEW';
+    return statusValue === 'RECEIVED' || statusValue === 'UNDER_REVIEW';
   }
 
   canSchedule(statusValue: ApplicationStatus): boolean {
@@ -215,15 +205,15 @@ export class ApplicationDetailComponent implements OnInit {
   }
 
   canCompleteInterview(statusValue: ApplicationStatus): boolean {
-    return statusValue === 'INTERVIEW_SCHEDULED';
+    return false;
   }
 
   canAccept(statusValue: ApplicationStatus): boolean {
-    return ['PRESELECTED', 'INTERVIEW_SCHEDULED', 'INTERVIEW_COMPLETED'].includes(statusValue);
+    return ['PRESELECTED', 'INTERVIEW'].includes(statusValue);
   }
 
   canReject(statusValue: ApplicationStatus): boolean {
-    return !['ACCEPTED', 'REJECTED', 'CANCELLED'].includes(statusValue);
+    return !['ACCEPTED', 'REJECTED', 'ARCHIVED'].includes(statusValue);
   }
 
   typeLabel(value: Application['application_type']): string {
@@ -317,14 +307,33 @@ export class ApplicationDetailComponent implements OnInit {
   }
 
   private actionErrorMessage(error: unknown): string {
-    if (error instanceof HttpErrorResponse && error.error && typeof error.error === 'object') {
-      const details = error.error as Record<string, unknown>;
-      const message = details['detail'] ?? details['non_field_errors'];
-      if (Array.isArray(message)) {
-        return message.map(String).join(' ');
+    if (error instanceof HttpErrorResponse && error.error) {
+      const errBody = error.error;
+      if (typeof errBody === 'string') {
+        return errBody;
       }
-      if (typeof message === 'string') {
-        return message;
+      if (Array.isArray(errBody)) {
+        return errBody.map(String).join(' ');
+      }
+      if (typeof errBody === 'object') {
+        const details = errBody as Record<string, unknown>;
+        const message = details['detail'] ?? details['non_field_errors'];
+        if (Array.isArray(message)) {
+          return message.map(String).join(' ');
+        }
+        if (typeof message === 'string') {
+          return message;
+        }
+        const values = Object.values(details);
+        if (values.length > 0) {
+          const firstVal = values[0];
+          if (Array.isArray(firstVal)) {
+            return firstVal.map(String).join(' ');
+          }
+          if (typeof firstVal === 'string') {
+            return firstVal;
+          }
+        }
       }
     }
     return 'L’action n’a pas pu être effectuée. Réessayez ou vérifiez le statut de la candidature.';

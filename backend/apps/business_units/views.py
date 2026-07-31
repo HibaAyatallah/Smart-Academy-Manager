@@ -20,7 +20,7 @@ from .permissions import (
     is_collaborator,
 )
 from apps.accounts.permissions import IsSuperAdminOnly
-from apps.accounts.roles import is_super_admin
+from apps.accounts.roles import is_super_admin, is_hr
 
 
 class BusinessUnitViewSet(viewsets.ModelViewSet):
@@ -30,7 +30,7 @@ class BusinessUnitViewSet(viewsets.ModelViewSet):
     - Super Admin: full CRUD.
     - BU Manager: read-only list/detail for own BU; limited update (no manager/code/is_active).
     - Collaborator (EMPLOYEE): read-only for BU they belong to.
-    - HR: no access — HR uses /api/hr/collaborators/ to view collaborators grouped by BU.
+    - HR: global read-only access.
     """
     serializer_class = BusinessUnitSerializer
     permission_classes = [CanViewBUData]
@@ -49,14 +49,13 @@ class BusinessUnitViewSet(viewsets.ModelViewSet):
         user = self.request.user
         queryset = BusinessUnit.objects.select_related("manager").all()
 
-        if is_super_admin(user):
+        if is_super_admin(user) or is_hr(user):
             return queryset
         if is_bu_manager(user):
             return queryset.filter(manager=user)
         if is_collaborator(user):
             return queryset.filter(memberships__user=user, memberships__is_active=True).distinct()
 
-        # HR and all other roles: no access via this viewset
         return queryset.none()
 
     def perform_update(self, serializer):
@@ -95,7 +94,7 @@ class BusinessUnitMembershipViewSet(viewsets.ModelViewSet):
         user = self.request.user
         queryset = BusinessUnitMembership.objects.select_related("user", "business_unit").all()
 
-        if is_super_admin(user):
+        if is_super_admin(user) or is_hr(user):
             return queryset
         if is_bu_manager(user):
             return queryset.filter(business_unit__manager=user)
@@ -116,7 +115,7 @@ class BusinessUnitNeedViewSet(viewsets.ModelViewSet):
 
     - Super Admin: full CRUD + status transitions.
     - BU Manager: CRUD for own BU needs; submit/draft transitions.
-    - Collaborator (EMPLOYEE): read-only for CONFIRMED TRAINING needs targeted to them.
+    - Collaborator (EMPLOYEE): read-only for ACCEPTED TRAINING needs targeted to them.
     - HR: no access via this viewset.
     """
     serializer_class = BusinessUnitNeedWorkflowSerializer
@@ -133,7 +132,7 @@ class BusinessUnitNeedViewSet(viewsets.ModelViewSet):
             "business_unit", "created_by", "requester", "trainer"
         ).prefetch_related("training_recipients").all()
 
-        if is_super_admin(user):
+        if is_super_admin(user) or is_hr(user):
             return queryset
         if is_bu_manager(user):
             return queryset.filter(business_unit__manager=user)

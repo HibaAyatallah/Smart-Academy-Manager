@@ -4,7 +4,7 @@
 
 <form class="filters" [formGroup]="filters" (ngSubmit)="load()">
   <mat-form-field appearance="outline"><mat-label>Recherche</mat-label><input matInput formControlName="search"></mat-form-field>
-  <mat-form-field appearance="outline"><mat-label>Statut</mat-label><mat-select formControlName="status"><mat-option value="">Tous</mat-option><mat-option value="DRAFT">Brouillon</mat-option><mat-option value="PUBLISHED">Publiée</mat-option><mat-option value="ARCHIVED">Archivée</mat-option></mat-select></mat-form-field>
+  <mat-form-field appearance="outline"><mat-label>Statut</mat-label><mat-select formControlName="status"><mat-option value="">Tous</mat-option><mat-option *ngIf="canManage" value="DRAFT">Brouillon</mat-option><mat-option value="PUBLISHED">Publiée</mat-option><mat-option *ngIf="canManage" value="ARCHIVED">Archivée</mat-option></mat-select></mat-form-field>
   <button mat-stroked-button type="submit">Filtrer</button>
 </form>
 
@@ -27,7 +27,6 @@
     <mat-form-field appearance="outline"><mat-label>ID client</mat-label><input matInput type="number" formControlName="external_client"></mat-form-field>
     <mat-form-field appearance="outline"><mat-label>Projet</mat-label><input matInput formControlName="project_name"></mat-form-field>
     <mat-form-field appearance="outline"><mat-label>Lien associé</mat-label><input matInput formControlName="associated_link"></mat-form-field>
-    <mat-form-field appearance="outline"><mat-label>Lien Moodle</mat-label><input matInput formControlName="moodle_link"></mat-form-field>
     <div class="wide actions"><button mat-button type="button" (click)="showTrainingForm=false">Annuler</button><button mat-flat-button color="primary" [disabled]="saving">Enregistrer</button></div>
   </form>
 </mat-card>
@@ -46,7 +45,19 @@
     </mat-card>
     <mat-card *ngIf="showSessionForm" class="editor"><mat-card-title>{{ editingSessionId ? 'Modifier' : 'Créer' }} une session</mat-card-title>
       <form [formGroup]="sessionForm" (ngSubmit)="saveSession()" class="form-grid">
-        <mat-form-field appearance="outline"><mat-label>Début</mat-label><input matInput type="date" formControlName="start_date"></mat-form-field><mat-form-field appearance="outline"><mat-label>Fin</mat-label><input matInput type="date" formControlName="end_date"></mat-form-field>
+        <mat-form-field appearance="outline">
+          <mat-label>Début</mat-label>
+          <input matInput type="date" formControlName="start_date" [min]="todayStr">
+          <mat-error *ngIf="sessionForm.get('start_date')?.hasError('minToday')">La date ne peut pas être antérieure à aujourd’hui.</mat-error>
+          <mat-error *ngIf="sessionForm.get('start_date')?.hasError('required')">La date de début est requise.</mat-error>
+        </mat-form-field>
+        <mat-form-field appearance="outline">
+          <mat-label>Fin</mat-label>
+          <input matInput type="date" formControlName="end_date" [min]="sessionForm.get('start_date')?.value || todayStr">
+          <mat-error *ngIf="sessionForm.get('end_date')?.hasError('minToday')">La date ne peut pas être antérieure à aujourd’hui.</mat-error>
+          <mat-error *ngIf="sessionForm.get('end_date')?.hasError('dateRange')">La date de fin doit être postérieure ou égale à la date de début.</mat-error>
+          <mat-error *ngIf="sessionForm.get('end_date')?.hasError('required')">La date de fin est requise.</mat-error>
+        </mat-form-field>
         <mat-form-field appearance="outline"><mat-label>Heure de début</mat-label><input matInput type="time" formControlName="start_time"></mat-form-field><mat-form-field appearance="outline"><mat-label>Heure de fin</mat-label><input matInput type="time" formControlName="end_time"></mat-form-field>
         <mat-form-field appearance="outline"><mat-label>Lieu</mat-label><input matInput formControlName="location"></mat-form-field><mat-form-field appearance="outline"><mat-label>Lien en ligne</mat-label><input matInput formControlName="online_link"></mat-form-field>
         <mat-form-field appearance="outline"><mat-label>Capacité</mat-label><input matInput type="number" formControlName="maximum_participants"></mat-form-field><mat-form-field appearance="outline"><mat-label>ID formateur</mat-label><input matInput type="number" formControlName="trainer"></mat-form-field>

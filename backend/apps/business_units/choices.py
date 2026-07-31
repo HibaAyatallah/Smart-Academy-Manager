@@ -25,7 +25,7 @@ class NeedStatus(models.TextChoices):
     DRAFT = "DRAFT", "Brouillon"
     SUBMITTED = "SUBMITTED", "Soumis"
     UNDER_REVIEW = "UNDER_REVIEW", "En cours d'examen"
-    ACCEPTED = "ACCEPTED", "Accepté"
+    ACCEPTED = "ACCEPTED", "Approuvé"
     REJECTED = "REJECTED", "Refusé"
     SATISFIED = "SATISFIED", "Satisfait"
     CLOSED = "CLOSED", "Clôturé"

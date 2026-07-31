@@ -55,8 +55,6 @@ class Training(models.Model):
     project_name = models.CharField(max_length=255, blank=True)
     
     associated_link = models.URLField(blank=True)
-    moodle_course_id = models.CharField(max_length=100, blank=True)
-    moodle_link = models.URLField(blank=True)
     
     status = models.CharField(
         max_length=50,
@@ -247,7 +245,8 @@ class EnrollmentHistory(models.Model):
 
 class SessionAttendance(models.Model):
     STATUS_CHOICES = [("PRESENT", "Present"), ("ABSENT", "Absent"), ("LATE", "Late"), ("EXCUSED", "Excused")]
-    enrollment = models.OneToOneField(TrainingEnrollment, on_delete=models.CASCADE, related_name="attendance")
+    enrollment = models.ForeignKey(TrainingEnrollment, on_delete=models.CASCADE, related_name="attendances")
+    date = models.DateField()
     status = models.CharField(max_length=20, choices=STATUS_CHOICES)
     note = models.TextField(blank=True)
     validated = models.BooleanField(default=False)
@@ -256,6 +255,15 @@ class SessionAttendance(models.Model):
     validated_at = models.DateTimeField(null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(
+                fields=["enrollment", "date"],
+                name="unique_daily_attendance_per_enrollment",
+            )
+        ]
+        ordering = ["date", "enrollment__user__email"]
 
 
 class AttendanceHistory(models.Model):

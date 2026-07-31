@@ -59,6 +59,7 @@ INSTALLED_APPS = [
     "apps.projects",
     "apps.notifications",
     "apps.reports",
+    "apps.assistant",
 ]
 
 MIDDLEWARE = [
@@ -130,6 +131,15 @@ DEFAULT_FROM_EMAIL = env(
     "DEFAULT_FROM_EMAIL",
     default="noreply@smart-academy.local",
 )
+EMAIL_BACKEND = env("EMAIL_BACKEND", default="django.core.mail.backends.smtp.EmailBackend")
+EMAIL_HOST = env("EMAIL_HOST", default="localhost")
+EMAIL_PORT = env.int("EMAIL_PORT", default=587)
+EMAIL_HOST_USER = env("EMAIL_HOST_USER", default="")
+EMAIL_HOST_PASSWORD = env("EMAIL_HOST_PASSWORD", default="")
+EMAIL_USE_TLS = env.bool("EMAIL_USE_TLS", default=True)
+EMAIL_TIMEOUT = env.int("EMAIL_TIMEOUT", default=10)
+FRONTEND_URL = env("FRONTEND_URL", default="http://localhost:4200")
+AI_ASSISTANT_PROVIDER = env("AI_ASSISTANT_PROVIDER", default="apps.assistant.services.ReadOnlyAssistantProvider")
 
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 AUTH_USER_MODEL = "accounts.User"
@@ -157,6 +167,8 @@ REST_FRAMEWORK = {
         "user": env("USER_THROTTLE_RATE", default="60/minute"),
         "login": env("LOGIN_THROTTLE_RATE", default="10/minute"),
         "public_submission": env("PUBLIC_SUBMISSION_THROTTLE_RATE", default="5/hour"),
+        "sensitive_account": env("SENSITIVE_ACCOUNT_THROTTLE_RATE", default="10/hour"),
+        "chatbot": env("CHATBOT_THROTTLE_RATE", default="30/minute"),
     },
     "NUM_PROXIES": None,
     "TEST_REQUEST_DEFAULT_THROTTLE_RATES": {
@@ -164,6 +176,8 @@ REST_FRAMEWORK = {
         "user": "1000/minute",
         "login": "1000/minute",
         "public_submission": "1000/hour",
+        "sensitive_account": "1000/hour",
+        "chatbot": "1000/minute",
     },
 }
 
@@ -172,6 +186,7 @@ SIMPLE_JWT = {
     "REFRESH_TOKEN_LIFETIME": timedelta(days=env("REFRESH_TOKEN_LIFETIME_DAYS")),
     "AUTH_HEADER_TYPES": ("Bearer",),
     "UPDATE_LAST_LOGIN": True,
+    "CHECK_REVOKE_TOKEN": True,
 }
 
 SPECTACULAR_SETTINGS = {

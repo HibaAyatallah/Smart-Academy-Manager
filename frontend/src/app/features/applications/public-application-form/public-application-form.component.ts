@@ -364,9 +364,30 @@ export class PublicApplicationFormComponent {
 
   private errorMessage(value: unknown): string {
     if (Array.isArray(value)) {
-      return value.map(String).join(' ');
+      return value.map((item) => this.errorMessage(item)).filter(Boolean).join(' ');
     }
-    return typeof value === 'string' ? value : '';
+    if (typeof value === 'string') {
+      const normalized = value.trim();
+      if (!normalized) {
+        return '';
+      }
+      const stripped = normalized.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
+      if (!stripped) {
+        return '';
+      }
+      if (/<(html|body|div|p|h1|h2|span|pre|script|style)/i.test(normalized)) {
+        return 'La candidature n\'a pas pu être envoyée.';
+      }
+      return stripped;
+    }
+    if (value && typeof value === 'object') {
+      const entries = Object.entries(value as Record<string, unknown>);
+      return entries
+        .map(([_, nestedValue]) => this.errorMessage(nestedValue))
+        .filter(Boolean)
+        .join(' ');
+    }
+    return '';
   }
 
   private requiredFileMessage(target: RequiredFileTarget): string {
@@ -390,6 +411,9 @@ export class PublicApplicationFormComponent {
       formData.append(key, String(fieldValue ?? ''));
     });
     Object.entries(value.professional).forEach(([key, fieldValue]) => {
+      if (key === 'offer' && (fieldValue === null || fieldValue === '')) {
+        return;
+      }
       formData.append(key, String(fieldValue ?? ''));
     });
 

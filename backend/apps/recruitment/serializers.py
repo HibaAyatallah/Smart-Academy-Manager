@@ -1,5 +1,6 @@
 from django.contrib.auth import get_user_model
 from django.contrib.auth.password_validation import validate_password
+from django.conf import settings
 from django.db import transaction
 from django.utils import timezone
 from rest_framework import serializers
@@ -13,9 +14,9 @@ from .models import (
     ApplicationDocument,
     ApplicationStatusHistory,
     CandidateProfile,
-    EmployeeProfile,
     InternProfile,
     InternDocument,
+    InternDocumentRequirement,
     InternEvaluation,
     Interview,
     Offer,
@@ -96,6 +97,29 @@ class OfferSerializer(serializers.ModelSerializer):
             "updated_at",
         ]
 
+    def validate(self, attrs):
+        today = timezone.localdate()
+        errors = {}
+        start = attrs.get("start_date", getattr(self.instance, "start_date", None))
+        end = attrs.get("end_date", getattr(self.instance, "end_date", None))
+        deadline = attrs.get("application_deadline", getattr(self.instance, "application_deadline", None))
+        
+        old_start = getattr(self.instance, "start_date", None) if self.instance else None
+        old_end = getattr(self.instance, "end_date", None) if self.instance else None
+        old_deadline = getattr(self.instance, "application_deadline", None) if self.instance else None
+
+        if "start_date" in attrs and start and start != old_start and start < today:
+            errors["start_date"] = "La date ne peut pas être antérieure à aujourd’hui."
+        if "end_date" in attrs and end and end != old_end and end < today:
+            errors["end_date"] = "La date ne peut pas être antérieure à aujourd’hui."
+        if "application_deadline" in attrs and deadline and deadline != old_deadline and deadline < today:
+            errors["application_deadline"] = "La date ne peut pas être antérieure à aujourd’hui."
+        if start and end and end < start:
+            errors.setdefault("end_date", "La date de fin doit être postérieure ou égale à la date de début.")
+        if errors:
+            raise serializers.ValidationError(errors)
+        return attrs
+
 
 class ApplicationDocumentSerializer(serializers.ModelSerializer):
     download_url = serializers.SerializerMethodField()
@@ -171,8 +195,9 @@ class InterviewSerializer(serializers.ModelSerializer):
         read_only_fields = ["id", "created_by_email", "created_at", "updated_at"]
 
     def validate_scheduled_at(self, value):
-        if value < timezone.now():
-            raise serializers.ValidationError("La date d'entretien doit être future.")
+        old_val = getattr(self.instance, "scheduled_at", None) if self.instance else None
+        if value != old_val and timezone.localdate(value) < timezone.localdate():
+            raise serializers.ValidationError("La date ne peut pas être antérieure à aujourd’hui.")
         return value
 
 
@@ -382,8 +407,9 @@ class ScheduleInterviewSerializer(serializers.ModelSerializer):
         ]
 
     def validate_scheduled_at(self, value):
-        if value < timezone.now():
-            raise serializers.ValidationError("La date d'entretien doit être future.")
+        old_val = getattr(self.instance, "scheduled_at", None) if self.instance else None
+        if value != old_val and timezone.localdate(value) < timezone.localdate():
+            raise serializers.ValidationError("La date ne peut pas être antérieure à aujourd’hui.")
         return value
 
 
@@ -503,9 +529,22 @@ class ApplicationConversionSerializer(serializers.Serializer):
     specification_pdf = serializers.FileField(required=False, allow_null=True)
 
     def validate(self, data):
+        from datetime import date
+        today = date.today()
+        errors = {}
         conversion_type = data.get("conversion_type")
         if conversion_type == "INTERN" and not data.get("supervisor"):
-            raise serializers.ValidationError({"supervisor": "Le superviseur est requis pour un stagiaire."})
+            errors["supervisor"] = "Le superviseur est requis pour un stagiaire."
+        start = data.get("internship_start")
+        end = data.get("internship_end")
+        if start and start < today:
+            errors["internship_start"] = "La date ne peut pas être antérieure à aujourd'hui."
+        if end and end < today:
+            errors["internship_end"] = "La date ne peut pas être antérieure à aujourd'hui."
+        if start and end and start > end:
+            errors.setdefault("internship_end", "La date de fin doit être postérieure ou égale à la date de début.")
+        if errors:
+            raise serializers.ValidationError(errors)
         return data
 
 
@@ -518,7 +557,12 @@ class InternDocumentSerializer(serializers.ModelSerializer):
             "id",
             "intern",
             "document_type",
+            "requirement",
             "file",
+            "original_name",
+            "content_type",
+            "size",
+            "status",
             "is_validated",
             "validated_at",
             "validator",
@@ -526,7 +570,36 @@ class InternDocumentSerializer(serializers.ModelSerializer):
             "comment",
             "uploaded_at",
         ]
-        read_only_fields = ["id", "is_validated", "validated_at", "validator", "validator_email", "uploaded_at"]
+        read_only_fields = ["id", "document_type", "original_name", "content_type", "size", "status", "is_validated", "validated_at", "validator", "validator_email", "uploaded_at"]
+        extra_kwargs = {"file": {"write_only": True}}
+
+    def validate_file(self, uploaded_file):
+        from pathlib import Path
+        allowed = {".pdf": "application/pdf", ".png": "image/png", ".jpg": "image/jpeg", ".jpeg": "image/jpeg"}
+        extension = Path(uploaded_file.name).suffix.lower()
+        if extension not in allowed or getattr(uploaded_file, "content_type", "") != allowed[extension]:
+            raise serializers.ValidationError("Formats autorisés : PDF, PNG, JPG.")
+        max_size_mb = getattr(settings, "INTERN_DOCUMENT_MAX_UPLOAD_SIZE_MB", 5)
+        if uploaded_file.size > max_size_mb * 1024 * 1024:
+            raise serializers.ValidationError(f"Taille maximale : {max_size_mb} Mo.")
+        header = uploaded_file.read(12)
+        uploaded_file.seek(0)
+        signatures = {".pdf": b"%PDF", ".png": b"\x89PNG\r\n\x1a\n", ".jpg": b"\xff\xd8\xff", ".jpeg": b"\xff\xd8\xff"}
+        if not header.startswith(signatures[extension]):
+            raise serializers.ValidationError("Le contenu du fichier ne correspond pas au format annoncé.")
+        return uploaded_file
+
+    def validate_requirement(self, requirement):
+        if not requirement.is_active:
+            raise serializers.ValidationError("Ce document n'est plus demandé.")
+        return requirement
+
+
+class InternDocumentRequirementSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = InternDocumentRequirement
+        fields = ["id", "document_type", "name", "description", "is_required", "due_date", "is_active", "created_at", "updated_at"]
+        read_only_fields = ["id", "created_at", "updated_at"]
 
 
 class InternEvaluationSerializer(serializers.ModelSerializer):
@@ -574,6 +647,8 @@ class InternProfileSerializer(serializers.ModelSerializer):
     supervisor_email = serializers.EmailField(source="supervisor.email", read_only=True)
     documents = InternDocumentSerializer(many=True, read_only=True)
     evaluations = InternEvaluationSerializer(many=True, read_only=True)
+    document_requirements = serializers.SerializerMethodField()
+    manager_name = serializers.CharField(source="business_unit.manager.full_name", read_only=True)
 
     class Meta:
         model = InternProfile
@@ -589,6 +664,7 @@ class InternProfileSerializer(serializers.ModelSerializer):
             "paid",
             "business_unit",
             "business_unit_name",
+            "manager_name",
             "supervisor",
             "supervisor_email",
             "subject_title",
@@ -599,6 +675,7 @@ class InternProfileSerializer(serializers.ModelSerializer):
             "progress",
             "final_decision",
             "documents",
+            "document_requirements",
             "evaluations",
             "created_at",
         ]
@@ -609,9 +686,33 @@ class InternProfileSerializer(serializers.ModelSerializer):
             raise serializers.ValidationError("La progression doit être comprise entre 0 et 100.")
         return value
 
+    def get_document_requirements(self, obj):
+        requirements = InternDocumentRequirement.objects.filter(is_active=True)
+        submissions = {}
+        for submission in obj.documents.filter(requirement__isnull=False).order_by("requirement_id", "-uploaded_at"):
+            submissions.setdefault(submission.requirement_id, submission)
+        data = []
+        for requirement in requirements:
+            item = InternDocumentRequirementSerializer(requirement).data
+            submission = submissions.get(requirement.id)
+            item["latest_submission"] = InternDocumentSerializer(submission, context=self.context).data if submission else None
+            data.append(item)
+        return data
+
     def validate(self, attrs):
+        today = timezone.localdate()
+        errors = {}
         start = attrs.get("internship_start", getattr(self.instance, "internship_start", None))
         end = attrs.get("internship_end", getattr(self.instance, "internship_end", None))
+        # Only reject past dates for values that are actually being changed
+        old_start = getattr(self.instance, "internship_start", None) if self.instance else None
+        old_end = getattr(self.instance, "internship_end", None) if self.instance else None
+        if "internship_start" in attrs and start and start != old_start and start < today:
+            errors["internship_start"] = "La date ne peut pas être antérieure à aujourd’hui."
+        if "internship_end" in attrs and end and end != old_end and end < today:
+            errors["internship_end"] = "La date ne peut pas être antérieure à aujourd’hui."
         if start and end and start > end:
-            raise serializers.ValidationError({"internship_end": "La date de fin doit suivre la date de début."})
+            errors.setdefault("internship_end", "La date de fin doit être postérieure ou égale à la date de début.")
+        if errors:
+            raise serializers.ValidationError(errors)
         return attrs

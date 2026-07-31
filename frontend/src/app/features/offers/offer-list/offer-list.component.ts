@@ -75,7 +75,7 @@ export class OfferListComponent implements OnInit {
 
   get isAdmin(): boolean {
     const role = this.authService.currentUserSnapshot?.role;
-    return role === 'SUPER_ADMIN' || role === 'HR';
+    return role === 'SUPER_ADMIN';
   }
 
   ngOnInit(): void {

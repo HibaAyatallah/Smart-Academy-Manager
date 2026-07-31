@@ -41,5 +41,23 @@ class IsTrainingOperationsUser(permissions.BasePermission):
         return bool(
             request.user
             and request.user.is_authenticated
-            and request.user.role not in [UserRole.CLIENT, UserRole.HR]
+            and request.user.role not in [UserRole.CLIENT, UserRole.HR, UserRole.INTERN]
+        )
+
+
+class IsTrainingCatalogueUser(permissions.BasePermission):
+    """Keep employees out of the administrative catalogue and session APIs."""
+
+    allowed_roles = {
+        UserRole.SUPER_ADMIN,
+        UserRole.HR,
+        UserRole.BU_MANAGER,
+        UserRole.TRAINER_TUTOR,
+    }
+
+    def has_permission(self, request, view):
+        return bool(
+            request.user
+            and request.user.is_authenticated
+            and request.user.role in self.allowed_roles
         )

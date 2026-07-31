@@ -51,3 +51,16 @@ class AuditLog(models.Model):
     class Meta:
         ordering = ["-created_at"]
         indexes = [models.Index(fields=["-created_at", "actor"]), models.Index(fields=["action"])]
+
+class EmailDeliveryLog(models.Model):
+    recipient = models.EmailField()
+    event = models.CharField(max_length=80)
+    event_key = models.CharField(max_length=255)
+    language = models.CharField(max_length=2, default="fr")
+    status = models.CharField(max_length=16, choices=[("PENDING","Pending"),("SENT","Sent"),("FAILED","Failed")], default="PENDING")
+    error_code = models.CharField(max_length=120, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    sent_at = models.DateTimeField(null=True, blank=True)
+    class Meta:
+        constraints = [models.UniqueConstraint(fields=["recipient", "event_key"], name="unique_email_event_recipient")]
+        ordering = ["-created_at"]

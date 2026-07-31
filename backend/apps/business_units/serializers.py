@@ -213,12 +213,30 @@ class BusinessUnitNeedSerializer(serializers.ModelSerializer):
             if self.instance is None:
                 attrs["status"] = "DRAFT"
 
-        start = attrs.get("training_start_date", getattr(self.instance, "training_start_date", None))
-        end = attrs.get("training_end_date", getattr(self.instance, "training_end_date", None))
-        if start and end and end < start:
-            raise serializers.ValidationError({
-                "training_end_date": "La date de fin doit être postérieure à la date de début."
-            })
+        from django.utils import timezone
+        today = timezone.localdate()
+        errors = {}
+
+        expected = attrs.get("expected_date", getattr(self.instance, "expected_date", None))
+        old_expected = getattr(self.instance, "expected_date", None) if self.instance else None
+        if "expected_date" in attrs and expected and expected != old_expected and expected < today:
+            errors["expected_date"] = "La date ne peut pas être antérieure à aujourd’hui."
+
+        t_start = attrs.get("training_start_date", getattr(self.instance, "training_start_date", None))
+        old_t_start = getattr(self.instance, "training_start_date", None) if self.instance else None
+        if "training_start_date" in attrs and t_start and t_start != old_t_start and t_start < today:
+            errors["training_start_date"] = "La date ne peut pas être antérieure à aujourd’hui."
+
+        t_end = attrs.get("training_end_date", getattr(self.instance, "training_end_date", None))
+        old_t_end = getattr(self.instance, "training_end_date", None) if self.instance else None
+        if "training_end_date" in attrs and t_end and t_end != old_t_end and t_end < today:
+            errors["training_end_date"] = "La date ne peut pas être antérieure à aujourd’hui."
+
+        if t_start and t_end and t_end < t_start:
+            errors.setdefault("training_end_date", "La date de fin doit être postérieure ou égale à la date de début.")
+
+        if errors:
+            raise serializers.ValidationError(errors)
         return attrs
 
 
@@ -275,7 +293,7 @@ class BusinessUnitNeedWorkflowSerializer(BusinessUnitNeedSerializer):
         attrs["_recipient_users"] = recipient_users
 
         if request and is_bu_manager(request.user):
-            if self.instance and self.instance.status in {"CONFIRMED", "REFUSED"}:
+            if self.instance and self.instance.status in {"ACCEPTED", "REJECTED"}:
                 raise serializers.ValidationError("Un besoin déjà traité ne peut plus être modifié.")
             protected = {
                 "training_start_date", "training_end_date", "training_link",
@@ -294,11 +312,11 @@ class BusinessUnitNeedWorkflowSerializer(BusinessUnitNeedSerializer):
                 raise serializers.ValidationError("La décision est réservée au Super Admin.")
 
         status = attrs.get("status", getattr(self.instance, "status", None))
-        if request and request.user.role == UserRole.SUPER_ADMIN and status in {"CONFIRMED", "REFUSED"}:
+        if request and request.user.role == UserRole.SUPER_ADMIN and status in {"ACCEPTED", "REJECTED"}:
             comment = attrs.get("decision_comment", getattr(self.instance, "decision_comment", ""))
             if not comment.strip():
                 raise serializers.ValidationError({"decision_comment": "Un commentaire est obligatoire."})
-            if status == "CONFIRMED" and need_type == "TRAINING":
+            if status == "ACCEPTED" and need_type == "TRAINING":
                 required = {
                     "training_start_date": attrs.get("training_start_date", getattr(self.instance, "training_start_date", None)),
                     "training_end_date": attrs.get("training_end_date", getattr(self.instance, "training_end_date", None)),
@@ -315,7 +333,14 @@ class BusinessUnitNeedWorkflowSerializer(BusinessUnitNeedSerializer):
         start = attrs.get("training_start_date", getattr(self.instance, "training_start_date", None))
         end = attrs.get("training_end_date", getattr(self.instance, "training_end_date", None))
         if start and end and end < start:
-            raise serializers.ValidationError({"training_end_date": "La date de fin doit suivre la date de début."})
+            raise serializers.ValidationError({"training_end_date": "La date de fin doit être postérieure ou égale à la date de début."})
+
+        from datetime import date
+        today = date.today()
+        if "training_start_date" in attrs and start and start < today:
+            raise serializers.ValidationError({"training_start_date": "La date ne peut pas être antérieure à aujourd'hui."})
+        if "training_end_date" in attrs and end and end < today:
+            raise serializers.ValidationError({"training_end_date": "La date ne peut pas être antérieure à aujourd'hui."})
         return attrs
 
     def get_training_recipient_emails(self, obj):

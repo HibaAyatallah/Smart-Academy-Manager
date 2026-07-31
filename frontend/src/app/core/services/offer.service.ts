@@ -17,7 +17,7 @@ export interface OfferFilters {
 })
 export class OfferService {
   private http = inject(HttpClient);
-  private apiUrl = `${environment.apiBaseUrl}/offers/`;
+  private apiUrl = `${environment.apiBaseUrl}offers/`;
 
   getOffers(filters?: OfferFilters): Observable<PaginatedResponse<Offer>> {
     let params = new HttpParams();

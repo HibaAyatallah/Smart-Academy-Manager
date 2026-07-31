@@ -1,25 +1,22 @@
 from django.db import transaction
-from django.db.models import Q, F
+from django.db.models import Q
 from django.core.files.base import ContentFile
-from django.http import FileResponse
-from django.utils import timezone
 import uuid
 from rest_framework import viewsets, filters, status
-from rest_framework.exceptions import ValidationError
+from rest_framework.exceptions import PermissionDenied, ValidationError
 from django_filters.rest_framework import DjangoFilterBackend
 from rest_framework.decorators import action
 from rest_framework.response import Response
 
-from .models import Training, TrainingSession, ClientProfile, TrainingEnrollment, EnrollmentHistory, SessionAttendance, AttendanceHistory, TrainingCertificate
+from .models import Training, TrainingSession, ClientProfile, TrainingEnrollment, EnrollmentHistory, SessionAttendance, TrainingCertificate
 from .serializers import (
     TrainingSerializer, TrainingSessionSerializer,
     ClientTrainingSerializer, ClientTrainingSessionSerializer,
-    ClientProfileSerializer,
-    TrainingEnrollmentSerializer, TrainingEnrollmentCreateSerializer,
-    ManagerDecisionSerializer, SuperAdminDecisionSerializer,
-    DirectEnrollmentSerializer, SessionAttendanceSerializer, TrainingCertificateSerializer
+    TrainingEnrollmentSerializer,
+    TrainingEnrollmentCreateSerializer, ManagerDecisionSerializer,
+    SuperAdminDecisionSerializer, DirectEnrollmentSerializer
 )
-from .permissions import IsSuperAdminOrReadOnly, IsClientProfile, IsNotClientProfile, IsTrainingOperationsUser
+from .permissions import IsSuperAdminOrReadOnly, IsClientProfile, IsNotClientProfile, IsTrainingOperationsUser, IsTrainingCatalogueUser
 from apps.accounts.permissions import IsSuperAdminOnly
 from apps.accounts.choices import UserRole
 from .choices import TrainingStatus, SessionStatus, EnrollmentStatus
@@ -62,7 +59,7 @@ def _issue_certificate(enrollment, user):
 
 class TrainingViewSet(viewsets.ModelViewSet):
     serializer_class = TrainingSerializer
-    permission_classes = [IsNotClientProfile, IsSuperAdminOrReadOnly]
+    permission_classes = [IsTrainingCatalogueUser, IsSuperAdminOrReadOnly]
     filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
     filterset_fields = ["training_type", "category", "delivery_mode", "level", "status", "business_unit", "trainer"]
     search_fields = ["title", "description", "category", "objectives"]
@@ -122,7 +119,7 @@ class TrainingViewSet(viewsets.ModelViewSet):
 
 class TrainingSessionViewSet(viewsets.ModelViewSet):
     serializer_class = TrainingSessionSerializer
-    permission_classes = [IsNotClientProfile, IsSuperAdminOrReadOnly]
+    permission_classes = [IsTrainingCatalogueUser, IsSuperAdminOrReadOnly]
     filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
     filterset_fields = ["training", "status", "trainer", "location", "external_client"]
     search_fields = ["training__title", "location"]
@@ -200,13 +197,14 @@ class TrainingSessionViewSet(viewsets.ModelViewSet):
         session = self.get_object()
         if request.user.role != UserRole.SUPER_ADMIN and not (request.user.role == UserRole.TRAINER_TUTOR and session.trainer_id == request.user.id):
             return Response({"detail": "Access denied."}, status=status.HTTP_403_FORBIDDEN)
-        attendances = SessionAttendance.objects.filter(enrollment__session=session, enrollment__status=EnrollmentStatus.ENROLLED)
-        if attendances.filter(validated=False).exists() or attendances.count() != session.enrollments.filter(status=EnrollmentStatus.ENROLLED).count():
-            return Response({"detail": "All enrolled participants require validated attendance."}, status=status.HTTP_400_BAD_REQUEST)
+        enrollments = session.enrollments.filter(status=EnrollmentStatus.ENROLLED)
+        attendances = SessionAttendance.objects.filter(enrollment__in=enrollments)
+        expected_records = enrollments.count() * ((session.end_date - session.start_date).days + 1)
+        if attendances.filter(validated=False).exists() or attendances.count() != expected_records:
+            return Response({"detail": "Chaque journée de chaque participant doit être renseignée et validée."}, status=status.HTTP_400_BAD_REQUEST)
         with transaction.atomic():
-            for attendance in attendances.select_related("enrollment"):
-                if attendance.status in ["PRESENT", "LATE"]:
-                    enrollment = attendance.enrollment
+            for enrollment in enrollments:
+                if attendances.filter(enrollment=enrollment, status__in=["PRESENT", "LATE"]).exists():
                     previous = enrollment.status
                     enrollment.status = enrollment.final_status = EnrollmentStatus.COMPLETED
                     enrollment.save(update_fields=["status", "final_status", "updated_at"])
@@ -255,6 +253,13 @@ class TrainingEnrollmentViewSet(viewsets.ModelViewSet):
     ordering_fields = ["requested_at", "created_at", "updated_at"]
     ordering = ["-requested_at"]
 
+    def create(self, request, *args, **kwargs):
+        if request.user.role == UserRole.EMPLOYEE:
+            raise PermissionDenied(
+                "Les collaborateurs ne peuvent pas accéder au workflow d'inscription."
+            )
+        return super().create(request, *args, **kwargs)
+
     def get_queryset(self):
         user = self.request.user
         qs = TrainingEnrollment.objects.select_related("user", "training", "session").prefetch_related("history")
@@ -269,6 +274,11 @@ class TrainingEnrollmentViewSet(viewsets.ModelViewSet):
         if user.role == UserRole.TRAINER_TUTOR:
             return qs.filter(Q(session__trainer=user) | Q(user=user))
             
+        if user.role == UserRole.EMPLOYEE:
+            bu_ids = user.bu_memberships.filter(is_active=True).values_list(
+                "business_unit_id", flat=True
+            )
+            return qs.filter(user=user, training__business_unit_id__in=bu_ids)
         return qs.filter(user=user)
 
     def get_serializer_class(self):

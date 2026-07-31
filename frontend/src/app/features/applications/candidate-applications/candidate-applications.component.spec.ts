@@ -60,7 +60,7 @@ describe('CandidateApplicationsComponent', () => {
       },
       application_type: 'PFA_INTERNSHIP',
       application_type_label: 'Stage PFA',
-      status: 'SUBMITTED',
+      status: 'RECEIVED',
       status_label: 'T0 - Candidature deposee',
       motivation_message: '',
       rejection_reason: '',
@@ -116,7 +116,7 @@ describe('CandidateApplicationsComponent', () => {
     applicationService.getMyApplications.and.returnValue(
       of({
         count: 21,
-        next: 'http://127.0.0.1:8000/api/applications/mine/?page=2',
+        next: 'http://127.0.0.1:8001/api/applications/mine/?page=2',
         previous: null,
         results: [],
       }),

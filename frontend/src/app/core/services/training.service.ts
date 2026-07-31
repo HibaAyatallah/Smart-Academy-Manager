@@ -40,7 +40,7 @@ export class TrainingService {
 
   getClientTrainings(): Observable<PaginatedResponse<ClientTraining>> { return this.http.get<PaginatedResponse<ClientTraining>>(`${this.baseUrl}client/trainings/`); }
   getAttendance(filters: Record<string, unknown> = {}): Observable<PaginatedResponse<SessionAttendance>> { return this.http.get<PaginatedResponse<SessionAttendance>>(`${this.baseUrl}attendance/`, { params: this.params(filters) }); }
-  recordAttendance(enrollment:number, status:string, note=''): Observable<SessionAttendance> { return this.http.post<SessionAttendance>(`${this.baseUrl}attendance/`, { enrollment, status, note }); }
+  recordAttendance(enrollment:number, date:string, status:string, note=''): Observable<SessionAttendance> { return this.http.post<SessionAttendance>(`${this.baseUrl}attendance/`, { enrollment, date, status, note }); }
   updateAttendance(id:number, status:string, note=''): Observable<SessionAttendance> { return this.http.patch<SessionAttendance>(`${this.baseUrl}attendance/${id}/`, { status, note }); }
   validateAttendance(id:number): Observable<SessionAttendance> { return this.http.post<SessionAttendance>(`${this.baseUrl}attendance/${id}/validate/`, {}); }
   getCertificates(filters: Record<string, unknown> = {}): Observable<PaginatedResponse<TrainingCertificate>> { return this.http.get<PaginatedResponse<TrainingCertificate>>(`${this.baseUrl}certificates/`, { params: this.params(filters) }); }

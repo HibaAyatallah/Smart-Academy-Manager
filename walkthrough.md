@@ -365,7 +365,7 @@ No skipped/disabled tests were found by source search. No tracked tests were del
 - CSRF: JWT bearer API reduces normal CSRF exposure; Django admin/session remains protected by middleware.
 - Files/media: authorization-protected API streaming is good. Direct `MEDIA_URL` serving is not wired in `urls.py`, but production storage/private-media design is absent. Never expose media through a public bucket URL without equivalent authorization.
 - PostgreSQL: one Django DB configured; no network/container exposure config exists. Moodle is absent, so separate-database policy is not violated but is not implemented.
-- URLs: both Angular environments hardcode `http://127.0.0.1:8000/api/`; production is invalid.
+- URLs: the Angular development environment now targets `http://127.0.0.1:8001/api/`, while production continues to use the same-origin `/api/` contract.
 - Credentials/passwords: Django uses password hashing and validation. No plaintext password storage or Moodle password copy was found. Public registration accepts a password over the API, requiring HTTPS in deployment.
 - Moodle, SSO, AI: none implemented, consistent with current “do not implement” direction except Moodle remains planned.
 - Email: local console backend only; production delivery configuration is missing.

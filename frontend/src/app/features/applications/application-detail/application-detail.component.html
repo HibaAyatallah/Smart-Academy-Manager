@@ -49,15 +49,7 @@
           >
             Planifier entretien
           </button>
-          <button
-            mat-stroked-button
-            type="button"
-            *ngIf="canCompleteInterview(application.status)"
-            (click)="completeInterview()"
-            [disabled]="isActionRunning"
-          >
-            Entretien realise
-          </button>
+
           <button
             mat-flat-button
             color="primary"

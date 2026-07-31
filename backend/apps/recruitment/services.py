@@ -4,10 +4,8 @@ from django.db import transaction
 from django.utils import timezone
 from rest_framework.exceptions import ValidationError
 
-from apps.accounts.choices import UserRole
-from apps.business_units.models import BusinessUnitMembership
 
-from .choices import ApplicationStatus, ApplicationType
+from .choices import ApplicationStatus
 from .emails import send_application_status_email
 from .models import (
     Application,

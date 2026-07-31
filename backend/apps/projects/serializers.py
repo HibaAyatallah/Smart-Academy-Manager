@@ -3,7 +3,7 @@ from rest_framework import serializers
 from apps.accounts.choices import UserRole
 from apps.business_units.models import BusinessUnitMembership
 from apps.recruitment.models import InternProfile
-from .models import Project, ProjectAssignment, ProjectComment, ProjectDeliverable, ProjectDocument
+from .models import Project, ProjectComment, ProjectDeliverable, ProjectDocument
 
 User = get_user_model()
 
@@ -13,6 +13,13 @@ class ProjectDeliverableSerializer(serializers.ModelSerializer):
         model = ProjectDeliverable
         fields = ["id", "project", "title", "description", "due_date", "status", "created_by", "updated_by", "created_at", "updated_at"]
         read_only_fields = ["id", "created_by", "updated_by", "created_at", "updated_at"]
+
+    def validate_due_date(self, value):
+        from django.utils import timezone
+        old_val = getattr(self.instance, "due_date", None) if self.instance else None
+        if value and value != old_val and value < timezone.localdate():
+            raise serializers.ValidationError("La date ne peut pas être antérieure à aujourd’hui.")
+        return value
 
 
 class ProjectCommentSerializer(serializers.ModelSerializer):
@@ -58,10 +65,21 @@ class ProjectSerializer(serializers.ModelSerializer):
         return value
 
     def validate(self, attrs):
+        from django.utils import timezone
+        today = timezone.localdate()
+        errors = {}
         start = attrs.get("start_date", getattr(self.instance, "start_date", None))
         end = attrs.get("end_date", getattr(self.instance, "end_date", None))
+        old_start = getattr(self.instance, "start_date", None) if self.instance else None
+        old_end = getattr(self.instance, "end_date", None) if self.instance else None
+        if "start_date" in attrs and start and start != old_start and start < today:
+            errors["start_date"] = "La date ne peut pas être antérieure à aujourd’hui."
+        if "end_date" in attrs and end and end != old_end and end < today:
+            errors["end_date"] = "La date ne peut pas être antérieure à aujourd’hui."
         if start and end and start > end:
-            raise serializers.ValidationError({"end_date": "La date de fin doit suivre la date de début."})
+            errors.setdefault("end_date", "La date de fin doit être postérieure ou égale à la date de début.")
+        if errors:
+            raise serializers.ValidationError(errors)
         supervisor = attrs.get("supervisor", getattr(self.instance, "supervisor", None))
         if supervisor and supervisor.role != UserRole.EMPLOYEE:
             raise serializers.ValidationError({"supervisor": "Le superviseur doit être un collaborateur."})

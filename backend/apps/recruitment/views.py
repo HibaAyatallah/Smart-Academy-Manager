@@ -1,5 +1,6 @@
 from django.db.models import Q
 from django.http import FileResponse, Http404
+from django.utils import timezone
 from rest_framework import filters, status, viewsets
 from django_filters.rest_framework import DjangoFilterBackend
 from rest_framework.decorators import action
@@ -9,11 +10,12 @@ from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
 
 from apps.accounts.throttles import PublicSubmissionRateThrottle
+from apps.accounts.choices import UserRole
 
 from .choices import ApplicationStatus, OfferStatus
 from .models import (
     Application, ApplicationDocument, Interview, Offer,
-    InternProfile, InternDocument, InternEvaluation
+    InternProfile, InternDocument, InternDocumentRequirement, InternEvaluation
 )
 from .permissions import (
     CanManageOffersOrReadPublished,
@@ -23,6 +25,7 @@ from .permissions import (
     is_candidate,
     is_recruitment_manager,
     IsInternshipParticipant,
+    IsInternDocumentRequirementUser,
     is_bu_manager,
     is_employee,
     is_intern,
@@ -42,6 +45,7 @@ from .serializers import (
     ApplicationConversionSerializer,
     InternProfileSerializer,
     InternDocumentSerializer,
+    InternDocumentRequirementSerializer,
     InternEvaluationSerializer,
 )
 
@@ -83,6 +87,7 @@ class OfferViewSet(viewsets.ModelViewSet):
         offer.save(update_fields=["status", "updated_at"])
         return Response(self.get_serializer(offer).data)
 from .services import log_sensitive_action, transition_application
+from apps.notifications.services import queue_email
 
 
 class ApplicationViewSet(viewsets.ModelViewSet):
@@ -154,6 +159,7 @@ class ApplicationViewSet(viewsets.ModelViewSet):
             "APPLICATION_SUBMITTED",
             {"candidate_email": application.candidate.email},
         )
+        queue_email(recipient=application.candidate,event="application.submitted",event_key=f"application:{application.pk}:submitted",subject="Candidature reçue",context={"message":"Votre candidature a bien été enregistrée."})
         return Response(
             ApplicationSerializer(application, context=self.get_serializer_context()).data,
             status=status.HTTP_201_CREATED,
@@ -177,9 +183,10 @@ class ApplicationViewSet(viewsets.ModelViewSet):
         try:
             serializer.is_valid(raise_exception=True)
             application = serializer.save()
+            queue_email(recipient=application.candidate,event="application.submitted",event_key=f"application:{application.pk}:submitted",subject="Candidature reçue",context={"message":"Votre candidature a bien été enregistrée."})
         except DRFValidationError as exc:
             return Response(exc.detail, status=status.HTTP_400_BAD_REQUEST)
-        except Exception as exc:  # pragma: no cover - defensive guard for unexpected API failures
+        except Exception:  # pragma: no cover - defensive guard for unexpected API failures
             return Response(
                 {"detail": "Impossible de traiter votre candidature. Veuillez réessayer plus tard."},
                 status=status.HTTP_400_BAD_REQUEST,
@@ -425,6 +432,18 @@ class InternProfileViewSet(viewsets.ModelViewSet):
                 raise PermissionDenied("Le superviseur peut uniquement mettre à jour la progression et le statut.")
         serializer.save()
 
+    @action(detail=True, methods=["get"], url_path="specification")
+    def specification(self, request, pk=None):
+        intern = self.get_object()
+        if not intern.specification_pdf:
+            raise Http404
+        return FileResponse(
+            intern.specification_pdf.open("rb"),
+            as_attachment=True,
+            filename=intern.specification_pdf.name.rsplit("/", 1)[-1],
+            content_type="application/pdf",
+        )
+
 
 class InternDocumentViewSet(viewsets.ModelViewSet):
     serializer_class = InternDocumentSerializer
@@ -435,6 +454,8 @@ class InternDocumentViewSet(viewsets.ModelViewSet):
         user = self.request.user
         
         if is_recruitment_manager(user):
+            return queryset
+        if user.role == UserRole.HR:
             return queryset
             
         if is_bu_manager(user):
@@ -452,7 +473,18 @@ class InternDocumentViewSet(viewsets.ModelViewSet):
             raise PermissionDenied("Vous pouvez uniquement ajouter vos propres documents.")
         if is_employee(user) and not is_recruitment_manager(user) and intern.supervisor_id != user.id:
             raise PermissionDenied("Ce stagiaire ne vous est pas affecté.")
-        serializer.save()
+        requirement = serializer.validated_data["requirement"]
+        uploaded_file = serializer.validated_data["file"]
+        serializer.save(
+            document_type=requirement.document_type,
+            original_name=uploaded_file.name.rsplit("/", 1)[-1].rsplit("\\", 1)[-1],
+            content_type=getattr(uploaded_file, "content_type", ""),
+            size=uploaded_file.size,
+            status="PENDING",
+            is_validated=False,
+            validator=None,
+            validated_at=None,
+        )
 
     @action(detail=True, methods=["get"], url_path="download")
     def download(self, request, pk=None):
@@ -468,11 +500,36 @@ class InternDocumentViewSet(viewsets.ModelViewSet):
         document = self.get_object()
         from django.utils import timezone
         document.is_validated = True
+        document.status = "VALIDATED"
         document.validated_at = timezone.now()
         document.validator = request.user
         document.comment = request.data.get("comment", document.comment)
-        document.save(update_fields=["is_validated", "validated_at", "validator", "comment"])
+        document.save(update_fields=["is_validated", "status", "validated_at", "validator", "comment"])
         return Response(self.get_serializer(document).data)
+
+    @action(detail=True, methods=["post"], url_path="reject")
+    def reject_document(self, request, pk=None):
+        if not is_recruitment_manager(request.user):
+            raise PermissionDenied("Seul le Super Admin peut refuser un document.")
+        document = self.get_object()
+        document.is_validated = False
+        document.status = "REJECTED"
+        document.validated_at = timezone.now()
+        document.validator = request.user
+        document.comment = request.data.get("comment", "")
+        if not document.comment:
+            raise DRFValidationError({"comment": "Le motif du refus est obligatoire."})
+        document.save(update_fields=["is_validated", "status", "validated_at", "validator", "comment"])
+        return Response(self.get_serializer(document).data)
+
+
+class InternDocumentRequirementViewSet(viewsets.ModelViewSet):
+    serializer_class = InternDocumentRequirementSerializer
+    permission_classes = [IsInternDocumentRequirementUser]
+    queryset = InternDocumentRequirement.objects.all()
+
+    def perform_create(self, serializer):
+        serializer.save(created_by=self.request.user)
 
 
 class InternEvaluationViewSet(viewsets.ModelViewSet):

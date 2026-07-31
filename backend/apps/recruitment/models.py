@@ -1,10 +1,11 @@
 from datetime import timedelta
+from pathlib import Path
+import uuid
 
 from django.conf import settings
 from django.db import models
 from django.utils import timezone
 
-from apps.accounts.choices import UserRole
 from apps.business_units.models import BusinessUnit
 
 from .choices import (
@@ -290,6 +291,31 @@ class InternProfile(models.Model):
     def __str__(self) -> str:
         return self.user.email
 
+
+class InternDocumentRequirement(models.Model):
+    document_type = models.CharField(max_length=32, choices=InternDocumentType.choices)
+    name = models.CharField(max_length=255)
+    description = models.TextField(blank=True)
+    is_required = models.BooleanField(default=True)
+    due_date = models.DateField(null=True, blank=True)
+    is_active = models.BooleanField(default=True)
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        related_name="created_intern_document_requirements",
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["due_date", "name"]
+
+
+def intern_document_upload_to(instance, filename):
+    extension = Path(filename).suffix.lower()
+    return f"internships/documents/{instance.intern.user_id}/{uuid.uuid4().hex}{extension}"
+
 class InternDocument(models.Model):
     intern = models.ForeignKey(
         InternProfile,
@@ -297,7 +323,22 @@ class InternDocument(models.Model):
         related_name="documents",
     )
     document_type = models.CharField(max_length=32, choices=InternDocumentType.choices)
-    file = models.FileField(upload_to="internships/documents/")
+    requirement = models.ForeignKey(
+        InternDocumentRequirement,
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name="submissions",
+    )
+    file = models.FileField(upload_to=intern_document_upload_to)
+    original_name = models.CharField(max_length=255, blank=True)
+    content_type = models.CharField(max_length=100, blank=True)
+    size = models.PositiveIntegerField(default=0)
+    status = models.CharField(
+        max_length=16,
+        choices=[("PENDING", "Pending"), ("VALIDATED", "Validated"), ("REJECTED", "Rejected")],
+        default="PENDING",
+    )
     is_validated = models.BooleanField(default=False)
     validated_at = models.DateTimeField(null=True, blank=True)
     validator = models.ForeignKey(

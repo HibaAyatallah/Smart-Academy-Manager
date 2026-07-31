@@ -17,6 +17,7 @@ import { OfferCreateUpdate } from '../../../core/models/offer.models';
 import { BusinessUnitService } from '../../../core/services/business-unit.service';
 import { OfferService } from '../../../core/services/offer.service';
 import { PageHeaderComponent } from '../../../shared/components/page-header/page-header.component';
+import { minTodayValidator, dateRangeValidator } from '../../../core/utils/date-validators';
 
 @Component({
   selector: 'app-offer-form',
@@ -49,6 +50,11 @@ export class OfferFormComponent implements OnInit {
   isEditing = false;
   offerId: number | null = null;
   isLoading = false;
+  today = (() => {
+    const d = new Date();
+    d.setHours(0, 0, 0, 0);
+    return d;
+  })();
 
   businessUnits: any[] = [];
   
@@ -64,9 +70,11 @@ export class OfferFormComponent implements OnInit {
     required_level: [''],
     number_of_positions: [1, [Validators.min(1)]],
     location: ['', [Validators.maxLength(255)]],
-    start_date: [null as string | null],
-    end_date: [null as string | null],
-    application_deadline: [null as string | null],
+    start_date: [null as string | null, [minTodayValidator()]],
+    end_date: [null as string | null, [minTodayValidator()]],
+    application_deadline: [null as string | null, [minTodayValidator()]],
+  }, {
+    validators: [dateRangeValidator('start_date', 'end_date')]
   });
 
   ngOnInit(): void {

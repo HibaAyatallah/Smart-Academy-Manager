@@ -104,6 +104,6 @@ python manage.py runserver
 
 Verification dans le navigateur :
 
-- API root : http://127.0.0.1:8000/api/
-- Swagger : http://127.0.0.1:8000/api/docs/
-- Schema OpenAPI : http://127.0.0.1:8000/api/schema/
+- API root : http://127.0.0.1:8001/api/
+- Swagger : http://127.0.0.1:8001/api/docs/
+- Schema OpenAPI : http://127.0.0.1:8001/api/schema/

@@ -3,12 +3,10 @@ from django.urls import reverse
 from rest_framework.test import APIClient
 from django.contrib.auth import get_user_model
 from django.core.files.uploadedfile import SimpleUploadedFile
-import pandas as pd
-import io
 
 from apps.accounts.choices import UserRole
 from apps.business_units.models import BusinessUnit, BusinessUnitMembership
-from apps.recruitment.models import EmployeeProfile, InternProfile
+from apps.recruitment.models import EmployeeProfile
 from apps.accounts.services.account_generation import generate_professional_email
 
 User = get_user_model()
@@ -62,7 +60,7 @@ class BulkImportTests(TestCase):
         self.assertIn("Prénom est requis", error_text)
         self.assertIn("Format d'email invalide", error_text)
         self.assertIn("Rôle ou profil invalide", error_text)
-        self.assertIn("Business Unit introuvable", error_text)
+        self.assertIn("BU_FAKE", data["missing_bus"])
 
     def test_email_collision(self):
         User.objects.create_user(email="jean.dupont@finatech.com", password="pwd")
@@ -90,6 +88,6 @@ class BulkImportTests(TestCase):
         user = User.objects.get(contact_email="marc@perso.com")
         self.assertEqual(user.email, "marc.lafayette@finatech.com")
         self.assertTrue(user.must_change_password)
-        self.assertTrue(user.check_password(response.json()["results"][0]["temporary_password"]))
+        self.assertTrue(user.check_password(response.json()["results"][0]["Mot de passe temporaire"]))
         self.assertTrue(EmployeeProfile.objects.filter(user=user).exists())
         self.assertTrue(BusinessUnitMembership.objects.filter(user=user, business_unit=self.bu).exists())

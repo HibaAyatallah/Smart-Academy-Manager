@@ -1,7 +1,7 @@
 from rest_framework.permissions import SAFE_METHODS, BasePermission
 
 from apps.accounts.choices import UserRole
-from apps.accounts.roles import is_super_admin, is_hr
+from apps.accounts.roles import is_super_admin
 from apps.business_units.models import BusinessUnit, BusinessUnitMembership
 
 
@@ -26,18 +26,26 @@ class IsHRSuperAdminOrManager(BasePermission):
     """
     Super Admin: All access.
     BU Manager: Read/Write only to their assigned BU objects.
-    HR: No access (HR uses dedicated /api/hr/ endpoints).
+    HR: Read-only access globally.
     Others: No access.
     """
 
     def has_permission(self, request, view) -> bool:
         user = request.user
-        return is_super_admin(user) or is_bu_manager(user)
+        if not user or not user.is_authenticated:
+            return False
+        if is_super_admin(user) or is_bu_manager(user):
+            return True
+        if user.role == UserRole.HR:
+            return request.method in SAFE_METHODS
+        return False
 
     def has_object_permission(self, request, view, obj) -> bool:
         user = request.user
         if is_super_admin(user):
             return True
+        if user.role == UserRole.HR:
+            return request.method in SAFE_METHODS
 
         if is_bu_manager(user):
             # For BusinessUnit
@@ -56,21 +64,25 @@ class CanViewBUData(BasePermission):
     Super Admin: Full access (read + write).
     BU Manager: Read + write for own BU only.
     Collaborator (EMPLOYEE): Read-only for BU they are members of.
-    HR: No access via this permission — use /api/hr/collaborators/ instead.
+    HR: Read-only access globally.
     Candidate / Client / Others: No access.
     """
 
     def has_permission(self, request, view) -> bool:
         user = request.user
+        if not user or not user.is_authenticated:
+            return False
         if is_super_admin(user) or is_bu_manager(user):
             return True
-        if is_collaborator(user):
+        if user.role == UserRole.HR or is_collaborator(user):
             return request.method in SAFE_METHODS
         return False
 
     def has_object_permission(self, request, view, obj) -> bool:
         user = request.user
         if is_super_admin(user):
+            return True
+        if user.role == UserRole.HR and request.method in SAFE_METHODS:
             return True
 
         # Extract BU from object

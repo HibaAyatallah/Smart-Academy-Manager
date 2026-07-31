@@ -75,7 +75,8 @@
 
     <mat-form-field appearance="outline">
       <mat-label>Date souhaitée</mat-label>
-      <input matInput type="date" formControlName="expected_date">
+      <input matInput type="date" formControlName="expected_date" [min]="todayStr">
+      <mat-error *ngIf="form.get('expected_date')?.hasError('minToday')">La date ne peut pas être antérieure à aujourd’hui.</mat-error>
     </mat-form-field>
 
     <p class="form-error wide" *ngIf="errorMessage">{{ errorMessage }}</p>

@@ -1,12 +1,15 @@
 import { AsyncPipe, DatePipe, NgClass, NgFor, NgIf } from '@angular/common';
-import { Component, OnDestroy, OnInit, inject } from '@angular/core';
+import { Component, OnDestroy, OnInit, inject, ViewChildren, QueryList, ElementRef, AfterViewInit } from '@angular/core';
 import { MatButtonModule } from '@angular/material/button';
 import { MatCardModule } from '@angular/material/card';
 import { MatChipsModule } from '@angular/material/chips';
 import { MatPaginatorModule, PageEvent } from '@angular/material/paginator';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
-import { ActivatedRoute } from '@angular/router';
+import { MatIconModule } from '@angular/material/icon';
+import { MatTooltipModule } from '@angular/material/tooltip';
+import { ActivatedRoute, RouterLink } from '@angular/router';
+import { Observable } from 'rxjs';
 import { finalize, map, shareReplay, take } from 'rxjs/operators';
 
 import { ROLE_LABELS } from '../../core/models/auth.models';
@@ -18,8 +21,12 @@ import {
   ApplicationStatus,
   EDUCATION_LEVEL_LABELS,
 } from '../../core/models/application.models';
+import { ReportData, HRDashboardData } from '../../core/models/report.models';
 import { ApplicationService } from '../../core/services/application.service';
 import { AuthService } from '../../core/services/auth.service';
+import { ReportService } from '../../core/services/report.service';
+import { InternshipService } from '../../core/services/internship.service';
+import { InternProfile, INTERNSHIP_STATUS_LABELS } from '../../core/models/internship.models';
 import { PageHeaderComponent } from '../../shared/components/page-header/page-header.component';
 import { EmptyStateComponent } from '../../shared/components/empty-state/empty-state.component';
 import {
@@ -45,18 +52,23 @@ import {
     MatPaginatorModule,
     MatProgressSpinnerModule,
     MatSnackBarModule,
+    MatIconModule,
+    MatTooltipModule,
     NgClass,
     NgFor,
     NgIf,
     PageHeaderComponent,
+    RouterLink,
   ],
   templateUrl: './dashboard.component.html',
   styleUrl: './dashboard.component.scss',
 })
-export class DashboardComponent implements OnDestroy, OnInit {
+export class DashboardComponent implements OnDestroy, OnInit, AfterViewInit {
   private readonly route = inject(ActivatedRoute);
   private readonly authService = inject(AuthService);
   private readonly applicationService = inject(ApplicationService);
+  private readonly reportService = inject(ReportService);
+  private readonly internshipService = inject(InternshipService);
   private readonly snackBar = inject(MatSnackBar);
 
   readonly roleLabels = ROLE_LABELS;
@@ -66,6 +78,25 @@ export class DashboardComponent implements OnDestroy, OnInit {
     shareReplay({ bufferSize: 1, refCount: true }),
   );
   readonly title$ = this.route.data.pipe(map((data) => data['title'] as string));
+  
+  // Super Admin Data
+  reportData: ReportData | null = null;
+  reportLoading = false;
+  reportError = '';
+  readonly periods = [
+    { value: '7d', label: '7 jours' },
+    { value: '30d', label: '30 jours' },
+    { value: '3m', label: '3 mois' },
+    { value: 'year', label: 'Cette année' },
+  ] as const;
+  selectedPeriod: '7d' | '30d' | '3m' | 'year' = '30d';
+  
+  // HR Data
+  hrReportData: HRDashboardData | null = null;
+  hrReportLoading = false;
+  hrReportError = '';
+  
+  // Candidate Data
   candidateApplications: Application[] = [];
   candidatePhotoUrls = new Map<number, string>();
   candidateApplicationsTotal = 0;
@@ -73,29 +104,162 @@ export class DashboardComponent implements OnDestroy, OnInit {
   readonly candidatePageSize = 20;
   candidateApplicationsLoading = false;
   candidateApplicationsError = '';
+  internProfile: InternProfile | null = null;
+  internLoading = false;
+  internError = '';
+  readonly internshipStatuses = INTERNSHIP_STATUS_LABELS;
+
+  @ViewChildren('chartCanvas') chartCanvases!: QueryList<ElementRef<HTMLCanvasElement>>;
+  private chartInstances: any[] = [];
 
   ngOnInit(): void {
-    // The roleGuard already guarantees the profile is available before this
-    // component is activated. Use the synchronous snapshot to avoid an
-    // unnecessary asynchronous round-trip that could delay the first render.
     const user = this.authService.currentUserSnapshot;
     if (user) {
-      if (user.role === 'CANDIDATE') {
-        this.loadCandidateApplications();
-      }
+      this.loadDashboardData(user.role);
       return;
     }
-    // Fallback: profile not yet in cache (should not happen in practice
-    // thanks to the guard, but keeps the component self-contained).
     this.user$.pipe(take(1)).subscribe((u) => {
-      if (u.role === 'CANDIDATE') {
-        this.loadCandidateApplications();
-      }
+      this.loadDashboardData(u.role);
+    });
+  }
+
+  ngAfterViewInit(): void {
+    this.chartCanvases.changes.subscribe(() => {
+      this.initCharts();
+    });
+  }
+
+  private initCharts(): void {
+    this.chartInstances.forEach(c => c.destroy());
+    this.chartInstances = [];
+    
+    if (!this.reportData || this.chartCanvases.length === 0) return;
+    
+    const canvases = this.chartCanvases.toArray();
+    
+    const statusCanvas = canvases.find(c => c.nativeElement.id === 'statusChart');
+    if (statusCanvas && this.reportData.series['recruitment']) {
+      const data = this.reportData.series['recruitment'];
+      this.chartInstances.push(new (window as any).Chart(statusCanvas.nativeElement, {
+        type: 'doughnut',
+        data: {
+          labels: data.map(d => this.statusLabels[d.label as ApplicationStatus] || d.label),
+          datasets: [{ data: data.map(d => d.value), backgroundColor: ['#3b82f6', '#f59e0b', '#10b981', '#ef4444', '#8b5cf6'] }]
+        },
+        options: { responsive: true, maintainAspectRatio: false, interaction: { intersect: false }, plugins: { legend: { position: 'bottom' }, tooltip: { enabled: true } } }
+      }));
+    }
+    
+    const monthlyCanvas = canvases.find(c => c.nativeElement.id === 'monthlyChart');
+    if (monthlyCanvas && this.reportData.series['monthly_applications']) {
+      const data = this.reportData.series['monthly_applications'];
+      this.chartInstances.push(new (window as any).Chart(monthlyCanvas.nativeElement, {
+        type: 'line',
+        data: {
+          labels: data.map(d => d.label),
+          datasets: [{ label: 'Candidatures', data: data.map(d => d.value), borderColor: '#3b82f6', backgroundColor: 'rgba(59, 130, 246, 0.1)', fill: true, tension: 0.4 }]
+        },
+        options: { responsive: true, maintainAspectRatio: false, interaction: { mode: 'index', intersect: false }, plugins: { legend: { display: false }, tooltip: { enabled: true } } }
+      }));
+    }
+    
+    const workforceCanvas = canvases.find(c => c.nativeElement.id === 'workforceChart');
+    if (workforceCanvas && this.reportData.series['workforce_by_bu']) {
+      const raw = this.reportData.series['workforce_by_bu'];
+      this.chartInstances.push(new (window as any).Chart(workforceCanvas.nativeElement, {
+        type: 'bar',
+        data: {
+          labels: raw.map(d => d.business_unit),
+          datasets: [
+            { label: 'Stagiaires', data: raw.map(d => d.interns), backgroundColor: '#3b82f6' },
+            { label: 'Collaborateurs', data: raw.map(d => d.collaborators), backgroundColor: '#10b981' }
+          ]
+        },
+        options: { responsive: true, maintainAspectRatio: false, interaction: { mode: 'index', intersect: false }, plugins: { tooltip: { enabled: true } } }
+      }));
+    }
+  }
+
+  private loadDashboardData(role: string): void {
+    if (role === 'CANDIDATE') {
+      this.loadCandidateApplications();
+    } else if (role === 'INTERN') {
+      this.loadInternDashboard();
+    } else if (role === 'SUPER_ADMIN') {
+      this.loadSuperAdminDashboard();
+    } else if (role === 'HR') {
+      this.loadHrDashboard();
+    }
+  }
+
+  private loadInternDashboard(): void {
+    this.internLoading = true;
+    this.internshipService.getInterns().pipe(finalize(() => this.internLoading = false)).subscribe({
+      next: response => this.internProfile = response.results[0] ?? null,
+      error: () => this.internError = 'Impossible de charger votre stage.',
+    });
+  }
+
+  daysRemaining(intern: InternProfile): number {
+    if (!intern.internship_end) return 0;
+    const end = new Date(`${intern.internship_end}T00:00:00`);
+    const today = new Date(); today.setHours(0, 0, 0, 0);
+    return Math.max(0, Math.ceil((end.getTime() - today.getTime()) / 86400000));
+  }
+
+  documentProgress(intern: InternProfile): {done:number;total:number} {
+    return {
+      total: intern.document_requirements.length,
+      done: intern.document_requirements.filter(item => item.latest_submission?.status === 'VALIDATED').length,
+    };
+  }
+
+  private loadSuperAdminDashboard(): void {
+    this.reportLoading = true;
+    this.reportError = '';
+    this.reportService.summary(this.periodFilters()).pipe(
+      finalize(() => this.reportLoading = false)
+    ).subscribe({
+      next: (data) => {
+        this.reportData = data;
+        // In case views are already initialized
+        setTimeout(() => this.initCharts());
+      },
+      error: () => this.reportError = 'Impossible de charger le tableau de bord Administrateur.'
+    });
+  }
+
+  selectPeriod(period: '7d' | '30d' | '3m' | 'year'): void {
+    if (period === this.selectedPeriod) return;
+    this.selectedPeriod = period;
+    this.loadSuperAdminDashboard();
+  }
+
+  private periodFilters(): { date_from: string; date_to: string } {
+    const today = new Date();
+    const from = new Date(today);
+    if (this.selectedPeriod === '7d') from.setDate(from.getDate() - 6);
+    if (this.selectedPeriod === '30d') from.setDate(from.getDate() - 29);
+    if (this.selectedPeriod === '3m') from.setMonth(from.getMonth() - 3);
+    if (this.selectedPeriod === 'year') from.setMonth(0, 1);
+    const isoDate = (value: Date) => value.toISOString().slice(0, 10);
+    return { date_from: isoDate(from), date_to: isoDate(today) };
+  }
+
+  private loadHrDashboard(): void {
+    this.hrReportLoading = true;
+    this.hrReportError = '';
+    this.reportService.hrDashboard().pipe(
+      finalize(() => this.hrReportLoading = false)
+    ).subscribe({
+      next: (data) => this.hrReportData = data,
+      error: () => this.hrReportError = 'Impossible de charger le tableau de bord RH.'
     });
   }
 
   ngOnDestroy(): void {
     this.candidatePhotoUrls.forEach((url) => URL.revokeObjectURL(url));
+    this.chartInstances.forEach(c => c.destroy());
   }
 
   loadCandidateApplications(): void {
@@ -139,6 +303,16 @@ export class DashboardComponent implements OnDestroy, OnInit {
 
   statusLabel(value: ApplicationStatus): string {
     return APPLICATION_STATUS_LABELS[value];
+  }
+
+  getStatusClass(status: ApplicationStatus | string | null | undefined): string {
+    if (!status) return 'status-archived';
+    return 'status-' + status.toLowerCase();
+  }
+
+  getStatusLabel(status: ApplicationStatus | string | null | undefined): string {
+    if (!status) return '';
+    return this.statusLabels[status as ApplicationStatus] || status;
   }
 
   studyLevelBaseLabel(application: Application): string {

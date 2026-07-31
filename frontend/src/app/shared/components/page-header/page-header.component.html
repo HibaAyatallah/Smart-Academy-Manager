@@ -1,6 +1,9 @@
 <header class="page-header">
-  <button *ngIf="showBackButton" class="back-button" type="button" (click)="goBack()" aria-label="Retour">←</button>
-  <div>
+  <button *ngIf="showBackButton" class="back-button" type="button" (click)="goBack()" aria-label="Retour">
+    <span aria-hidden="true">←</span>
+  </button>
+  <div class="page-heading">
+    <span class="page-eyebrow">Smart Academy Manager</span>
     <h1>{{ title }}</h1>
     <p *ngIf="subtitle">{{ subtitle }}</p>
   </div>

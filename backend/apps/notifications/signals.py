@@ -1,15 +1,33 @@
-from django.db.models.signals import post_save
+from django.db.models.signals import post_save, pre_save
 from django.dispatch import receiver
 from apps.projects.models import ProjectAssignment, ProjectDocument
 from apps.recruitment.models import InternDocument, InternEvaluation, InternProfile
 from apps.trainings.models import TrainingCertificate, TrainingEnrollment, TrainingSession
 from .models import NotificationCategory
 from .services import notify
+from .services import queue_email
+from apps.accounts.models import User
+from apps.business_units.models import BusinessUnitMembership
+
+@receiver(pre_save, sender=User)
+def remember_previous_role(sender, instance, **kwargs):
+    instance._previous_role = sender.objects.filter(pk=instance.pk).values_list("role", flat=True).first() if instance.pk else None
+
+@receiver(post_save, sender=User)
+def account_created_email(sender, instance, created, **kwargs):
+    if created:
+        queue_email(recipient=instance,event="account.created",event_key=f"account-created:{instance.pk}",context={"message":"Votre compte Smart Academy est disponible."})
+    elif getattr(instance,"_previous_role",None) and instance._previous_role != instance.role:
+        queue_email(recipient=instance,event="account.converted",event_key=f"account-role:{instance.pk}:{instance.role}",subject="Votre espace Smart Academy a évolué",context={"message":f"Votre nouveau rôle est : {instance.get_role_display()}."})
+
+@receiver(post_save, sender=BusinessUnitMembership)
+def business_unit_assignment_email(sender, instance, created, **kwargs):
+    if created or instance.is_active:
+        queue_email(recipient=instance.user,event="business-unit.assigned",event_key=f"bu-assignment:{instance.pk}:{instance.is_active}",subject="Affectation Business Unit",context={"message":f"Vous êtes affecté à la Business Unit {instance.business_unit.name}."})
 
 @receiver(post_save, sender=TrainingEnrollment)
 def enrollment_notice(sender, instance, created, **kwargs):
-    if not created:
-        notify(instance.user, NotificationCategory.APPROVAL, "Training request updated", f"Your enrollment for {instance.training.title} is now {instance.status}.", "/training-enrollments", instance)
+    notify(instance.user, NotificationCategory.APPROVAL, "Training enrollment" if created else "Training request updated", f"Your enrollment for {instance.training.title} is now {instance.status}.", "/training-enrollments", instance)
 
 @receiver(post_save, sender=ProjectAssignment)
 def project_assignment_notice(sender, instance, created, **kwargs):

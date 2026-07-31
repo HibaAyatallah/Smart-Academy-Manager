@@ -19,7 +19,9 @@ describe('Business Unit routes', () => {
     expect(approvals?.data?.['roles']).toContain('BU_MANAGER');
     expect(client?.data?.['roles']).toEqual(['CLIENT']);
     const attendance = privateShell?.children?.find((child) => child.path === 'attendance-certificates');
-    expect(attendance?.data?.['roles']).toEqual(['SUPER_ADMIN', 'HR', 'TRAINER_TUTOR', 'EMPLOYEE', 'INTERN']);
+    expect(attendance?.data?.['roles']).toEqual(['SUPER_ADMIN', 'BU_MANAGER', 'TRAINER_TUTOR']);
+    expect(catalogue?.data?.['roles']).not.toContain('EMPLOYEE');
+    expect(approvals?.data?.['roles']).not.toContain('EMPLOYEE');
   });
 
   it('separates intern self-service from internship administration', () => {
@@ -28,32 +30,25 @@ describe('Business Unit routes', () => {
     const detail = privateShell?.children?.find((child) => child.path === 'internships/:id');
     const list = privateShell?.children?.find((child) => child.path === 'internships');
     expect(own?.data?.['roles']).toEqual(['INTERN']);
-    expect(detail?.data?.['roles']).toContain('EMPLOYEE');
-    expect(list?.data?.['roles']).toContain('HR');
+    expect(detail?.data?.['roles']).not.toContain('EMPLOYEE');
+    expect(list?.data?.['roles']).not.toContain('HR');
   });
 
-  it('protects project management and keeps HR read-only at navigation level', () => {
+  it('protects project management and excludes HR', () => {
     const privateShell = routes.find((route) => route.canActivate?.length && route.children);
     const list = privateShell?.children?.find((child) => child.path === 'projects');
     const detail = privateShell?.children?.find((child) => child.path === 'projects/:id');
     const create = privateShell?.children?.find((child) => child.path === 'projects/new');
-    expect(list?.data?.['roles']).toEqual(['SUPER_ADMIN', 'HR', 'EMPLOYEE', 'INTERN']);
-    expect(detail?.data?.['roles']).toEqual(['SUPER_ADMIN', 'HR', 'EMPLOYEE', 'INTERN']);
+    expect(list?.data?.['roles']).toEqual(['SUPER_ADMIN', 'EMPLOYEE']);
+    expect(detail?.data?.['roles']).toEqual(['SUPER_ADMIN', 'EMPLOYEE']);
     expect(create?.data?.['roles']).toEqual(['SUPER_ADMIN', 'EMPLOYEE']);
   });
 
-  it('exposes notifications to all roles and audit logs only to administrators', () => {
-    const privateShell = routes.find((route) => route.canActivate?.length && route.children);
-    const notifications = privateShell?.children?.find((child) => child.path === 'notifications');
-    const audit = privateShell?.children?.find((child) => child.path === 'audit-logs');
-    expect(notifications?.data?.['roles'].length).toBe(8);
-    expect(audit?.data?.['roles']).toEqual(['SUPER_ADMIN', 'HR']);
-  });
 
   it('exposes only implemented BU pages and preserves role restrictions', () => {
     const privateShell = routes.find((route) => route.canActivate?.length && route.children);
     const businessUnits = privateShell?.children?.find((route) => route.path === 'business-units');
-    expect(businessUnits?.data?.['roles']).toEqual(['SUPER_ADMIN', 'HR', 'BU_MANAGER']);
+    expect(businessUnits?.data?.['roles']).toEqual(['SUPER_ADMIN', 'BU_MANAGER', 'HR']);
     const paths = businessUnits?.children?.map((route) => route.path) ?? [];
     expect(paths).toContain('');
     expect(paths).toContain('needs');

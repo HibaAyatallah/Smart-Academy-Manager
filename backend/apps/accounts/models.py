@@ -16,6 +16,7 @@ class User(AbstractUser):
     contact_email = models.EmailField("email de contact", blank=True, null=True)
     phone_number = models.CharField(max_length=32, blank=True)
     must_change_password = models.BooleanField(default=False)
+    preferred_language = models.CharField(max_length=2, choices=[("fr", "Français"), ("en", "English"), ("ar", "العربية")], default="fr")
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -37,3 +38,13 @@ class User(AbstractUser):
     @property
     def full_name(self) -> str:
         return self.get_full_name().strip() or self.email
+
+
+class AccountSecurityLog(models.Model):
+    actor = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, related_name="account_security_logs")
+    action = models.CharField(max_length=64)
+    metadata = models.JSONField(default=dict, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-created_at"]

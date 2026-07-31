@@ -21,6 +21,7 @@ import {
 } from '../../../core/models/business-unit.models';
 import { BusinessUnitService } from '../../../core/services/business-unit.service';
 import { PageHeaderComponent } from '../../../shared/components/page-header/page-header.component';
+import { minTodayValidator } from '../../../core/utils/date-validators';
 
 @Component({
   selector: 'app-bu-need-form',
@@ -51,6 +52,13 @@ export class BuNeedForm implements OnInit {
 
   readonly needTypes = Object.values(NeedType);
   readonly priorities = Object.values(NeedPriority);
+  readonly todayStr = (() => {
+    const d = new Date();
+    const year = d.getFullYear();
+    const month = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+  })();
   readonly form = this.formBuilder.nonNullable.group({
     business_unit: [0, [Validators.required, Validators.min(1)]],
     title: ['', [Validators.required, Validators.maxLength(255)]],
@@ -60,7 +68,7 @@ export class BuNeedForm implements OnInit {
     training_audience: ['ALL' as 'ALL' | 'SPECIFIC'],
     specific_recipient_emails: [''],
     priority: [NeedPriority.MEDIUM, Validators.required],
-    expected_date: [''],
+    expected_date: ['', [minTodayValidator()]],
   });
 
   managedBusinessUnits: BusinessUnit[] = [];

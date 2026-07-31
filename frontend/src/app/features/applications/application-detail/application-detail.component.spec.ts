@@ -32,7 +32,7 @@ const submittedApplication: Application = {
   },
   application_type: 'PFA_INTERNSHIP',
   application_type_label: 'Stage PFA',
-  status: 'SUBMITTED',
+  status: 'RECEIVED',
   status_label: 'Candidature déposée',
   motivation_message: '',
   rejection_reason: '',
@@ -128,7 +128,7 @@ describe('ApplicationDetailComponent', () => {
         () =>
           new HttpErrorResponse({
             status: 400,
-            error: { non_field_errors: ['Transition invalide de SUBMITTED vers ACCEPTED.'] },
+            error: { non_field_errors: ['Transition invalide de RECEIVED vers ACCEPTED.'] },
           }),
       ),
     );
@@ -137,7 +137,7 @@ describe('ApplicationDetailComponent', () => {
 
     expect(component.isActionRunning).toBeFalse();
     expect(snackBar.open).toHaveBeenCalledWith(
-      'Transition invalide de SUBMITTED vers ACCEPTED.',
+      'Transition invalide de RECEIVED vers ACCEPTED.',
       'Fermer',
       { duration: 5000 },
     );

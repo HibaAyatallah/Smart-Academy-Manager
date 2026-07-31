@@ -24,7 +24,7 @@ class TrainingAdmin(admin.ModelAdmin):
             "fields": ("trainer", "business_unit", "external_client", "project_name")
         }),
         ("Links", {
-            "fields": ("associated_link", "moodle_course_id", "moodle_link")
+            "fields": ("associated_link",)
         }),
         ("Status & Audit", {
             "fields": ("status", "created_by", "created_at", "updated_at")

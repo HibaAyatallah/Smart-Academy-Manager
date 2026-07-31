@@ -73,7 +73,7 @@ function candidateApplicationStepIndex(status: ApplicationStatus): number {
   if (status === 'ACCEPTED') {
     return 2;
   }
-  if (['PRESELECTED', 'INTERVIEW_SCHEDULED', 'INTERVIEW_COMPLETED'].includes(status)) {
+  if (['PRESELECTED', 'INTERVIEW'].includes(status)) {
     return 1;
   }
   return 0;

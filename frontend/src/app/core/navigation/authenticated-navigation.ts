@@ -1,85 +1,13 @@
-import { UserRole } from '../models/auth.models';
-
-export interface NavigationItem {
-  label: string;
-  icon: string;
-  route: string;
-  roles: readonly UserRole[];
-  exact?: boolean;
-}
-
-export interface NavigationSection {
-  label: string;
-  items: readonly NavigationItem[];
-}
-
-const ALL_ROLES: readonly UserRole[] = [
-  'SUPER_ADMIN', 'HR', 'BU_MANAGER', 'TRAINER_TUTOR',
-  'EMPLOYEE', 'INTERN', 'CANDIDATE', 'CLIENT',
+import {UserRole} from '../models/auth.models';
+export interface NavigationItem{label:string;labelKey:string;icon:string;route:string;roles:readonly UserRole[];exact?:boolean} export interface NavigationSection{label:string;labelKey:string;items:readonly NavigationItem[]}
+const ALL:readonly UserRole[]=['SUPER_ADMIN','HR','BU_MANAGER','TRAINER_TUTOR','EMPLOYEE','INTERN','CANDIDATE','CLIENT'];const ADMIN:readonly UserRole[]=['SUPER_ADMIN'];
+const item=(label:string,labelKey:string,icon:string,route:string,roles:readonly UserRole[],exact=false):NavigationItem=>({label,labelKey,icon,route,roles,exact});
+export const AUTHENTICATED_NAVIGATION:readonly NavigationSection[]=[
+ {label:'Vue d’ensemble',labelKey:'nav.overview',items:[item('Tableau de bord','nav.dashboard','space_dashboard','/dashboard',ALL)]},
+ {label:'Recrutement',labelKey:'nav.recruitment',items:[item('Offres','nav.offers','work','/offers',['SUPER_ADMIN']),item('Candidatures','nav.applications','assignment_ind','/applications',ADMIN,true)]},
+ {label:'Organisation',labelKey:'nav.organization',items:[item('Gestion des utilisateurs','nav.users','manage_accounts','/users',['SUPER_ADMIN']),item('Business Units','nav.businessUnits','domain','/business-units',['SUPER_ADMIN','HR'],true),item('Besoins des BU','nav.buNeeds','fact_check','/business-units/needs',['SUPER_ADMIN','HR']),item('Besoins de ma BU','nav.myBuNeeds','fact_check','/business-units/needs',['BU_MANAGER']),item('Membres de ma BU','nav.myBuMembers','groups','/business-units/members',['BU_MANAGER']),item('Formations de ma BU','nav.myBuTrainings','school','/my-business-unit/trainings',['EMPLOYEE'])]},
+ {label:'Formation',labelKey:'nav.training',items:[item('Catalogue et sessions','nav.catalog','school','/trainings',['SUPER_ADMIN','HR','BU_MANAGER','TRAINER_TUTOR']),item('Inscriptions et validations','nav.enrollments','how_to_reg','/training-enrollments',['SUPER_ADMIN','BU_MANAGER','TRAINER_TUTOR']),item('Présences et certificats','nav.attendance','workspace_premium','/attendance-certificates',['SUPER_ADMIN','BU_MANAGER','TRAINER_TUTOR']),item('Mes formations client','nav.clientTrainings','business_center','/client-trainings',['CLIENT'])]},
+ {label:'Stages',labelKey:'nav.internships',items:[item('Gestion des stagiaires','nav.internManagement','badge','/internships',['SUPER_ADMIN','BU_MANAGER']),item('Stagiaires acceptés','nav.acceptedInterns','badge','/hr/interns',['HR']),item('Collaborateurs par BU','nav.collaboratorsByBu','groups','/hr/collaborators',['HR']),item('Mon stage','nav.myInternship','assignment','/internships/me',['INTERN'])]},
+ {label:'Projets',labelKey:'nav.projects',items:[item('Projets','nav.projects','folder_open','/projects',['SUPER_ADMIN','EMPLOYEE'])]}
 ];
-
-const ADMIN_ROLES: readonly UserRole[] = ['SUPER_ADMIN', 'HR'];
-const ADMIN_BU_ROLES: readonly UserRole[] = ['SUPER_ADMIN', 'HR'];
-
-export const AUTHENTICATED_NAVIGATION: readonly NavigationSection[] = [
-  { label: 'Activité', items: [
-    { label: 'Notifications', icon: 'notifications', route: '/notifications', roles: ALL_ROLES },
-    { label: "Journal d'audit", icon: 'history', route: '/audit-logs', roles: ADMIN_ROLES },
-  ] },
-  {
-    label: 'Vue d’ensemble',
-    items: [
-      { label: 'Tableau de bord', icon: 'space_dashboard', route: '/dashboard', roles: ALL_ROLES },
-    ],
-  },
-  {
-    label: 'Recrutement',
-    items: [
-      { label: 'Offres', icon: 'work', route: '/offers', roles: ['SUPER_ADMIN', 'HR', 'CANDIDATE'] },
-      { label: 'Candidatures', icon: 'assignment_ind', route: '/applications', roles: ADMIN_ROLES, exact: true },
-      { label: 'Mes candidatures', icon: 'description', route: '/applications/my', roles: ['CANDIDATE'] },
-    ],
-  },
-  {
-    label: 'Organisation',
-    items: [
-      { label: 'Gestion des utilisateurs', icon: 'manage_accounts', route: '/users', roles: ['SUPER_ADMIN'] },
-      { label: 'Business Units', icon: 'domain', route: '/business-units', roles: ADMIN_BU_ROLES, exact: true },
-      { label: 'Besoins des BU', icon: 'fact_check', route: '/business-units/needs', roles: ADMIN_BU_ROLES },
-      { label: 'Besoins de ma BU', icon: 'fact_check', route: '/business-units/needs', roles: ['BU_MANAGER'] },
-      { label: 'Membres de ma BU', icon: 'groups', route: '/business-units/members', roles: ['BU_MANAGER'] },
-      { label: 'Formations de ma BU', icon: 'school', route: '/my-business-unit/trainings', roles: ['EMPLOYEE'] },
-    ],
-  },
-  {
-    label: 'Formation',
-    items: [
-      { label: 'Catalogue et sessions', icon: 'school', route: '/trainings', roles: ['SUPER_ADMIN', 'HR', 'BU_MANAGER', 'TRAINER_TUTOR', 'EMPLOYEE', 'INTERN'] },
-      { label: 'Inscriptions et validations', icon: 'how_to_reg', route: '/training-enrollments', roles: ['SUPER_ADMIN', 'HR', 'BU_MANAGER', 'TRAINER_TUTOR', 'EMPLOYEE', 'INTERN'] },
-      { label: 'Présences et certificats', icon: 'workspace_premium', route: '/attendance-certificates', roles: ['SUPER_ADMIN', 'HR', 'TRAINER_TUTOR', 'EMPLOYEE', 'INTERN'] },
-      { label: 'Mes formations client', icon: 'business_center', route: '/client-trainings', roles: ['CLIENT'] },
-    ],
-  },
-  {
-    label: 'Stages',
-    items: [
-      { label: 'Gestion des stagiaires', icon: 'badge', route: '/internships', roles: ['SUPER_ADMIN', 'HR', 'BU_MANAGER', 'EMPLOYEE'] },
-      { label: 'Mon stage', icon: 'assignment', route: '/internships/me', roles: ['INTERN'] },
-    ],
-  },
-  {
-    label: 'Projets',
-    items: [
-      { label: 'Projets', icon: 'folder_open', route: '/projects', roles: ['SUPER_ADMIN', 'HR', 'EMPLOYEE', 'INTERN'] },
-    ],
-  },
-];
-
-export function navigationForRole(role: UserRole): NavigationSection[] {
-  return AUTHENTICATED_NAVIGATION
-    .map((section) => ({
-      ...section,
-      items: section.items.filter((item) => item.roles.includes(role)),
-    }))
-    .filter((section) => section.items.length > 0);
-}
+export function navigationForRole(role:UserRole):NavigationSection[]{return AUTHENTICATED_NAVIGATION.map(section=>({...section,items:section.items.filter(i=>i.roles.includes(role))})).filter(section=>section.items.length>0)}

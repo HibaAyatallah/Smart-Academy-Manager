@@ -1,0 +1,3 @@
+<app-page-header title="Stagiaires acceptés" subtitle="Consultation RH en lecture seule"></app-page-header>
+<p *ngIf="loading">Chargement…</p><p class="error" *ngIf="error">{{error}}</p><p *ngIf="!loading&&!interns.length">Aucun stagiaire accepté.</p>
+<div class="grid"><mat-card *ngFor="let intern of interns" [routerLink]="['/hr/interns',intern.id]"><mat-card-title>{{intern.full_name||intern.email}}</mat-card-title><mat-card-subtitle>{{intern.school||'École non renseignée'}} · {{intern.specialization||'Spécialisation non renseignée'}}</mat-card-subtitle><p>{{intern.business_unit?.name||'Business Unit non affectée'}} · {{intern.subject_title||'Sujet non défini'}}</p><mat-chip>{{intern.document_submission_status.submitted_count}} document(s)</mat-chip></mat-card></div>

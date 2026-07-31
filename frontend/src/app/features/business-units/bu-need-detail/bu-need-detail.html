@@ -25,12 +25,21 @@
     <form [formGroup]="decisionForm" class="details">
       <mat-form-field appearance="outline"><mat-label>Commentaire</mat-label><textarea matInput formControlName="decision_comment"></textarea><mat-error>Le commentaire est obligatoire.</mat-error></mat-form-field>
       <ng-container *ngIf="item.need_type === 'TRAINING'">
-        <mat-form-field appearance="outline"><mat-label>Date de début</mat-label><input matInput type="date" formControlName="training_start_date"></mat-form-field>
-        <mat-form-field appearance="outline"><mat-label>Date de fin</mat-label><input matInput type="date" formControlName="training_end_date"></mat-form-field>
+        <mat-form-field appearance="outline">
+          <mat-label>Date de début</mat-label>
+          <input matInput type="date" formControlName="training_start_date" [min]="todayStr">
+          <mat-error *ngIf="decisionForm.get('training_start_date')?.hasError('minToday')">La date ne peut pas être antérieure à aujourd’hui.</mat-error>
+        </mat-form-field>
+        <mat-form-field appearance="outline">
+          <mat-label>Date de fin</mat-label>
+          <input matInput type="date" formControlName="training_end_date" [min]="decisionForm.get('training_start_date')?.value || todayStr">
+          <mat-error *ngIf="decisionForm.get('training_end_date')?.hasError('minToday')">La date ne peut pas être antérieure à aujourd’hui.</mat-error>
+          <mat-error *ngIf="decisionForm.get('training_end_date')?.hasError('dateRange')">La date de fin doit être postérieure ou égale à la date de début.</mat-error>
+        </mat-form-field>
         <mat-form-field appearance="outline"><mat-label>Formateur</mat-label><mat-select formControlName="trainer"><mat-option *ngFor="let trainer of trainers" [value]="trainer.id">{{ trainer.full_name }}</mat-option></mat-select></mat-form-field>
         <mat-form-field appearance="outline"><mat-label>Lien</mat-label><input matInput formControlName="training_link"></mat-form-field>
       </ng-container>
-      <div><button mat-button type="button" (click)="decide('REFUSED')">Refuser</button><button mat-flat-button color="primary" type="button" (click)="decide('CONFIRMED')">Confirmer</button></div>
+      <div><button mat-button type="button" (click)="decide('REJECTED')">Refuser</button><button mat-flat-button color="primary" type="button" (click)="decide('ACCEPTED')">Confirmer</button></div>
     </form>
   </mat-card-content>
 </mat-card>

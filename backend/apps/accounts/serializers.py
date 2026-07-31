@@ -161,13 +161,60 @@ class MeSerializer(serializers.ModelSerializer):
             "full_name",
             "phone_number",
             "role",
+            "preferred_language",
         ]
-        read_only_fields = ["id", "email", "full_name", "role"]
+        read_only_fields = ["id", "email", "phone_number", "full_name", "role"]
+
+
+class ContactDetailsSerializer(serializers.Serializer):
+    email = serializers.EmailField(required=False)
+    phone_number = serializers.RegexField(r"^\+?[0-9][0-9 .()-]{6,30}$", required=False, allow_blank=True)
+    current_password = serializers.CharField(write_only=True, trim_whitespace=False)
+
+    def validate_current_password(self, value):
+        if not self.context["request"].user.check_password(value):
+            raise serializers.ValidationError("Le mot de passe actuel est incorrect.")
+        return value
+
+
+    def validate_email(self, value):
+        normalized = User.objects.normalize_email(value).lower()
+        if User.objects.exclude(pk=self.context["request"].user.pk).filter(email__iexact=normalized).exists():
+            raise serializers.ValidationError("Cette adresse e-mail est déjà utilisée.")
+        return normalized
+
+    def validate(self, attrs):
+        if not {"email", "phone_number"}.intersection(attrs):
+            raise serializers.ValidationError("Aucune modification fournie.")
+        return attrs
+
+    def save(self, **kwargs):
+        user = self.context["request"].user
+        changed = []
+        for field in ("email", "phone_number"):
+            if field in self.validated_data and getattr(user, field) != self.validated_data[field]:
+                setattr(user, field, self.validated_data[field])
+                changed.append(field)
+        if changed:
+            user.save(update_fields=[*changed, "updated_at"])
+        return user, changed
+
+
+class PreferredLanguageSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = User
+        fields = ["preferred_language"]
+
+    def update(self, instance, validated_data):
+        instance.preferred_language = validated_data["preferred_language"]
+        instance.save(update_fields=["preferred_language", "updated_at"])
+        return instance
 
 
 class ChangePasswordSerializer(serializers.Serializer):
     current_password = serializers.CharField(write_only=True, trim_whitespace=False)
     new_password = serializers.CharField(write_only=True, trim_whitespace=False)
+    confirmation = serializers.CharField(write_only=True, trim_whitespace=False)
 
     def validate_current_password(self, value):
         if not self.context["request"].user.check_password(value):
@@ -177,6 +224,11 @@ class ChangePasswordSerializer(serializers.Serializer):
     def validate_new_password(self, value):
         validate_password(value, self.context["request"].user)
         return value
+
+    def validate(self, attrs):
+        if attrs["new_password"] != attrs["confirmation"]:
+            raise serializers.ValidationError({"confirmation": "Les nouveaux mots de passe ne correspondent pas."})
+        return attrs
 
     def save(self, **kwargs):
         user = self.context["request"].user

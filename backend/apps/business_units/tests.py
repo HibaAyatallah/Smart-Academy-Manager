@@ -6,7 +6,7 @@ from rest_framework.test import APITestCase
 
 from apps.accounts.choices import UserRole
 from apps.business_units.models import BusinessUnit, BusinessUnitMembership, BusinessUnitNeed
-from apps.business_units.choices import NeedType, NeedRequiredLevel, NeedPriority, NeedStatus
+from apps.business_units.choices import NeedType, NeedPriority, NeedStatus
 
 User = get_user_model()
 
@@ -65,11 +65,18 @@ class BusinessUnitTests(APITestCase):
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertEqual(len(response.data["results"]), 2)
 
-    def test_hr_cannot_see_bu_list(self):
-        """HR is blocked from standard BU endpoints (uses /api/hr/ instead)"""
+    def test_hr_can_see_bu_list_and_is_read_only(self):
+        """HR has read-only access to standard BU endpoints"""
         self.client.force_authenticate(user=self.hr)
+        # HR can GET list
         response = self.client.get(reverse("business-unit-list"))
-        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        # HR is blocked from creating
+        create_response = self.client.post(
+            reverse("business-unit-list"),
+            {"name": "HR Created BU", "code": "HRC", "manager": self.manager1.id},
+        )
+        self.assertEqual(create_response.status_code, status.HTTP_403_FORBIDDEN)
 
     def test_manager_can_see_only_own_bu(self):
         """Manager can only see their own BU"""
@@ -124,10 +131,19 @@ class BusinessUnitTests(APITestCase):
         self.assertEqual(create_response.status_code, status.HTTP_403_FORBIDDEN)
         self.assertEqual(delete_response.status_code, status.HTTP_403_FORBIDDEN)
 
-    def test_hr_is_blocked_from_bu_endpoints(self):
+    def test_hr_is_read_only_on_bu_endpoints(self):
+        """HR can retrieve BU details but cannot update or delete them"""
         self.client.force_authenticate(user=self.hr)
-        response = self.client.get(reverse("business-unit-list"))
-        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+        detail_url = reverse("business-unit-detail", args=[self.bu1.id])
+        # Can read detail
+        response = self.client.get(detail_url)
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        # Cannot update
+        patch_response = self.client.patch(detail_url, {"name": "HR Mod BU"})
+        self.assertEqual(patch_response.status_code, status.HTTP_403_FORBIDDEN)
+        # Cannot delete
+        delete_response = self.client.delete(detail_url)
+        self.assertEqual(delete_response.status_code, status.HTTP_403_FORBIDDEN)
 
     def test_create_bu_need(self):
         """Test creating a BU Need"""

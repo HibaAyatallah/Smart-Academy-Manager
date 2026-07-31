@@ -2,7 +2,7 @@ from rest_framework import status
 from rest_framework.test import APITestCase
 from apps.accounts.choices import UserRole
 from apps.accounts.models import User
-from .models import AuditLog, Notification, NotificationCategory
+from .models import AuditLog, NotificationCategory
 from .services import notify
 
 class NotificationAuditTests(APITestCase):
@@ -51,3 +51,15 @@ class NotificationAuditTests(APITestCase):
         self.assertEqual(self.client.get("/api/audit-logs/").status_code,status.HTTP_403_FORBIDDEN)
         self.client.force_authenticate(self.admin)
         self.assertGreaterEqual(self.client.get("/api/audit-logs/").data["count"],1)
+from django.core import mail
+from django.test import override_settings
+from apps.notifications.services import send_templated_email
+from apps.notifications.models import EmailDeliveryLog
+
+@override_settings(EMAIL_BACKEND="django.core.mail.backends.locmem.EmailBackend")
+class EmailNotificationTests(APITestCase):
+    def test_multilingual_email_is_sent_and_deduplicated(self):
+        user=User.objects.create_user(email="mail@test.com",password="pwd",role=UserRole.CANDIDATE,preferred_language="ar")
+        first=send_templated_email(recipient=user,event="account.created",event_key="account:mail-test",context={"message":"Welcome"})
+        second=send_templated_email(recipient=user,event="account.created",event_key="account:mail-test",context={"message":"Welcome"})
+        self.assertEqual(first.status,"SENT");self.assertIsNone(second);self.assertEqual(len(mail.outbox),1);self.assertEqual(EmailDeliveryLog.objects.filter(recipient=user.email).count(),1);self.assertIn('dir="rtl"',mail.outbox[0].alternatives[0].content)

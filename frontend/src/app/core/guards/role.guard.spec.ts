@@ -52,6 +52,15 @@ describe('roleGuard', () => {
     expect(result).toBe(true);
   });
 
+  it('denies a route explicitly configured with no allowed roles', () => {
+    const result = runRoleGuard({
+      currentUserSnapshot: hrUser,
+      ensureProfile: jasmine.createSpy(),
+      getDashboardUrlForRole: jasmine.createSpy().and.returnValue('/dashboard/hr'),
+    }, []);
+    expect(result instanceof UrlTree).toBeTrue();
+  });
+
   /**
    * FAILING TEST (before the fix) — mirrors the race condition in authGuard:
    *

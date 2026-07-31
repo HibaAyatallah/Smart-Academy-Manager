@@ -43,7 +43,7 @@ describe('HrApplicationListComponent', () => {
         email: 'candidate@example.com',
       },
       application_type: 'PFA_INTERNSHIP',
-      status: 'SUBMITTED',
+      status: 'RECEIVED',
       submitted_at: '2026-07-10T10:00:00Z',
     } as Application;
 

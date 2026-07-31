@@ -1,71 +1,56 @@
+import { provideNoopAnimations } from '@angular/platform-browser/animations';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { of } from 'rxjs';
 
-import { NeedStatus, NeedType } from '../../../core/models/business-unit.models';
-import { BusinessUnitService } from '../../../core/services/business-unit.service';
+import { TrainingService } from '../../../core/services/training.service';
 import { EmployeeTrainings } from './employee-trainings';
 
 describe('EmployeeTrainings', () => {
   let fixture: ComponentFixture<EmployeeTrainings>;
-  let service: jasmine.SpyObj<BusinessUnitService>;
+  let service: jasmine.SpyObj<TrainingService>;
 
   beforeEach(async () => {
-    service = jasmine.createSpyObj('BusinessUnitService', ['getNeeds']);
-    service.getNeeds.and.returnValue(of({
-      count: 1,
-      next: null,
-      previous: null,
-      results: [{
-        id: 1,
-        business_unit: 4,
-        business_unit_name: 'Data',
-        title: 'Formation Angular',
-        description: '',
-        need_type: NeedType.TRAINING,
-        need_type_label: 'Formation',
-        required_skills: '',
-        required_level: 'MID' as any,
-        required_level_label: '',
-        number_of_profiles: 1,
-        priority: 'MEDIUM' as any,
-        priority_label: 'Moyenne',
-        expected_date: null,
-        training_start_date: '2026-09-10',
-        training_end_date: null,
-        training_link: 'https://example.com/formation',
-        status: NeedStatus.CONFIRMED,
-        status_label: 'Confirmé',
-        created_by: 2,
-        created_by_email: 'admin@example.com',
-        created_at: '',
-        updated_at: '',
+    service = jasmine.createSpyObj('TrainingService', [
+      'getEnrollments', 'getAttendance', 'recordAttendance', 'updateAttendance',
+    ]);
+    service.getEnrollments.and.returnValue(of({
+      count: 1, next: null, previous: null, results: [{
+        id: 8, user: 3, user_email: 'employee@test.com', user_name: 'Sam Employee',
+        training: 1, training_title: 'Angular avancé', project_name: 'Portail',
+        business_unit: 4, session: 5, session_start_date: '2026-07-01',
+        session_end_date: '2026-07-30', present_days: 1, requested_at: '',
+        status: 'ENROLLED', final_status: 'ENROLLED', manager_comment: '',
+        super_admin_comment: '', history: [],
       }],
+    }));
+    service.getAttendance.and.returnValue(of({
+      count: 0, next: null, previous: null, results: [],
     }));
 
     await TestBed.configureTestingModule({
       imports: [EmployeeTrainings],
-      providers: [{ provide: BusinessUnitService, useValue: service }],
+      providers: [
+        provideNoopAnimations(),
+        { provide: TrainingService, useValue: service },
+      ],
     }).compileComponents();
     fixture = TestBed.createComponent(EmployeeTrainings);
     fixture.detectChanges();
   });
 
-  it('shows only the requested training columns without an internal details link', () => {
-    expect(service.getNeeds).toHaveBeenCalledOnceWith({
-      need_type: NeedType.TRAINING,
-      status: NeedStatus.CONFIRMED,
-    });
+  it('loads enrolled BU trainings as cards', () => {
+    expect(service.getEnrollments).toHaveBeenCalled();
+    expect(service.getAttendance).toHaveBeenCalled();
     const text = fixture.nativeElement.textContent;
-    expect(text).toContain('Formation Angular');
-    expect(text).toContain('À définir');
-    expect(text).not.toContain('Détails');
-    expect(text).not.toContain('Priorité');
-    expect(text).not.toContain('Statut');
+    expect(text).toContain('Angular avancé');
+    expect(text).toContain('Portail');
+    expect(text).toContain('Voir mon calendrier');
   });
 
-  it('opens the external training link in a new tab', () => {
-    const link = fixture.nativeElement.querySelector('a[href="https://example.com/formation"]');
-    expect(link?.getAttribute('target')).toBe('_blank');
-    expect(link?.getAttribute('rel')).toContain('noopener');
+  it('builds only the dates inside the session period', () => {
+    fixture.componentInstance.openCalendar(fixture.componentInstance.trainings[0]);
+    expect(fixture.componentInstance.days.length).toBe(30);
+    expect(fixture.componentInstance.days[0].date).toBe('2026-07-01');
+    expect(fixture.componentInstance.days[29].date).toBe('2026-07-30');
   });
 });

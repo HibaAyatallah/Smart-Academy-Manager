@@ -1,0 +1,273 @@
+<div class="page-container">
+  <div class="page-header">
+    <div class="page-title">
+      <h1>Importation en masse</h1>
+      <p>Importez des utilisateurs via un fichier Excel ou CSV de manière sécurisée.</p>
+    </div>
+    <div class="page-actions">
+      <button mat-stroked-button (click)="downloadTemplate()">
+        <mat-icon>download</mat-icon>
+        Télécharger le modèle
+      </button>
+    </div>
+  </div>
+
+  <div class="modern-card p-0">
+    <mat-stepper [linear]="true" #stepper class="bulk-stepper">
+      
+      <!-- ÉTAPE 1 : TÉLÉCHARGEMENT -->
+      <mat-step [completed]="!!previewData">
+        <ng-template matStepLabel>Téléchargement</ng-template>
+        
+        <div class="step-content">
+          <div *ngIf="errorMessage" class="alert-banner error fade-in-up">
+            <mat-icon>error_outline</mat-icon>
+            {{ errorMessage }}
+          </div>
+
+          <div class="upload-zone" 
+               (dragover)="onDragOver($event)" 
+               (drop)="onDrop($event)"
+               [class.has-file]="file">
+            
+            <mat-icon class="upload-icon">cloud_upload</mat-icon>
+            
+            <ng-container *ngIf="!file">
+              <h3>Glissez-déposez votre fichier ici</h3>
+              <p>ou cliquez pour parcourir (Formats acceptés : .xlsx, .csv)</p>
+            </ng-container>
+            
+            <ng-container *ngIf="file">
+              <h3 class="file-name">{{ file.name }}</h3>
+              <p class="file-size">{{ (file.size / 1024).toFixed(2) }} KB</p>
+            </ng-container>
+
+            <input type="file" id="file-input" (change)="onFileSelected($event)" accept=".csv,.xlsx" hidden>
+            <label for="file-input" mat-flat-button color="primary" class="mt-4">
+              Sélectionner un fichier
+            </label>
+          </div>
+
+          <div class="step-actions">
+            <button mat-flat-button color="primary" 
+                    [disabled]="!file || isLoading" 
+                    (click)="uploadFile()">
+              {{ isLoading ? 'Analyse en cours...' : 'Analyser le fichier' }}
+            </button>
+          </div>
+          
+          <mat-progress-bar mode="indeterminate" *ngIf="isLoading" class="mt-4"></mat-progress-bar>
+        </div>
+      </mat-step>
+
+      <!-- ÉTAPE 2 : PRÉVISUALISATION -->
+      <mat-step [completed]="!!importResult">
+        <ng-template matStepLabel>Prévisualisation</ng-template>
+        
+        <div class="step-content" *ngIf="previewData">
+          <div class="stats-grid">
+            <div class="stat-card">
+              <div class="stat-icon success-icon"><mat-icon>check_circle</mat-icon></div>
+              <div class="stat-content">
+                <h3>Lignes valides</h3>
+                <p class="stat-value">{{ previewData.valid_count }}</p>
+              </div>
+            </div>
+            <div class="stat-card">
+              <div class="stat-icon error-icon"><mat-icon>error</mat-icon></div>
+              <div class="stat-content">
+                <h3>Lignes invalides</h3>
+                <p class="stat-value">{{ previewData.invalid_count }}</p>
+              </div>
+            </div>
+            <div class="stat-card">
+              <div class="stat-icon warning-icon"><mat-icon>info</mat-icon></div>
+              <div class="stat-content">
+                <h3>Lignes ignorées</h3>
+                <p class="stat-value">{{ previewData.skipped_count }}</p>
+              </div>
+            </div>
+          </div>
+
+          <div class="preview-tabs">
+            <button class="tab-btn" [class.active]="activeTab === 'valid'" (click)="activeTab = 'valid'">
+              Valides ({{ previewData.valid_count }})
+            </button>
+            <button class="tab-btn" [class.active]="activeTab === 'invalid'" (click)="activeTab = 'invalid'">
+              Invalides ({{ previewData.invalid_count }})
+            </button>
+            <button class="tab-btn" [class.active]="activeTab === 'skipped'" (click)="activeTab = 'skipped'">
+              Ignorées ({{ previewData.skipped_count }})
+            </button>
+          </div>
+
+          <div class="table-wrapper">
+            <!-- Valides -->
+            <table class="mat-mdc-table" *ngIf="activeTab === 'valid' && previewData.valid_rows.length > 0">
+              <thead>
+                <tr>
+                  <th class="mat-mdc-header-cell">Ligne</th>
+                  <th class="mat-mdc-header-cell">Prénom & Nom</th>
+                  <th class="mat-mdc-header-cell">Email</th>
+                  <th class="mat-mdc-header-cell">Rôle</th>
+                  <th class="mat-mdc-header-cell">BU</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr class="mat-mdc-row" *ngFor="let item of previewData.valid_rows">
+                  <td class="mat-mdc-cell">
+                    {{ item.row }}
+                    <mat-icon *ngIf="item.warnings?.length" class="text-warning" [matTooltip]="item.warnings.join('\n')" style="font-size: 16px; width: 16px; height: 16px; color: #ff9800; vertical-align: middle; margin-left: 4px; cursor: help;">warning</mat-icon>
+                  </td>
+                  <td class="mat-mdc-cell"><strong>{{ item.payload.first_name }} {{ item.payload.last_name }}</strong></td>
+                  <td class="mat-mdc-cell">{{ item.payload.contact_email }}</td>
+                  <td class="mat-mdc-cell"><span class="status-badge info">{{ item.payload.role }}</span></td>
+                  <td class="mat-mdc-cell">{{ item.payload.business_unit_name || '-' }}</td>
+                </tr>
+              </tbody>
+            </table>
+            
+            <div class="empty-state" *ngIf="activeTab === 'valid' && previewData.valid_rows.length === 0">
+              <mat-icon>rule</mat-icon>
+              <p>Aucune ligne valide trouvée dans le fichier.</p>
+            </div>
+
+            <!-- Invalides -->
+            <table class="mat-mdc-table" *ngIf="activeTab === 'invalid' && previewData.invalid_rows.length > 0">
+              <thead>
+                <tr>
+                  <th class="mat-mdc-header-cell">Ligne</th>
+                  <th class="mat-mdc-header-cell">Erreurs rencontrées</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr class="mat-mdc-row" *ngFor="let item of previewData.invalid_rows">
+                  <td class="mat-mdc-cell">{{ item.row }}</td>
+                  <td class="mat-mdc-cell error-text">
+                    <ul>
+                      <li *ngFor="let err of item.errors">{{ err }}</li>
+                    </ul>
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+
+            <div class="empty-state" *ngIf="activeTab === 'invalid' && previewData.invalid_rows.length === 0">
+              <mat-icon>check_circle_outline</mat-icon>
+              <p>Parfait ! Aucune ligne invalide.</p>
+            </div>
+
+            <!-- Ignorées -->
+            <table class="mat-mdc-table" *ngIf="activeTab === 'skipped' && previewData.skipped_rows.length > 0">
+              <thead>
+                <tr>
+                  <th class="mat-mdc-header-cell">Ligne</th>
+                  <th class="mat-mdc-header-cell">Email</th>
+                  <th class="mat-mdc-header-cell">Raison</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr class="mat-mdc-row" *ngFor="let item of previewData.skipped_rows">
+                  <td class="mat-mdc-cell">{{ item.row }}</td>
+                  <td class="mat-mdc-cell">{{ item.email }}</td>
+                  <td class="mat-mdc-cell"><span class="status-badge warning">{{ item.reason }}</span></td>
+                </tr>
+              </tbody>
+            </table>
+
+            <div class="empty-state" *ngIf="activeTab === 'skipped' && previewData.skipped_rows.length === 0">
+              <mat-icon>info_outline</mat-icon>
+              <p>Aucune ligne ignorée.</p>
+            </div>
+          </div>
+
+          <div class="step-actions mt-4">
+            <button mat-button (click)="stepper.previous()">Retour</button>
+            <button mat-flat-button color="primary" (click)="stepper.next()" [disabled]="previewData.invalid_count > 0 || previewData.valid_count === 0">
+              Continuer
+            </button>
+          </div>
+        </div>
+      </mat-step>
+
+      <!-- ÉTAPE 3 : CONFIRMATION -->
+      <mat-step>
+        <ng-template matStepLabel>Confirmation</ng-template>
+        <div class="step-content text-center">
+          <div class="confirmation-box">
+            <mat-icon class="huge-icon">warning_amber</mat-icon>
+            <h2>Confirmation d'importation</h2>
+            <p>Vous êtes sur le point d'importer <strong>{{ stats.total }} comptes</strong>.</p>
+            
+            <ul style="list-style: none; padding: 0; margin-bottom: 20px; font-size: 16px;">
+              <li><strong>{{ stats.collaborateurs }}</strong> collaborateurs</li>
+              <li><strong>{{ stats.stagiaires }}</strong> stagiaires</li>
+            </ul>
+
+            <p>Cette action générera des identifiants et des mots de passe temporaires.</p>
+            
+            <div *ngIf="previewData?.missing_bus?.length" class="alert-banner warning mt-4 text-left" style="background: #fff3cd; color: #856404; padding: 12px; border-radius: 4px; display: flex; gap: 12px; align-items: flex-start;">
+              <mat-icon>warning</mat-icon>
+              <div>
+                <strong>Business Units manquantes détectées</strong><br>
+                Les Business Units suivantes n'existent pas dans le système : <br>
+                <strong>{{ previewData?.missing_bus?.join(', ') }}</strong><br><br>
+                <label style="display: flex; align-items: center; cursor: pointer; gap: 8px; font-weight: 500;">
+                  <input type="checkbox" #cb (change)="createMissingBus = cb.checked" [checked]="createMissingBus" style="width: 18px; height: 18px;">
+                  Créer automatiquement ces Business Units manquantes
+                </label>
+              </div>
+            </div>
+
+            <div *ngIf="errorMessage" class="alert-banner error mt-4 text-left">
+              <mat-icon>error_outline</mat-icon>
+              {{ errorMessage }}
+            </div>
+          </div>
+
+          <div class="step-actions justify-center mt-6">
+            <button mat-button (click)="stepper.previous()" [disabled]="isLoading">Annuler</button>
+            <button mat-flat-button color="primary" (click)="confirmImport()" [disabled]="isLoading">
+              {{ isLoading ? 'Importation en cours...' : 'Confirmer l\'import' }}
+            </button>
+          </div>
+          
+          <mat-progress-bar mode="indeterminate" *ngIf="isLoading" class="mt-4"></mat-progress-bar>
+        </div>
+      </mat-step>
+
+      <!-- ÉTAPE 4 : RÉSULTAT -->
+      <mat-step>
+        <ng-template matStepLabel>Résultat</ng-template>
+        <div class="step-content text-center" *ngIf="importResult">
+          <div class="success-box">
+            <div class="success-icon-large">
+              <mat-icon>task_alt</mat-icon>
+            </div>
+            <h2>Importation réussie !</h2>
+            <p>{{ importResult.results?.length }} utilisateurs ont été créés avec succès.</p>
+            
+            <div class="alert-banner warning text-left mt-4">
+              <mat-icon>lock_outline</mat-icon>
+              <div>
+                <strong>Action requise</strong><br>
+                Les mots de passe temporaires ont été générés. Téléchargez le fichier des résultats pour les conserver. Ils ne seront plus accessibles ultérieurement.
+              </div>
+            </div>
+          </div>
+
+          <div class="step-actions justify-center mt-6">
+            <button mat-flat-button color="primary" (click)="downloadResult()">
+              <mat-icon>download</mat-icon>
+              Télécharger les identifiants
+            </button>
+            <button mat-stroked-button (click)="resetProcess()">
+              Nouvel import
+            </button>
+          </div>
+        </div>
+      </mat-step>
+
+    </mat-stepper>
+  </div>
+</div>

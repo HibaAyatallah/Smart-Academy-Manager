@@ -106,7 +106,17 @@ export class AuthService {
       );
   }
 
-  changePassword(payload: { current_password: string; new_password: string }): Observable<{ detail: string }> {
+  updateContactDetails(payload: { email?: string; phone_number?: string; current_password: string }): Observable<UserProfile> {
+    return this.http.patch<UserProfile>(`${this.apiBaseUrl}auth/contact-details/`, payload).pipe(
+      tap(profile => this.currentUserSubject.next(profile)),
+    );
+  }
+
+  updateLanguage(preferred_language: 'fr' | 'en' | 'ar'): Observable<{preferred_language:string}> {
+    return this.http.patch<{preferred_language:string}>(`${environment.apiBaseUrl}auth/language/`, {preferred_language});
+  }
+
+  changePassword(payload: { current_password: string; new_password: string; confirmation: string }): Observable<{ detail: string }> {
     return this.http.post<{ detail: string }>(`${this.apiBaseUrl}auth/change-password/`, payload);
   }
 

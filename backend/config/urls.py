@@ -4,7 +4,7 @@ from drf_spectacular.views import SpectacularAPIView, SpectacularRedocView, Spec
 from rest_framework.routers import DefaultRouter
 from rest_framework_simplejwt.views import TokenRefreshView, TokenVerifyView
 
-from apps.accounts.views import ChangePasswordAPIView, MeAPIView, UserViewSet, SmartAcademyTokenObtainPairView, UserImportViewSet
+from apps.accounts.views import ChangePasswordAPIView, ContactDetailsAPIView, MeAPIView, PreferredLanguageAPIView, UserViewSet, SmartAcademyTokenObtainPairView, UserImportViewSet
 from apps.recruitment.views import (
     ApplicationDocumentViewSet, 
     ApplicationViewSet, 
@@ -12,6 +12,7 @@ from apps.recruitment.views import (
     OfferViewSet,
     InternProfileViewSet,
     InternDocumentViewSet,
+    InternDocumentRequirementViewSet,
     InternEvaluationViewSet
 )
 
@@ -24,6 +25,7 @@ router.register("application-documents", ApplicationDocumentViewSet, basename="a
 router.register("interviews", InterviewViewSet, basename="interview")
 router.register("interns", InternProfileViewSet, basename="intern")
 router.register("intern-documents", InternDocumentViewSet, basename="intern-document")
+router.register("intern-document-requirements", InternDocumentRequirementViewSet, basename="intern-document-requirement")
 router.register("intern-evaluations", InternEvaluationViewSet, basename="intern-evaluation")
 urlpatterns = [
     path("admin/", admin.site.urls),
@@ -33,12 +35,15 @@ urlpatterns = [
     path("api/", include("apps.projects.urls")),
     path("api/", include("apps.notifications.urls")),
     path("api/", include("apps.reports.urls")),
+    path("api/", include("apps.assistant.urls")),
     # HR read-only endpoints (restricted scope: interns, collaborators by BU)
     path("api/", include("apps.accounts.hr_urls")),
     path("api/auth/token/", SmartAcademyTokenObtainPairView.as_view(), name="token_obtain_pair"),
     path("api/auth/token/refresh/", TokenRefreshView.as_view(), name="token_refresh"),
     path("api/auth/token/verify/", TokenVerifyView.as_view(), name="token_verify"),
     path("api/auth/me/", MeAPIView.as_view(), name="auth_me"),
+    path("api/auth/contact-details/", ContactDetailsAPIView.as_view(), name="auth_contact_details"),
+    path("api/auth/language/", PreferredLanguageAPIView.as_view(), name="auth_language"),
     path("api/auth/change-password/", ChangePasswordAPIView.as_view(), name="auth_change_password"),
     path("api/schema/", SpectacularAPIView.as_view(), name="schema"),
     path("api/docs/", SpectacularSwaggerView.as_view(url_name="schema"), name="swagger-ui"),

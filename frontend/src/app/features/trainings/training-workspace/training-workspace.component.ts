@@ -14,6 +14,7 @@ import { SESSION_STATUS_LABELS, TRAINING_STATUS_LABELS, Training, TrainingSessio
 import { AuthService } from '../../../core/services/auth.service';
 import { TrainingService } from '../../../core/services/training.service';
 import { PageHeaderComponent } from '../../../shared/components/page-header/page-header.component';
+import { minTodayValidator, dateRangeValidator } from '../../../core/utils/date-validators';
 
 @Component({
   selector: 'app-training-workspace', standalone: true,
@@ -32,6 +33,13 @@ export class TrainingWorkspaceComponent implements OnInit {
   loading = true;
   saving = false;
   error = '';
+  readonly todayStr = (() => {
+    const d = new Date();
+    const year = d.getFullYear();
+    const month = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+  })();
   showTrainingForm = false;
   showSessionForm = false;
   editingTrainingId: number | null = null;
@@ -42,15 +50,20 @@ export class TrainingWorkspaceComponent implements OnInit {
     title: ['', Validators.required], description: ['', Validators.required], training_type: ['INTERNAL', Validators.required],
     category: ['', Validators.required], objectives: ['', Validators.required], prerequisites: [''], duration: [1, [Validators.required, Validators.min(1)]],
     delivery_mode: ['ON_SITE', Validators.required], level: ['', Validators.required], trainer: [null as number | null], business_unit: [null as number | null],
-    external_client: [null as number | null], project_name: [''], associated_link: [''], moodle_course_id: [''], moodle_link: [''],
+    external_client: [null as number | null], project_name: [''], associated_link: [''],
   });
   readonly sessionForm = this.fb.nonNullable.group({
-    start_date: ['', Validators.required], end_date: ['', Validators.required], start_time: ['', Validators.required], end_time: ['', Validators.required],
+    start_date: ['', [Validators.required, minTodayValidator()]],
+    end_date: ['', [Validators.required, minTodayValidator()]],
+    start_time: ['', Validators.required],
+    end_time: ['', Validators.required],
     location: [''], online_link: [''], trainer: [null as number | null], maximum_participants: [1, [Validators.required, Validators.min(1)]], external_client: [null as number | null],
+  }, {
+    validators: [dateRangeValidator('start_date', 'end_date')]
   });
 
   get role() { return this.auth.currentUserSnapshot?.role; }
-  get canManage() { return this.role === 'SUPER_ADMIN' || this.role === 'HR'; }
+  get canManage() { return this.role === 'SUPER_ADMIN'; }
   get canRequest() { return ['EMPLOYEE', 'INTERN', 'BU_MANAGER', 'TRAINER_TUTOR'].includes(this.role ?? ''); }
 
   ngOnInit(): void { this.load(); }

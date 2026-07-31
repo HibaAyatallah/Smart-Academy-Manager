@@ -10,13 +10,23 @@ import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { MatSelectModule } from '@angular/material/select';
 import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
 import { MatTableModule } from '@angular/material/table';
-import { RouterLink } from '@angular/router';
+import { ActivatedRoute, RouterLink } from '@angular/router';
 import { finalize } from 'rxjs/operators';
 
 import { BusinessUnitNeed, NeedStatus, NeedPriority, NeedType } from '../../../core/models/business-unit.models';
 import { BusinessUnitService } from '../../../core/services/business-unit.service';
 import { AuthService } from '../../../core/services/auth.service';
 import { PageHeaderComponent } from '../../../shared/components/page-header/page-header.component';
+
+export const NEED_STATUS_LABELS: Record<NeedStatus, string> = {
+  [NeedStatus.DRAFT]: 'Brouillon',
+  [NeedStatus.SUBMITTED]: 'Soumis',
+  [NeedStatus.UNDER_REVIEW]: "En cours d'examen",
+  [NeedStatus.ACCEPTED]: 'Approuvé',
+  [NeedStatus.REJECTED]: 'Refusé',
+  [NeedStatus.SATISFIED]: 'Satisfait',
+  [NeedStatus.CLOSED]: 'Clôturé',
+};
 
 @Component({
   selector: 'app-bu-needs-list',
@@ -46,10 +56,12 @@ export class BuNeedsList implements OnInit {
   private readonly authService = inject(AuthService, { optional: true });
   private readonly formBuilder = inject(FormBuilder);
   private readonly snackBar = inject(MatSnackBar);
+  private readonly route = inject(ActivatedRoute);
 
   readonly displayedColumns = ['title', 'business_unit', 'type', 'status', 'priority', 'created_at', 'actions'];
   
   readonly statuses = Object.values(NeedStatus);
+  readonly statusLabels = NEED_STATUS_LABELS;
   readonly types = Object.values(NeedType);
   readonly priorities = Object.values(NeedPriority);
 
@@ -69,6 +81,10 @@ export class BuNeedsList implements OnInit {
   readonly canManageNeeds = this.authService?.currentUserSnapshot?.role === 'BU_MANAGER';
 
   ngOnInit(): void {
+    const requestedStatus = this.route.snapshot.queryParamMap.get('status');
+    if (requestedStatus && this.statuses.includes(requestedStatus as NeedStatus)) {
+      this.filtersForm.patchValue({ status: requestedStatus as NeedStatus });
+    }
     this.loadNeeds();
   }
 

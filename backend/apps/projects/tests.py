@@ -56,7 +56,7 @@ class ProjectWorkflowTests(APITestCase):
         self.create_project();self.client.force_authenticate(self.employee)
         self.assertEqual(self.client.get("/api/projects/").data["count"],1)
         self.client.force_authenticate(self.intern)
-        self.assertEqual(self.client.get("/api/projects/").data["count"],1)
+        self.assertEqual(self.client.get("/api/projects/").status_code,status.HTTP_403_FORBIDDEN)
         self.client.force_authenticate(self.outsider)
         self.assertEqual(self.client.get("/api/projects/").data["count"],0)
 
@@ -72,7 +72,7 @@ class ProjectWorkflowTests(APITestCase):
         self.assertEqual(forbidden.status_code,status.HTTP_403_FORBIDDEN)
 
     def test_participants_can_comment_upload_and_download_documents(self):
-        project=self.create_project();self.client.force_authenticate(self.intern)
+        project=self.create_project();self.client.force_authenticate(self.employee)
         comment=self.client.post("/api/project-comments/",{"project":project.id,"content":"Première livraison"},format="json")
         self.assertEqual(comment.status_code,status.HTTP_201_CREATED)
         upload=SimpleUploadedFile("deliverable.pdf",b"%PDF-1.4 project",content_type="application/pdf")
@@ -80,8 +80,8 @@ class ProjectWorkflowTests(APITestCase):
         self.assertEqual(document.status_code,status.HTTP_201_CREATED)
         download=self.client.get(f"/api/project-documents/{document.data['id']}/download/")
         self.assertEqual(download.status_code,status.HTTP_200_OK)
-        self.assertEqual(ProjectComment.objects.get().author,self.intern)
-        self.assertEqual(ProjectDocument.objects.get().uploaded_by,self.intern)
+        self.assertEqual(ProjectComment.objects.get().author,self.employee)
+        self.assertEqual(ProjectDocument.objects.get().uploaded_by,self.employee)
 
     def test_assignment_rejects_users_outside_business_unit(self):
         self.payload["assignee_ids"]=[self.outsider.id]

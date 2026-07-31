@@ -1,17 +1,123 @@
 <a class="skip-link" href="#main-content">Aller au contenu principal</a>
-<mat-sidenav-container class="app-shell" *ngIf="viewModel$ | async as vm">
-  <mat-sidenav #drawer class="mobile-drawer" mode="over" [opened]="false" [fixedInViewport]="true" aria-label="Navigation mobile">
-    <div class="drawer-brand"><img src="/images/logos/logo_finatech.png" alt="Finatech"></div>
-    <nav aria-label="Navigation mobile principale"><ng-container *ngFor="let section of vm.navigation"><a class="mobile-nav-item" *ngFor="let item of section.items" [routerLink]="item.route" routerLinkActive="active" [routerLinkActiveOptions]="{exact:item.exact ?? false}" (click)="closeMobileNavigation()"><mat-icon aria-hidden="true">{{item.icon}}</mat-icon><span>{{item.label}}</span></a></ng-container></nav>
-  </mat-sidenav>
-  <mat-sidenav-content class="app-workspace">
-    <header class="authenticated-nav">
-      <a class="brand-link" routerLink="/dashboard" aria-label="Smart Academy Manager — accueil"><img src="/images/logos/logo_finatech.png" alt="Finatech"><span>Smart Academy Manager</span></a>
-      <nav class="desktop-navigation" aria-label="Navigation principale"><ng-container *ngFor="let section of vm.navigation"><a class="desktop-nav-item" *ngFor="let item of section.items" [routerLink]="item.route" routerLinkActive="active" [routerLinkActiveOptions]="{exact:item.exact ?? false}">{{item.label}}</a></ng-container></nav>
-      <button mat-icon-button type="button" class="mobile-menu" aria-label="Ouvrir la navigation" (click)="toggleNavigation()"><mat-icon>menu</mat-icon></button>
-      <button mat-button type="button" class="account-trigger" [matMenuTriggerFor]="accountMenu" aria-label="Ouvrir le menu du compte"><span class="avatar" aria-hidden="true">{{initials(vm.user)}}</span><span class="account-copy"><strong>{{vm.user.full_name}}</strong><small>{{roleLabels[vm.user.role]}}</small></span><mat-icon>expand_more</mat-icon></button>
-      <mat-menu #accountMenu="matMenu" xPosition="before"><a mat-menu-item routerLink="/espace-personnel"><mat-icon>person</mat-icon><span>Mon espace personnel</span></a><button mat-menu-item type="button" (click)="logout()"><mat-icon>logout</mat-icon><span>Se déconnecter</span></button></mat-menu>
-    </header>
-    <main id="main-content" class="content" tabindex="-1"><div class="page-container"><router-outlet /></div></main>
-  </mat-sidenav-content>
-</mat-sidenav-container>
+<div class="authenticated-theme" [class.sidebar-collapsed]="sidebarCollapsed" *ngIf="viewModel$ | async as vm">
+  <mat-sidenav-container class="app-shell" [hasBackdrop]="isHandset$ | async">
+    
+    <!-- Desktop & Mobile Sidebar -->
+    <mat-sidenav #drawer 
+                 class="premium-sidebar" 
+                 [mode]="(isHandset$ | async) ? 'over' : 'side'" 
+                 [opened]="!(isHandset$ | async)" 
+                 [fixedInViewport]="true" 
+                 aria-label="Navigation principale">
+      
+      <div class="sidebar-header">
+        <a class="brand-link" routerLink="/dashboard" aria-label="Smart Academy Manager — accueil">
+          <span class="brand-mark"><img src="/images/logos/logo_finatech.png" alt="Finatech"></span>
+          <div class="brand-text">
+            <span class="brand-title">Smart Academy</span>
+            <span class="brand-subtitle">Learning workspace</span>
+          </div>
+        </a>
+        <button mat-icon-button type="button" class="sidebar-collapse" (click)="toggleNavigation()"
+                [attr.aria-label]="sidebarCollapsed ? 'Déployer la navigation' : 'Réduire la navigation'">
+          <mat-icon>{{ sidebarCollapsed ? 'keyboard_double_arrow_right' : 'keyboard_double_arrow_left' }}</mat-icon>
+        </button>
+      </div>
+
+      <div class="sidebar-user" *ngIf="isHandset$ | async">
+        <span class="avatar" aria-hidden="true">{{ initials(vm.user) }}</span>
+        <div class="account-copy">
+          <strong>{{ vm.user.full_name }}</strong>
+          <small>{{ ('role.' + vm.user.role) | translate }}</small>
+        </div>
+      </div>
+
+      <nav aria-label="Navigation principale" class="sidebar-nav">
+        <ng-container *ngFor="let section of vm.navigation">
+          <div class="nav-section-title" *ngIf="section.label"><span>{{ section.labelKey | translate }}</span></div>
+          <a class="nav-item" 
+             *ngFor="let item of section.items" 
+             [routerLink]="item.route" 
+             routerLinkActive="active" 
+             [routerLinkActiveOptions]="{exact: item.exact ?? false}" 
+             (click)="closeMobileNavigation()"
+             [matTooltip]="sidebarCollapsed ? (item.labelKey | translate) : ''"
+             matTooltipPosition="right">
+            <mat-icon aria-hidden="true">{{ item.icon }}</mat-icon>
+            <span class="nav-label">{{ item.labelKey | translate }}</span>
+            <span class="active-indicator"></span>
+          </a>
+        </ng-container>
+      </nav>
+
+      <div class="sidebar-footer" *ngIf="isHandset$ | async">
+        <button class="nav-item logout-btn" (click)="logout()">
+          <mat-icon>logout</mat-icon>
+          <span>{{ 'header.logout' | translate }}</span>
+        </button>
+      </div>
+    </mat-sidenav>
+
+    <!-- Main Content Area -->
+    <mat-sidenav-content class="app-workspace">
+      <!-- Top Header -->
+      <header class="top-header">
+        <div class="header-left">
+          <button mat-icon-button type="button" class="menu-toggle" aria-label="Ouvrir ou réduire la navigation" (click)="toggleNavigation()">
+            <mat-icon>{{ (isHandset$ | async) ? 'menu' : (sidebarCollapsed ? 'menu_open' : 'menu') }}</mat-icon>
+          </button>
+          <div class="workspace-context">
+            <span class="eyebrow">{{ 'header.workspace' | translate }}</span>
+            <strong>{{ ('role.' + vm.user.role) | translate }}</strong>
+          </div>
+        </div>
+
+        <div class="header-right">
+          <mat-select class="language-select" [value]="language.current" (selectionChange)="setLanguage($event.value)" [attr.aria-label]="'header.language' | translate">
+            <mat-option value="fr">FR</mat-option><mat-option value="en">EN</mat-option><mat-option value="ar">ع</mat-option>
+          </mat-select>
+          <!-- Notification / Action icons -->
+          <button mat-icon-button class="header-action notification-action" aria-label="Notifications" matTooltip="Notifications">
+            <mat-icon>notifications_none</mat-icon>
+            <span class="notification-dot" aria-hidden="true"></span>
+          </button>
+
+          <!-- Desktop User Menu -->
+          <button mat-button type="button" class="account-trigger desktop-only" [matMenuTriggerFor]="accountMenu" aria-label="Ouvrir le menu du compte">
+            <span class="avatar" aria-hidden="true">{{ initials(vm.user) }}</span>
+            <span class="account-copy">
+              <strong>{{ vm.user.full_name }}</strong>
+              <small>{{ ('role.' + vm.user.role) | translate }}</small>
+            </span>
+            <mat-icon>expand_more</mat-icon>
+          </button>
+          
+          <mat-menu #accountMenu="matMenu" xPosition="before" class="premium-menu">
+            <div class="menu-header">
+              <strong>{{ vm.user.full_name }}</strong>
+              <small>{{ vm.user.email }}</small>
+            </div>
+            <mat-divider></mat-divider>
+            <a mat-menu-item routerLink="/profile">
+              <mat-icon>person_outline</mat-icon>
+              <span>{{ 'header.profile' | translate }}</span>
+            </a>
+            <mat-divider></mat-divider>
+            <button mat-menu-item type="button" (click)="logout()" class="text-danger">
+              <mat-icon>logout</mat-icon>
+              <span>{{ 'header.logout' | translate }}</span>
+            </button>
+          </mat-menu>
+        </div>
+      </header>
+
+      <!-- Router Outlet -->
+      <main id="main-content" class="content" tabindex="-1">
+        <div class="page-container">
+          <router-outlet />
+        </div>
+      </main>
+    </mat-sidenav-content>
+  </mat-sidenav-container>
+</div>
+<app-chatbot />

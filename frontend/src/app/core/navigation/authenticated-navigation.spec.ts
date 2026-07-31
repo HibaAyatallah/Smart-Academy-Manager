@@ -10,51 +10,54 @@ describe('authenticated navigation', () => {
   });
 
   it('limits candidate navigation to implemented candidate pages', () => {
-    expect(labelsFor('CANDIDATE')).toEqual(['Notifications', 'Tableau de bord', 'Offres', 'Mes candidatures']);
+    expect(labelsFor('CANDIDATE')).toEqual(['Tableau de bord']);
     expect(labelsFor('CANDIDATE')).not.toContain('Business Units');
   });
 
   it('gives BU Managers BU and training approval destinations', () => {
     expect(labelsFor('BU_MANAGER')).toEqual([
-      'Notifications', 'Tableau de bord', 'Besoins de ma BU', 'Membres de ma BU',
+      'Tableau de bord', 'Besoins de ma BU', 'Membres de ma BU',
       'Catalogue et sessions', 'Inscriptions et validations',
-      'Gestion des stagiaires',
+      'Présences et certificats', 'Gestion des stagiaires',
     ]);
     expect(labelsFor('BU_MANAGER')).not.toContain('Business Units');
   });
 
-  it('gives interns access to the training catalogue and their enrollments', () => {
+  it('limits interns to the dashboard and their internship', () => {
     const sections = navigationForRole('INTERN');
-    expect(sections.length).toBe(5);
-    expect(sections[0].items[0].label).toBe('Notifications');
-    expect(labelsFor('INTERN')).toContain('Catalogue et sessions');
-    expect(labelsFor('INTERN')).toContain('Inscriptions et validations');
+    expect(sections.length).toBe(2);
+    expect(sections[0].items[0].label).toBe('Tableau de bord');
     expect(labelsFor('INTERN')).toContain('Mon stage');
-    expect(labelsFor('INTERN')).toContain('Projets');
-    expect(labelsFor('INTERN')).toContain('Présences et certificats');
+    expect(labelsFor('INTERN')).not.toContain('Projets');
+    expect(labelsFor('INTERN')).not.toContain('Présences et certificats');
   });
 
-  it('exposes scoped internship management to supervisors and HR', () => {
-    expect(labelsFor('EMPLOYEE')).toContain('Gestion des stagiaires');
-    expect(labelsFor('HR')).toContain('Gestion des stagiaires');
+  it('separates HR consultation from internship management', () => {
+    expect(labelsFor('EMPLOYEE')).not.toContain('Gestion des stagiaires');
+    expect(labelsFor('HR')).not.toContain('Gestion des stagiaires');
+    expect(labelsFor('HR')).toContain('Stagiaires acceptés');
+    expect(labelsFor('HR')).toContain('Collaborateurs par BU');
+  });
+
+  it('limits employees to their BU training entry point', () => {
+    expect(labelsFor('EMPLOYEE')).toContain('Formations de ma BU');
+    expect(labelsFor('EMPLOYEE')).not.toContain('Catalogue et sessions');
+    expect(labelsFor('EMPLOYEE')).not.toContain('Inscriptions et validations');
+    expect(labelsFor('EMPLOYEE')).not.toContain('Présences et certificats');
   });
 
   it('exposes project views only to project workflow roles', () => {
-    for (const role of ['SUPER_ADMIN', 'HR', 'EMPLOYEE', 'INTERN'] as const) {
+    for (const role of ['SUPER_ADMIN', 'EMPLOYEE'] as const) {
       expect(labelsFor(role)).toContain('Projets');
     }
-    expect(labelsFor('HR')).not.toContain('Nouveau projet');
+    expect(labelsFor('HR')).not.toContain('Projets');
     expect(labelsFor('CANDIDATE')).not.toContain('Projets');
     expect(labelsFor('CLIENT')).not.toContain('Projets');
   });
 
   it('isolates the client training view', () => {
-    expect(labelsFor('CLIENT')).toEqual(['Notifications', 'Tableau de bord', 'Mes formations client']);
+    expect(labelsFor('CLIENT')).toEqual(['Tableau de bord', 'Mes formations client']);
   });
 
-  it('limits audit navigation to Super Admin and HR', () => {
-    expect(labelsFor('SUPER_ADMIN')).toContain("Journal d'audit");
-    expect(labelsFor('HR')).toContain("Journal d'audit");
-    expect(labelsFor('EMPLOYEE')).not.toContain("Journal d'audit");
-  });
+  // The audit and report navigation test is removed as these sections no longer exist.
 });

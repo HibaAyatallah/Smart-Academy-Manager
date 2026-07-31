@@ -24,7 +24,7 @@ describe('ApplicationService', () => {
       .listApplications({
         search: 'Jane Candidate',
         application_type: 'PFA_INTERNSHIP',
-        status: 'SUBMITTED',
+        status: 'RECEIVED',
         page: 2,
       })
       .subscribe();
@@ -34,7 +34,7 @@ describe('ApplicationService', () => {
     );
     expect(request.request.params.get('search')).toBe('Jane Candidate');
     expect(request.request.params.get('application_type')).toBe('PFA_INTERNSHIP');
-    expect(request.request.params.get('status')).toBe('SUBMITTED');
+    expect(request.request.params.get('status')).toBe('RECEIVED');
     expect(request.request.params.get('page')).toBe('2');
     request.flush({ count: 0, next: null, previous: null, results: [] });
   });

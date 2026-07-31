@@ -1,6 +1,6 @@
 # Smart Academy Manager — Project Summary
 
-> **Mise à jour 2026-07-20 :** le code actuel comprend les offres, stages, projets, formations, présences, certificats, notifications internes et journal d'audit. Le frontend de production compile et les migrations Django ne présentent aucune dérive. Les prochains modules majeurs restent les rapports/KPI, Moodle, le CI/CD et le déploiement.
+> **Mise à jour 2026-07-29 :** le code actuel comprend les offres, stages, projets, formations, présences, certificats, notifications, audit et rapports/KPI filtrables avec exports. Le frontend de production compile et les migrations Django ne présentent aucune dérive. Moodle et SSO sont définitivement hors de portée du projet. Les prochains chantiers concernent l'Entrepôt de données (ETL/Data Warehouse), les tableaux de bord décisionnels, et les outils d'IA (aide à la recommandation, extraction de CV, diagnostic de compétences).
 
 ## 1. Project Overview
 
@@ -16,7 +16,64 @@ Main objectives:
 - Provide a secure, role-aware JWT authentication experience.
 - Manage end-to-end recruitment from public application to acceptance or rejection.
 - Organize Business Units, their managers, memberships, and operational needs.
-- Prepare the foundation for future internships, projects, training, attendance, evaluations, certificates, notifications, and Moodle integration.
+- Prepare the foundation for future internships, projects, training, attendance, evaluations, certificates, notifications, and analytics integration.
+- Maintain a clean separation between public marketing content and private operational data.
+
+## 2. User Roles
+
+| Role | Purpose | Current Access | Status |
+|---|---|---|---|
+| | Super Admin | Full platform administration and oversight | All modules, all Business Units, user management, recruitment management | Functional |
+| | HR | Human resources operations | Recruitment management, Business Unit administration, user management; functionally equivalent to Super Admin for implemented modules | Functional |
+| | BU Manager | Operational management of a specific Business Unit | Own managed Business Unit, its memberships, and its needs; cannot modify another BU | Functional |
+| | Candidate | External applicant | Public application submission, personal application history, personal documents, interviews | Functional |
+| | Collaborator / Employee | Internal team member | Read-only access to own active Business Unit and Business Unit needs; generic dashboard | Partial |
+| | Intern | Onboarded former candidate | Generic dashboard only; no domain-specific module yet | Placeholder |
+| | Trainer / Tutor | Training delivery | Generic dashboard only; no training module yet | Placeholder |
+| | External Client | External stakeholder | Generic dashboard only; no client-specific module yet | Placeholder |
+
+Important distinctions:
+- HR and Super Admin currently have equivalent functional permissions across recruitment, Business Units, and user management. This equivalence is enforced by a shared `is_administrative_user()` backend policy.
+- BU Manager access is restricted to the Business Unit they manage. Cross-BU access is blocked by backend queryset filtering and object-level permissions.
+- Candidate access is limited to their own applications, documents, and interviews.
+- Collaborator read access to Business Units exists in the backend, but the Angular sidebar does not expose Business Unit routes to Collaborators, creating a frontend/backend mismatch.
+- Intern, Trainer/Tutor, and External Client roles exist in the data model and navigation policy, but no dedicated functional modules are implemented yet.
+
+## 3. Technical Architecture
+
+### Frontend
+
+- Angular 21 with standalone components
+- Angular Material for UI components
+- SCSS for styling with centralized design tokens
+- JWT authentication via `AuthService` and `TokenStorageService`
+- Role-based navigation through `authenticated-navigation.ts`
+- Responsive authenticated shell with compact horizontal navigation on desktop and overlay drawer on mobile
+- Separate public and authenticated layouts
+- Production build configured for same-origin `/api/` delivery
+
+### Backend
+
+- Django 5.2 with Django REST Framework
+- Custom `User` model based on email with centralized business roles
+- JWT authentication via SimpleJWT
+- PostgreSQL database configured through environment variables
+
+## 1. Project Overview
+
+Smart Academy Manager is an academic and human resources management platform built with Angular, Django REST Framework, and PostgreSQL. It is developed by Finatech to modernize and centralize recruitment, intern onboarding, Business Unit management, training administration, and operational HR workflows.
+
+The platform solves the problem of fragmented candidate tracking, scattered intern onboarding, and disconnected Business Unit governance. It replaces ad-hoc processes with a single authenticated system that enforces role-based access, audit history, and secure document handling.
+
+Target users include Super Admins, HR staff, BU Managers, Candidates, Collaborators/Employees, Interns, Trainers/Tutors, and External Clients. Each role has a tailored authenticated experience with role-filtered navigation and role-specific data visibility.
+
+The public Finatech Connect website is a separate, unauthenticated presence. Smart Academy Manager is the authenticated internal platform that sits behind login. The public site may reference Finatech branding, but all operational functionality — applications, dashboards, Business Units, recruitment workflows — requires authentication and lives inside Smart Academy Manager.
+
+Main objectives:
+- Provide a secure, role-aware JWT authentication experience.
+- Manage end-to-end recruitment from public application to acceptance or rejection.
+- Organize Business Units, their managers, memberships, and operational needs.
+- Prepare the foundation for future internships, projects, training, attendance, evaluations, certificates, notifications, and analytics integration.
 - Maintain a clean separation between public marketing content and private operational data.
 
 ## 2. User Roles
@@ -66,13 +123,13 @@ Important distinctions:
 
 ### Planned Integrations
 
-- Moodle REST Web Services — planned but not implemented
+- Data Warehouse & ETL — planned but not implemented
 - Docker — planned but not implemented
 - Render — planned but not implemented
 - Vercel — planned but not implemented
-- Future AI features — planned but not implemented
+- Decision-support AI features — planned but not implemented
 
-None of the planned integrations are currently implemented. The codebase contains no Dockerfile, Compose file, Render configuration, Vercel configuration, GitHub Actions workflow, or Moodle client code.
+None of the planned integrations are currently implemented. The codebase contains no Dockerfile, Compose file, Render configuration, Vercel configuration, or GitHub Actions workflow. Moodle and SSO are permanently out of scope.
 
 ## 4. Current Functional Modules
 
@@ -181,7 +238,7 @@ Current authenticated design:
 - **Role-based navigation**: The `authenticated-navigation.ts` component filters visible links based on the logged-in user's role. HR and Super Admin see equivalent links. Candidates see dashboard and applications. BU Managers see dashboard, Business Units, and BU needs. Other roles see only implemented pages.
 - **First-click route rendering correction**: The authenticated layout uses Angular Material sidenav `autosize` and explicit flex sizing to ensure routed content renders correctly on the first click without requiring a resize or hamburger toggle.
 
-Individual role dashboards will be customized later. Currently, only the Candidate dashboard loads real application data. All other roles receive an honest empty state instead of invented KPIs or charts.
+The Candidate dashboard loads personal application data. Super Admin and HR now have a connected multi-domain analytics dashboard; other role dashboards retain their existing scoped behavior.
 
 ## 8. Security
 
@@ -221,7 +278,7 @@ Latest verified results from the stabilization sprint (2026-07-14):
 
 Note: Running all backend tests together occasionally causes a PostgreSQL database lock. This is a pre-existing test infrastructure issue, not a code issue. Individual app test suites run successfully.
 
-Total automated test count: 285 tests (157 backend + 128 frontend), all passing.
+Total automated test count: 292 tests (162 backend + 130 frontend), all passing.
 
 Business Unit frontend tests:
 - `bu-list.spec.ts`: 4 tests covering create, load, empty state, pagination, error state
@@ -232,33 +289,33 @@ Business Unit frontend tests:
 
 The following target modules are not yet implemented end to end:
 
-- Reports and KPIs
-- Moodle integration
+- Data Warehouse & ETL
 - AI features
 - CI/CD
 - Production deployment
 
-Offers, training/session/enrollment, internship management, and project management are implemented across the backend and Angular frontend. The modules listed above are planned for future sprints.
+Offers, training/session/enrollment, internship management, and project management are implemented across the backend and Angular frontend. Moodle and SSO are permanently removed from scope. The modules listed above are planned for future sprints.
 
-## 11. Current Project Progress
+## 11. **Overall progress: approximately 67%**
 
-**Overall progress: approximately 74%**
+This percentage is calculated from a weighted assessment of backend implementation, frontend implementation, frontend-backend integration, roles and security, tests and validation, deployment, Data Warehouse, and AI. Moodle and SSO are excluded from the calculation.
 
-This percentage is calculated from a weighted assessment of backend implementation, frontend implementation, frontend-backend integration, roles and security, tests and validation, and deployment and documentation. The scoring counts working connected behavior, not file presence.
-
-| Category | Weight | Score | Weighted contribution | Basis |
-|---|---|---:|---:|---|
-| Backend implementation | 25% | 87% | 21.75% | Core APIs include notifications, preferences and append-only audit records |
-| Frontend implementation | 25% | 78% | 19.50% | Implemented workflows include notification and audit administration workspaces |
-| Frontend-backend integration | 20% | 84% | 16.80% | Role-aware routes and services connect all implemented core workflows |
-| Roles and security | 10% | 82% | 8.20% | Private notifications and Super Admin/HR audit boundaries are enforced server-side |
-| Tests and validation | 10% | 65% | 6.50% | 285 passing tests include notification privacy, preferences and audit redaction |
-| Deployment and documentation | 10% | 12% | 1.20% | Local documentation/env example only; no deployment artifacts/CI |
-| **Total** | **100%** |  | **73.95%** | Weighted sum |
+| Dimension | Weight | Score | Weighted pts | Basis for score |
+|-----------|-------:|------:|-------------:|-----------------|
+| Backend implementation | 20 % | 95 % | 19.0 | 8 apps with models, serializers, viewsets, URLs. Moodle fields permanently removed. |
+| Frontend implementation | 15 % | 85 % | 12.75 | Core feature components present and routed. Deductions for careers component shell. |
+| Frontend–backend integration | 15 % | 88 % | 13.2 | Services connect to correct endpoints. Double-slash bug on offers URL resolved. |
+| Roles & security | 10 % | 84 % | 8.4 | Role separation enforced in backend code; HR SAFE_METHODS-only enforced. |
+| Backend test suite | 8 % | 82 % | 6.56 | 173 tests PASS confirmed live on 2026-07-29. |
+| Frontend test suite | 7 % | 80 % | 5.6 | 129/129 tests PASS in Karma (ChromeHeadless). |
+| Deployment & infrastructure | 10 % | 12 % | 1.2 | Three documentation files. No Docker/compose, CI workflows, or Render/Vercel configs. |
+| Data Warehouse & ETL | 10 % | 0 % | 0.0 | Planned next phase. No ETL pipelines exist yet. |
+| AI features | 5 % | 0 % | 0.0 | Planned final phase. matching & extraction as decision support only. |
+| **Total** | **100 %** | | **≈ 67 %** | Weighted sum |
 
 The percentage is not higher because:
 - Passing tests validate only the functionality that has been implemented.
-- Several planned modules (reports, Moodle and AI) are still absent.
+- Data Warehouse & ETL and AI features are still absent.
 - Production deployment, CI/CD, and infrastructure are not implemented.
 - The project is assessed against the final multi-module application scope, not an MVP.
 
@@ -294,10 +351,12 @@ The percentage is not higher because:
 - Harden HTTPS, CORS, hosts, and media storage for production.
 - Configure production email delivery.
 
-### Priority 4 — Moodle and future AI integration
-- Design Moodle REST Web Services integration with separate database and credentials.
+### Priority 4 — ETL/Data Warehouse and AI Integration
+- Design and implement the database warehouse schema and implement Python/Django ETL processes.
+- Implement CV Information Extraction using AI to auto-fill candidate registrations.
+- Build analytical charts and dashboards for Business Unit and Recruitment KPIs.
 - Add Docker, Render, Vercel, and GitHub Actions CI/CD.
-- Explore AI features for reporting, recommendations, or automation.
+- Explore skills-gap assessment and candidate-offer matching recommendations as decision support.
 
 ## 14. Recommended Next Module
 
@@ -329,8 +388,7 @@ What already works:
 What remains to be developed:
 - Complete Business Unit CRUD forms and membership management
 - Offers, projects, internships, training, sessions, enrollments, attendance, evaluations, certificates
-- Reports and KPIs
-- Moodle integration, AI features, CI/CD, and production deployment
+- Data Warehouse & ETL, AI features, CI/CD, and production deployment
 - Security hardening for production (JWT rotation, malware scanning, HTTPS, media storage)
 
 The project is **ready for demonstration** of the implemented modules (authentication, recruitment, Business Units, authenticated shell, public pages) against a correctly provisioned backend. It is **not ready for production** due to missing modules, incomplete Business Unit CRUD forms, lack of deployment infrastructure, and unresolved production security configuration.

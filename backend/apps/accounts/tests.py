@@ -6,6 +6,7 @@ from rest_framework.test import APITestCase, override_settings
 from rest_framework_simplejwt.tokens import AccessToken
 
 from .choices import UserRole
+from .models import AccountSecurityLog
 from apps.business_units.models import BusinessUnit, BusinessUnitMembership
 from apps.recruitment.models import InternProfile
 
@@ -41,6 +42,7 @@ class UserModelTests(APITestCase):
             "user": "1000/minute",
             "login": "1000/minute",
             "public_submission": "1000/hour",
+            "sensitive_account": "1000/hour",
         },
         "NUM_PROXIES": None,
     },
@@ -76,7 +78,7 @@ class AuthAPITests(APITestCase):
 
         self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
 
-    def test_authenticated_user_can_read_and_update_own_profile(self):
+    def test_authenticated_user_can_read_but_not_update_via_me(self):
         self.client.force_authenticate(user=self.user)
 
         response = self.client.patch(
@@ -85,9 +87,9 @@ class AuthAPITests(APITestCase):
             format="json",
         )
 
-        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.status_code, status.HTTP_405_METHOD_NOT_ALLOWED)
         self.user.refresh_from_db()
-        self.assertEqual(self.user.phone_number, "+212600000000")
+        self.assertEqual(self.user.phone_number, "")
         # role is read-only on MeSerializer — must not change
         self.assertEqual(self.user.role, UserRole.EMPLOYEE)
 
@@ -98,11 +100,11 @@ class AuthAPITests(APITestCase):
     def test_password_change_verifies_current_password_and_hashes_new_password(self):
         self.client.force_authenticate(user=self.user)
         invalid = self.client.post(reverse("auth_change_password"), {
-            "current_password": "wrong", "new_password": "NewStrongPass456!"
+            "current_password": "wrong", "new_password": "NewStrongPass456!", "confirmation": "NewStrongPass456!"
         }, format="json")
         self.assertEqual(invalid.status_code, status.HTTP_400_BAD_REQUEST)
         response = self.client.post(reverse("auth_change_password"), {
-            "current_password": "StrongPass123!", "new_password": "NewStrongPass456!"
+            "current_password": "StrongPass123!", "new_password": "NewStrongPass456!", "confirmation": "NewStrongPass456!"
         }, format="json")
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.user.refresh_from_db()
@@ -112,7 +114,7 @@ class AuthAPITests(APITestCase):
     def test_password_change_applies_django_validation(self):
         self.client.force_authenticate(user=self.user)
         response = self.client.post(reverse("auth_change_password"), {
-            "current_password": "StrongPass123!", "new_password": "123"
+            "current_password": "StrongPass123!", "new_password": "123", "confirmation": "123"
         }, format="json")
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
 
@@ -123,7 +125,7 @@ class AuthAPITests(APITestCase):
         )
         self.client.force_authenticate(user=hr)
         response = self.client.post(reverse("auth_change_password"), {
-            "current_password": "StrongPass123!", "new_password": "NewHRPass456!"
+            "current_password": "StrongPass123!", "new_password": "NewHRPass456!", "confirmation": "NewHRPass456!"
         }, format="json")
         self.assertEqual(response.status_code, status.HTTP_200_OK)
 
@@ -153,6 +155,51 @@ class AuthAPITests(APITestCase):
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         token = AccessToken(response.data["access"])
         self.assertEqual(token["role"], UserRole.HR)
+
+    def test_contact_update_requires_password_and_uses_request_user_only(self):
+        other = User.objects.create_user(email="other@example.com", password="StrongPass123!")
+        self.client.force_authenticate(user=self.user)
+        denied = self.client.patch(reverse("auth_contact_details"), {
+            "email": "new@example.com", "current_password": "wrong", "user": other.id,
+        }, format="json")
+        self.assertEqual(denied.status_code, status.HTTP_400_BAD_REQUEST)
+        response = self.client.patch(reverse("auth_contact_details"), {
+            "email": "new@example.com", "phone_number": "+212600000001",
+            "current_password": "StrongPass123!", "user": other.id,
+        }, format="json")
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.user.refresh_from_db(); other.refresh_from_db()
+        self.assertEqual(self.user.email, "new@example.com")
+        self.assertEqual(other.email, "other@example.com")
+        self.assertTrue(AccountSecurityLog.objects.filter(actor=self.user, action="CONTACT_DETAILS_CHANGED").exists())
+
+    def test_contact_update_rejects_duplicate_email(self):
+        User.objects.create_user(email="used@example.com", password="StrongPass123!")
+        self.client.force_authenticate(user=self.user)
+        response = self.client.patch(reverse("auth_contact_details"), {
+            "email": "USED@example.com", "current_password": "StrongPass123!",
+        }, format="json")
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("email", response.data)
+
+    def test_password_change_requires_confirmation_and_invalidates_old_jwt(self):
+        token_response = self.client.post(reverse("token_obtain_pair"), {
+            "email": self.user.email, "password": "StrongPass123!",
+        }, format="json")
+        old_access = token_response.data["access"]
+        self.client.credentials(HTTP_AUTHORIZATION=f"Bearer {old_access}")
+        mismatch = self.client.post(reverse("auth_change_password"), {
+            "current_password": "StrongPass123!", "new_password": "NewStrongPass456!",
+            "confirmation": "DifferentPass456!",
+        }, format="json")
+        self.assertEqual(mismatch.status_code, status.HTTP_400_BAD_REQUEST)
+        changed = self.client.post(reverse("auth_change_password"), {
+            "current_password": "StrongPass123!", "new_password": "NewStrongPass456!",
+            "confirmation": "NewStrongPass456!",
+        }, format="json")
+        self.assertEqual(changed.status_code, status.HTTP_200_OK)
+        self.assertEqual(self.client.get(reverse("auth_me")).status_code, status.HTTP_401_UNAUTHORIZED)
+        self.assertTrue(AccountSecurityLog.objects.filter(actor=self.user, action="PASSWORD_CHANGED").exists())
 
 
 class UserPermissionTests(APITestCase):

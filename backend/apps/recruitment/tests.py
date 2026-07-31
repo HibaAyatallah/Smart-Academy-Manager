@@ -28,6 +28,7 @@ from .models import (
     CandidateProfile,
     EmployeeProfile,
     InternDocument,
+    InternDocumentRequirement,
     InternEvaluation,
     InternProfile,
     Interview,
@@ -818,25 +819,23 @@ class OfferTests(APITestCase):
         response_list = self.client.get("/api/offers/")
         self.assertEqual(response_list.status_code, status.HTTP_403_FORBIDDEN)
 
-    def test_candidate_can_read_only_published_offers(self):
+    def test_candidate_cannot_access_offers_even_when_published(self):
         self.client.force_authenticate(user=self.super_admin)
         response = self.client.post("/api/offers/", self.offer_payload)
         offer_id = response.data["id"]
 
         self.client.force_authenticate(user=self.candidate)
         response_get_draft = self.client.get(f"/api/offers/{offer_id}/")
-        self.assertEqual(response_get_draft.status_code, status.HTTP_404_NOT_FOUND)
-        response_list_draft = self.client.get("/api/offers/")
-        self.assertEqual(response_list_draft.data["count"], 0)
+        self.assertEqual(response_get_draft.status_code, status.HTTP_403_FORBIDDEN)
+        self.assertEqual(self.client.get("/api/offers/").status_code, status.HTTP_403_FORBIDDEN)
 
         self.client.force_authenticate(user=self.super_admin)
         self.client.post(f"/api/offers/{offer_id}/publish/")
 
         self.client.force_authenticate(user=self.candidate)
         response_get_published = self.client.get(f"/api/offers/{offer_id}/")
-        self.assertEqual(response_get_published.status_code, status.HTTP_200_OK)
-        response_list_published = self.client.get("/api/offers/")
-        self.assertEqual(response_list_published.data["count"], 1)
+        self.assertEqual(response_get_published.status_code, status.HTTP_403_FORBIDDEN)
+        self.assertEqual(self.client.get("/api/offers/").status_code, status.HTTP_403_FORBIDDEN)
 
 
 @override_settings(MEDIA_ROOT=tempfile.mkdtemp())
@@ -852,6 +851,9 @@ class InternshipWorkflowTests(APITestCase):
         self.bu = BusinessUnit.objects.create(name="Intern BU", code="INT", manager=self.manager)
         self.profile = InternProfile.objects.create(user=self.intern_user, business_unit=self.bu, supervisor=self.supervisor)
         self.other_profile = InternProfile.objects.create(user=self.other_intern_user, business_unit=self.bu, supervisor=self.other_supervisor)
+        self.requirement = InternDocumentRequirement.objects.create(
+            document_type="CONVENTION", name="Convention", is_required=True, created_by=self.admin
+        )
 
     def test_hr_cannot_manage_intern_profile(self):
         self.client.force_authenticate(self.hr)
@@ -862,24 +864,54 @@ class InternshipWorkflowTests(APITestCase):
         })
         self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
 
-    def test_supervisor_can_update_progress_but_not_assignment(self):
+    def test_employee_cannot_access_internship_management(self):
         self.client.force_authenticate(self.supervisor)
         response = self.client.patch(f"/api/interns/{self.profile.id}/", {"progress": 45, "current_status": "ACTIVE"})
-        self.assertEqual(response.status_code, status.HTTP_200_OK)
-        forbidden = self.client.patch(f"/api/interns/{self.profile.id}/", {"school": "Changed"})
-        self.assertEqual(forbidden.status_code, status.HTTP_403_FORBIDDEN)
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+        self.assertEqual(self.client.get("/api/interns/").status_code, status.HTTP_403_FORBIDDEN)
 
     def test_intern_can_upload_and_download_own_document_only(self):
         self.client.force_authenticate(self.intern_user)
         upload = SimpleUploadedFile("agreement.pdf", b"%PDF-1.4 internship", content_type="application/pdf")
-        response = self.client.post("/api/intern-documents/", {"intern": self.profile.id, "document_type": "CONVENTION", "file": upload}, format="multipart")
+        response = self.client.post("/api/intern-documents/", {"intern": self.profile.id, "requirement": self.requirement.id, "file": upload}, format="multipart")
         self.assertEqual(response.status_code, status.HTTP_201_CREATED)
         document_id = response.data["id"]
         download = self.client.get(f"/api/intern-documents/{document_id}/download/")
         self.assertEqual(download.status_code, status.HTTP_200_OK)
         other_upload = SimpleUploadedFile("other.pdf", b"%PDF-1.4 other", content_type="application/pdf")
-        forbidden = self.client.post("/api/intern-documents/", {"intern": self.other_profile.id, "document_type": "OTHER", "file": other_upload}, format="multipart")
+        forbidden = self.client.post("/api/intern-documents/", {"intern": self.other_profile.id, "requirement": self.requirement.id, "file": other_upload}, format="multipart")
         self.assertEqual(forbidden.status_code, status.HTTP_403_FORBIDDEN)
+
+    def test_document_upload_validates_format_size_and_supports_replacement(self):
+        self.client.force_authenticate(self.intern_user)
+        invalid = SimpleUploadedFile("malware.exe", b"MZ", content_type="application/octet-stream")
+        response = self.client.post("/api/intern-documents/", {
+            "intern": self.profile.id, "requirement": self.requirement.id, "file": invalid,
+        }, format="multipart")
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        for name in ("first.pdf", "replacement.pdf"):
+            upload = SimpleUploadedFile(name, b"%PDF-1.4 safe", content_type="application/pdf")
+            response = self.client.post("/api/intern-documents/", {
+                "intern": self.profile.id, "requirement": self.requirement.id, "file": upload,
+            }, format="multipart")
+            self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(InternDocument.objects.filter(intern=self.profile, requirement=self.requirement).count(), 2)
+
+    def test_super_admin_validates_or_rejects_and_hr_is_read_only(self):
+        document = InternDocument.objects.create(
+            intern=self.profile, requirement=self.requirement, document_type="CONVENTION",
+            file=SimpleUploadedFile("agreement.pdf", b"%PDF-1.4 safe"),
+        )
+        self.client.force_authenticate(self.admin)
+        rejected = self.client.post(f"/api/intern-documents/{document.id}/reject/", {"comment": "Illisible"})
+        self.assertEqual(rejected.status_code, status.HTTP_200_OK)
+        self.assertEqual(rejected.data["status"], "REJECTED")
+        validated = self.client.post(f"/api/intern-documents/{document.id}/validate/", {})
+        self.assertEqual(validated.status_code, status.HTTP_200_OK)
+        self.assertEqual(validated.data["status"], "VALIDATED")
+        self.client.force_authenticate(self.hr)
+        self.assertEqual(self.client.get(f"/api/intern-documents/{document.id}/download/").status_code, status.HTTP_200_OK)
+        self.assertEqual(self.client.post(f"/api/intern-documents/{document.id}/reject/", {"comment": "Non"}).status_code, status.HTTP_403_FORBIDDEN)
 
     def test_hr_cannot_validate_document(self):
         document = InternDocument.objects.create(intern=self.profile, document_type="NDA", file=SimpleUploadedFile("nda.pdf", b"nda"))
@@ -890,21 +922,18 @@ class InternshipWorkflowTests(APITestCase):
         self.assertFalse(document.is_validated)
         self.assertIsNone(document.validator)
 
-    def test_assigned_supervisor_can_create_evaluation_only_for_assigned_intern(self):
+    def test_employee_cannot_create_intern_evaluation(self):
         payload = {"intern": self.profile.id, "evaluation_type": "MIDTERM", "technical_skills": 4, "autonomy": 4, "communication": 4, "teamwork": 5, "deadline_respect": 4, "work_quality": 4, "professionalism": 5, "overall_score": 4.3, "comments": "Bon progrès"}
         self.client.force_authenticate(self.supervisor)
         response = self.client.post("/api/intern-evaluations/", payload)
-        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
-        self.assertEqual(InternEvaluation.objects.get().evaluator, self.supervisor)
-        payload["intern"] = self.other_profile.id
-        forbidden = self.client.post("/api/intern-evaluations/", payload)
-        self.assertEqual(forbidden.status_code, status.HTTP_403_FORBIDDEN)
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+        self.assertFalse(InternEvaluation.objects.exists())
 
-    def test_intern_and_supervisor_querysets_are_scoped(self):
+    def test_intern_queryset_is_scoped_and_employee_is_denied(self):
         self.client.force_authenticate(self.intern_user)
         intern_list = self.client.get("/api/interns/")
         self.assertEqual(intern_list.data["count"], 1)
         self.client.force_authenticate(self.supervisor)
         supervisor_list = self.client.get("/api/interns/")
-        self.assertEqual(supervisor_list.data["count"], 1)
+        self.assertEqual(supervisor_list.status_code, status.HTTP_403_FORBIDDEN)
 

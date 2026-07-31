@@ -35,8 +35,6 @@ export interface Training {
   external_client: number | null;
   project_name: string;
   associated_link: string;
-  moodle_course_id: string;
-  moodle_link: string;
   status: TrainingStatus;
   sessions: TrainingSession[];
 }
@@ -56,7 +54,13 @@ export interface TrainingEnrollment {
   user_email: string;
   training: number;
   training_title: string;
+  user_name: string;
+  project_name: string;
+  business_unit: number;
   session: number;
+  session_start_date: string;
+  session_end_date: string;
+  present_days: number;
   requested_at: string;
   status: EnrollmentStatus;
   final_status: EnrollmentStatus;
@@ -70,13 +74,12 @@ export interface ClientTraining {
   title: string;
   project_name: string;
   associated_link: string;
-  moodle_link: string;
   sessions: Omit<TrainingSession, 'training' | 'trainer' | 'maximum_participants' | 'participant_count' | 'remaining_capacity' | 'external_client'>[];
 }
 
 export type AttendanceStatus = 'PRESENT' | 'ABSENT' | 'LATE' | 'EXCUSED';
 export interface AttendanceHistory { id:number; status:AttendanceStatus; validated:boolean; changed_by_email:string; note:string; timestamp:string; }
-export interface SessionAttendance { id:number; enrollment:number; session:number; user_email:string; training_title:string; status:AttendanceStatus; note:string; validated:boolean; validated_at:string|null; history:AttendanceHistory[]; }
+export interface SessionAttendance { id:number; enrollment:number; session:number; user_email:string; user_name:string; training_title:string; date:string; status:AttendanceStatus; note:string; validated:boolean; validated_by:number|null; validated_by_email:string|null; validated_at:string|null; updated_at:string; history:AttendanceHistory[]; }
 export interface TrainingCertificate { id:number; enrollment:number; user_email:string; training_title:string; session:number; certificate_number:string; issued_at:string; download_url:string; }
 export const ATTENDANCE_STATUS_LABELS: Record<AttendanceStatus,string> = { PRESENT:'Présent', ABSENT:'Absent', LATE:'En retard', EXCUSED:'Absence justifiée' };
 

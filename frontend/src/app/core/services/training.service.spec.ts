@@ -36,9 +36,9 @@ describe('TrainingService', () => {
     http.expectOne(`${environment.apiBaseUrl}client/trainings/`).flush({ count: 0, next: null, previous: null, results: [] });
   });
   it('records and validates session attendance', () => {
-    service.recordAttendance(12, 'PRESENT', 'On time').subscribe();
+    service.recordAttendance(12, '2026-07-31', 'PRESENT', 'On time').subscribe();
     const record = http.expectOne(`${environment.apiBaseUrl}attendance/`);
-    expect(record.request.body).toEqual({ enrollment: 12, status: 'PRESENT', note: 'On time' });
+    expect(record.request.body).toEqual({ enrollment: 12, date: '2026-07-31', status: 'PRESENT', note: 'On time' });
     record.flush({});
     service.validateAttendance(3).subscribe();
     const validate = http.expectOne(`${environment.apiBaseUrl}attendance/3/validate/`);

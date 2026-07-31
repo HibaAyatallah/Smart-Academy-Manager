@@ -4,6 +4,8 @@ import { MatButtonModule } from '@angular/material/button';
 import { MAT_DIALOG_DATA, MatDialogModule, MatDialogRef } from '@angular/material/dialog';
 import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatInputModule } from '@angular/material/input';
+import { minTodayValidator } from '../../../../core/utils/date-validators';
+import { NgIf } from '@angular/common';
 
 export interface ScheduleInterviewDialogData {
   candidateName: string;
@@ -25,6 +27,7 @@ export interface ScheduleInterviewDialogResult {
     MatFormFieldModule,
     MatInputModule,
     ReactiveFormsModule,
+    NgIf,
   ],
   templateUrl: './schedule-interview-dialog.component.html',
 })
@@ -33,8 +36,16 @@ export class ScheduleInterviewDialogComponent {
   private readonly dialogRef = inject(MatDialogRef<ScheduleInterviewDialogComponent>);
   private readonly formBuilder = inject(FormBuilder);
 
+  readonly minDateTimeStr = (() => {
+    const d = new Date();
+    const year = d.getFullYear();
+    const month = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}T00:00`;
+  })();
+
   readonly form = this.formBuilder.nonNullable.group({
-    scheduled_at: ['', Validators.required],
+    scheduled_at: ['', [Validators.required, minTodayValidator()]],
     location: [''],
     meeting_link: [''],
     notes: [''],

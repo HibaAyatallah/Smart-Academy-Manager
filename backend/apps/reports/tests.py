@@ -33,3 +33,19 @@ class ReportTests(APITestCase):
     def test_csv_and_pdf_exports(self):
         self.client.force_authenticate(self.admin); csv_response=self.client.get("/api/reports/export/csv/"); self.assertEqual(csv_response.status_code,200); self.assertEqual(csv_response["Content-Type"],"text/csv"); self.assertIn(b"cards,projects,1",csv_response.content)
         pdf_response=self.client.get("/api/reports/export/pdf/"); self.assertEqual(pdf_response["Content-Type"],"application/pdf"); self.assertTrue(pdf_response.content.startswith(b"%PDF"))
+
+    def test_hr_can_access_hr_dashboard(self):
+        self.client.force_authenticate(self.hr)
+        response = self.client.get("/api/reports/hr-dashboard/")
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertIn("active_interns", response.data)
+        self.assertIn("missing_documents", response.data)
+
+    def test_other_roles_cannot_access_hr_dashboard(self):
+        self.client.force_authenticate(self.employee)
+        response = self.client.get("/api/reports/hr-dashboard/")
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+        
+        self.client.force_authenticate(self.admin)
+        response = self.client.get("/api/reports/hr-dashboard/")
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)

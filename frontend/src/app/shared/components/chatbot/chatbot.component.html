@@ -1,0 +1,6 @@
+<button mat-fab class="chat-fab" (click)="toggle()" [attr.aria-expanded]="open"><mat-icon>{{open?'close':'smart_toy'}}</mat-icon></button>
+<section class="chat-panel" *ngIf="open" role="dialog" [attr.aria-label]="'chat.title'|translate">
+ <header><div><strong>{{'chat.title'|translate}}</strong><small>Lecture seule</small></div><button mat-icon-button (click)="newConversation()" [attr.aria-label]="'chat.new'|translate"><mat-icon>add_comment</mat-icon></button></header>
+ <div class="messages" #scroll><div class="welcome" *ngIf="!conversation"><mat-icon>verified_user</mat-icon><p>{{'chat.title'|translate}}</p><button *ngFor="let suggestion of suggestions" (click)="ask(suggestion)">{{suggestion}}</button></div><div *ngFor="let message of conversation?.messages;trackBy:track" class="message" [class.user]="message.role==='USER'">{{message.content}}</div><mat-spinner *ngIf="loading" diameter="24"></mat-spinner><p class="error" *ngIf="error">{{error}}</p></div>
+ <form (ngSubmit)="ask()"><input name="message" [(ngModel)]="draft" maxlength="1000" autocomplete="off" [placeholder]="'chat.placeholder'|translate"><button mat-icon-button type="submit" [disabled]="loading||!draft.trim()"><mat-icon>send</mat-icon></button></form>
+</section>

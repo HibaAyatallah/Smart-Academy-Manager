@@ -8,6 +8,7 @@ import { Application } from '../../core/models/application.models';
 import { UserProfile } from '../../core/models/auth.models';
 import { ApplicationService } from '../../core/services/application.service';
 import { AuthService } from '../../core/services/auth.service';
+import { InternshipService } from '../../core/services/internship.service';
 import { DashboardComponent } from './dashboard.component';
 
 const candidateUser: UserProfile = {
@@ -42,8 +43,8 @@ const candidateApplication: Application = {
   },
   application_type: 'PFE_INTERNSHIP',
   application_type_label: 'Stage PFE',
-  status: 'INTERVIEW_SCHEDULED',
-  status_label: 'Entretien planifie',
+  status: 'INTERVIEW',
+  status_label: 'Entretien',
   motivation_message: 'Motivation',
   rejection_reason: '',
   submitted_at: '2026-07-10T10:00:00Z',
@@ -96,7 +97,7 @@ const candidateApplication: Application = {
     {
       id: 1,
       from_status: 'PRESELECTED',
-      to_status: 'INTERVIEW_SCHEDULED',
+      to_status: 'INTERVIEW',
       changed_by_email: 'hr@example.com',
       comment: '',
       created_at: '2026-07-10T11:00:00Z',
@@ -143,6 +144,10 @@ describe('DashboardComponent', () => {
         {
           provide: ApplicationService,
           useValue: applicationService,
+        },
+        {
+          provide: InternshipService,
+          useValue: jasmine.createSpyObj('InternshipService', ['getInterns']),
         },
         {
           provide: MatSnackBar,

@@ -182,6 +182,14 @@ Les présences `PRESENT` et `LATE` validées complètent l'inscription et génè
 
 Les notifications couvrent les approbations, affectations, changements de session, évaluations, documents et certificats. Le journal conserve l'acteur, l'action, la cible, le résultat HTTP, l'adresse IP et l'heure, sans enregistrer les corps de requête ni les secrets.
 
+## Analyses et rapports
+
+- `GET /api/reports/summary/` : cartes, KPI et séries regroupées pour recrutement, stages, projets, formations, présences, certificats, BU et utilisateurs ;
+- `GET /api/reports/export/csv/` : export tabulaire filtré ;
+- `GET /api/reports/export/pdf/` : rapport PDF filtré.
+
+Filtres communs : `date_from`, `date_to` et `business_unit`. Le Super Admin dispose de la vue globale et RH du même périmètre en lecture seule. Les autres rôles sont refusés côté API.
+
 ## Stages
 
 - `GET /api/interns/` et `GET /api/interns/{id}/` : dossiers filtrés selon le rôle ;

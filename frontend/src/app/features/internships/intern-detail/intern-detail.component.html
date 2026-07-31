@@ -1,5 +1,83 @@
-<app-page-header [title]="intern?.user_full_name||'Dossier de stage'" [subtitle]="intern?.user_email||''" [showBackButton]="role!=='INTERN'"></app-page-header><p *ngIf="loading">Chargement…</p><p class="error" *ngIf="error">{{error}}</p><ng-container *ngIf="intern"><section class="summary"><mat-card><mat-card-title>{{intern.subject_title||'Sujet à définir'}}</mat-card-title><mat-chip>{{statuses[intern.current_status]}}</mat-chip><p>{{intern.business_unit_name||'BU non affectée'}} · Superviseur : {{intern.supervisor_email||'Non affecté'}}</p><p>{{intern.internship_start|date:'dd/MM/yyyy'}} — {{intern.internship_end|date:'dd/MM/yyyy'}}</p><strong>Progression : {{intern.progress}}%</strong><div class="progress"><span [style.width.%]="intern.progress"></span></div></mat-card></section>
-<mat-card *ngIf="canAdmin" class="panel"><mat-card-title>Administration du stage</mat-card-title><form [formGroup]="adminForm" (ngSubmit)="saveAdmin()" class="form-grid"><mat-form-field appearance="outline"><mat-label>Business Unit</mat-label><mat-select formControlName="business_unit"><mat-option [value]="null">Non affectée</mat-option><mat-option *ngFor="let bu of businessUnits" [value]="bu.id">{{bu.name}}</mat-option></mat-select></mat-form-field><mat-form-field appearance="outline"><mat-label>Superviseur</mat-label><mat-select formControlName="supervisor"><mat-option [value]="null">Non affecté</mat-option><mat-option *ngFor="let user of supervisors" [value]="user.id">{{user.full_name||user.email}}</mat-option></mat-select></mat-form-field><mat-form-field appearance="outline"><mat-label>École</mat-label><input matInput formControlName="school"></mat-form-field><mat-form-field appearance="outline"><mat-label>Spécialisation</mat-label><input matInput formControlName="specialization"></mat-form-field><mat-form-field appearance="outline"><mat-label>Type de stage</mat-label><input matInput formControlName="internship_type"></mat-form-field><mat-form-field appearance="outline"><mat-label>Sujet</mat-label><input matInput formControlName="subject_title"></mat-form-field><mat-form-field appearance="outline"><mat-label>Début</mat-label><input matInput type="date" formControlName="internship_start"></mat-form-field><mat-form-field appearance="outline"><mat-label>Fin</mat-label><input matInput type="date" formControlName="internship_end"></mat-form-field><mat-form-field appearance="outline"><mat-label>Statut</mat-label><mat-select formControlName="current_status"><mat-option *ngFor="let value of ['UPCOMING','ACTIVE','SUSPENDED','COMPLETED','CANCELLED']" [value]="value">{{statuses[$any(value)]}}</mat-option></mat-select></mat-form-field><mat-form-field appearance="outline"><mat-label>Progression (%)</mat-label><input matInput type="number" formControlName="progress"></mat-form-field><mat-form-field appearance="outline" class="wide"><mat-label>Décision finale</mat-label><textarea matInput formControlName="final_decision"></textarea></mat-form-field><mat-slide-toggle formControlName="paid">Stage rémunéré</mat-slide-toggle><button mat-flat-button color="primary" [disabled]="saving">Enregistrer</button></form></mat-card>
-<mat-card *ngIf="canSupervise" class="panel"><mat-card-title>Suivi du superviseur</mat-card-title><form [formGroup]="progressForm" (ngSubmit)="saveProgress()" class="form-grid"><mat-form-field appearance="outline"><mat-label>Statut</mat-label><mat-select formControlName="current_status"><mat-option *ngFor="let value of ['UPCOMING','ACTIVE','SUSPENDED','COMPLETED','CANCELLED']" [value]="value">{{statuses[$any(value)]}}</mat-option></mat-select></mat-form-field><mat-form-field appearance="outline"><mat-label>Progression (%)</mat-label><input matInput type="number" formControlName="progress"></mat-form-field><mat-form-field appearance="outline" class="wide"><mat-label>Commentaire / décision</mat-label><textarea matInput formControlName="final_decision"></textarea></mat-form-field><button mat-flat-button color="primary" [disabled]="saving">Mettre à jour</button></form></mat-card>
-<div class="columns"><mat-card class="panel"><mat-card-title>Documents</mat-card-title><div class="item" *ngFor="let document of intern.documents"><div><strong>{{documentLabels[document.document_type]}}</strong><br><small>{{document.uploaded_at|date:'dd/MM/yyyy'}} · {{document.is_validated?'Validé':'En attente'}}</small></div><div class="actions"><button mat-button (click)="download(document)">Ouvrir</button><button *ngIf="canAdmin&&!document.is_validated" mat-button color="primary" (click)="validate(document)">Valider</button></div></div><p *ngIf="!intern.documents.length">Aucun document.</p><form *ngIf="canUpload" [formGroup]="documentForm" (ngSubmit)="upload()" class="upload"><mat-form-field appearance="outline"><mat-label>Type</mat-label><mat-select formControlName="document_type"><mat-option *ngFor="let value of ['CONVENTION','INSURANCE','SCHOOL_CERT','NDA','OTHER']" [value]="value">{{documentLabels[$any(value)]}}</mat-option></mat-select></mat-form-field><input type="file" (change)="fileSelected($event)"><button mat-stroked-button [disabled]="!selectedFile">Ajouter</button></form></mat-card>
-<mat-card class="panel"><mat-card-title>Évaluations</mat-card-title><div class="item" *ngFor="let evaluation of intern.evaluations"><div><strong>{{evaluationLabels[evaluation.evaluation_type]}}</strong> — {{evaluation.overall_score|number:'1.1-1'}}/5<br><small>{{evaluation.evaluator_email}} · {{evaluation.created_at|date:'dd/MM/yyyy'}}</small><p>{{evaluation.comments}}</p></div></div><p *ngIf="!intern.evaluations.length">Aucune évaluation.</p><form *ngIf="canEvaluate" [formGroup]="evaluationForm" (ngSubmit)="evaluate()" class="evaluation"><mat-form-field appearance="outline"><mat-label>Type</mat-label><mat-select formControlName="evaluation_type"><mat-option value="INITIAL">Initiale</mat-option><mat-option value="MIDTERM">Mi-parcours</mat-option><mat-option value="FINAL">Finale</mat-option></mat-select></mat-form-field><ng-container *ngFor="let field of ['technical_skills','autonomy','communication','teamwork','deadline_respect','work_quality','professionalism']"><mat-form-field appearance="outline"><mat-label>{{field}}</mat-label><input matInput type="number" min="0" max="5" [formControlName]="$any(field)"></mat-form-field></ng-container><mat-form-field appearance="outline" class="wide"><mat-label>Commentaires</mat-label><textarea matInput formControlName="comments"></textarea></mat-form-field><button mat-flat-button color="primary">Enregistrer l'évaluation</button></form></mat-card></div></ng-container>
+<app-page-header [title]="intern?.user_full_name||'Mon stage'" [subtitle]="intern?.user_email||''" [showBackButton]="role!=='INTERN'"></app-page-header>
+<p *ngIf="loading">Chargement…</p><p class="error" *ngIf="error">{{error}}</p>
+<ng-container *ngIf="intern">
+  <section class="summary">
+    <mat-card>
+      <div class="summary-head"><div><span class="eyebrow">Stage</span><mat-card-title>{{intern.subject_title||'Sujet à définir'}}</mat-card-title></div><mat-chip>{{statuses[intern.current_status]}}</mat-chip></div>
+      <div class="facts"><span><strong>Business Unit</strong>{{intern.business_unit_name||'Non affectée'}}</span><span><strong>Manager BU</strong>{{intern.manager_name||'Non affecté'}}</span><span><strong>Encadrant</strong>{{intern.supervisor_email||'Non affecté'}}</span><span><strong>Période</strong>{{intern.internship_start|date:'dd/MM/yyyy'}} — {{intern.internship_end|date:'dd/MM/yyyy'}}</span></div>
+      <strong>Progression : {{intern.progress}}%</strong><div class="progress" role="progressbar" [attr.aria-valuenow]="intern.progress"><span [style.width.%]="intern.progress"></span></div>
+      <button mat-stroked-button *ngIf="intern.specification_pdf" (click)="downloadSpecification()">Consulter le cahier des charges PDF</button>
+    </mat-card>
+  </section>
+
+  <mat-card *ngIf="canAdmin" class="panel">
+    <mat-card-title>Administration du stage</mat-card-title>
+    <form [formGroup]="adminForm" (ngSubmit)="saveAdmin()" class="form-grid">
+      <mat-form-field appearance="outline"><mat-label>Business Unit</mat-label><mat-select formControlName="business_unit"><mat-option [value]="null">Non affectée</mat-option><mat-option *ngFor="let bu of businessUnits" [value]="bu.id">{{bu.name}}</mat-option></mat-select></mat-form-field>
+      <mat-form-field appearance="outline"><mat-label>Encadrant</mat-label><mat-select formControlName="supervisor"><mat-option [value]="null">Non affecté</mat-option><mat-option *ngFor="let user of supervisors" [value]="user.id">{{user.full_name||user.email}}</mat-option></mat-select></mat-form-field>
+      <mat-form-field appearance="outline"><mat-label>Sujet</mat-label><input matInput formControlName="subject_title"></mat-form-field>
+      <mat-form-field appearance="outline"><mat-label>École</mat-label><input matInput formControlName="school"></mat-form-field>
+      <mat-form-field appearance="outline"><mat-label>Spécialisation</mat-label><input matInput formControlName="specialization"></mat-form-field>
+      <mat-form-field appearance="outline"><mat-label>Type de stage</mat-label><input matInput formControlName="internship_type"></mat-form-field>
+      <mat-form-field appearance="outline"><mat-label>Début</mat-label><input matInput type="date" formControlName="internship_start"></mat-form-field>
+      <mat-form-field appearance="outline"><mat-label>Fin</mat-label><input matInput type="date" formControlName="internship_end"></mat-form-field>
+      <mat-form-field appearance="outline"><mat-label>Progression</mat-label><input matInput type="number" formControlName="progress"></mat-form-field>
+      <mat-form-field appearance="outline"><mat-label>Statut</mat-label><mat-select formControlName="current_status"><mat-option *ngFor="let value of ['UPCOMING','ACTIVE','SUSPENDED','COMPLETED','CANCELLED']" [value]="value">{{statuses[$any(value)]}}</mat-option></mat-select></mat-form-field>
+      <mat-form-field appearance="outline"><mat-label>Décision finale</mat-label><input matInput formControlName="final_decision"></mat-form-field>
+      <mat-slide-toggle formControlName="paid">Stage rémunéré</mat-slide-toggle>
+      <button mat-flat-button color="primary" [disabled]="saving">Enregistrer</button>
+    </form>
+  </mat-card>
+
+  <mat-card *ngIf="canAdmin" class="panel">
+    <mat-card-title>Configurer un document demandé</mat-card-title>
+    <form [formGroup]="requirementForm" (ngSubmit)="createRequirement()" class="form-grid">
+      <mat-form-field appearance="outline"><mat-label>Nom</mat-label><input matInput formControlName="name"></mat-form-field>
+      <mat-form-field appearance="outline"><mat-label>Type</mat-label><mat-select formControlName="document_type"><mat-option *ngFor="let value of ['CONVENTION','INSURANCE','SCHOOL_CERT','NDA','OTHER']" [value]="value">{{documentLabels[$any(value)]}}</mat-option></mat-select></mat-form-field>
+      <mat-form-field appearance="outline"><mat-label>Date limite</mat-label><input matInput type="date" formControlName="due_date"></mat-form-field>
+      <mat-form-field appearance="outline" class="wide"><mat-label>Description</mat-label><textarea matInput formControlName="description"></textarea></mat-form-field>
+      <mat-slide-toggle formControlName="is_required">Obligatoire</mat-slide-toggle>
+      <button mat-flat-button color="primary">Ajouter</button>
+    </form>
+  </mat-card>
+
+  <mat-card class="panel documents-panel">
+    <mat-card-title>Documents du stage</mat-card-title>
+    <p *ngIf="!intern.document_requirements.length">Aucun document n’a encore été configuré.</p>
+    <article class="requirement" *ngFor="let requirement of intern.document_requirements">
+      <div class="requirement-copy">
+        <div><strong>{{requirement.name}}</strong><span class="required" *ngIf="requirement.is_required">Obligatoire</span></div>
+        <p>{{requirement.description||'Aucune description.'}}</p>
+        <small *ngIf="requirement.due_date">Date limite : {{requirement.due_date|date:'dd/MM/yyyy'}}</small>
+        <ng-container *ngIf="requirement.latest_submission as document">
+          <span class="document-status" [attr.data-status]="document.status">{{document.status==='VALIDATED'?'Validé':document.status==='REJECTED'?'Refusé':'En attente de validation'}}</span>
+          <small>Dernier dépôt : {{document.uploaded_at|date:'dd/MM/yyyy HH:mm'}} · {{document.original_name}}</small>
+          <p class="rejection" *ngIf="document.status==='REJECTED'">{{document.comment}}</p>
+        </ng-container>
+      </div>
+      <div class="actions">
+        <button mat-stroked-button *ngIf="requirement.latest_submission as document" (click)="download(document)">Consulter</button>
+        <ng-container *ngIf="role==='INTERN'">
+          <label class="file-button"><input type="file" accept=".pdf,.png,.jpg,.jpeg" (change)="fileSelected($event,requirement)">Choisir un fichier</label>
+          <button mat-flat-button color="primary" [disabled]="selectedRequirement?.id!==requirement.id||!selectedFile" (click)="upload(requirement)">{{requirement.latest_submission?'Remplacer':'Déposer'}}</button>
+        </ng-container>
+        <ng-container *ngIf="canAdmin && requirement.latest_submission as document">
+          <button mat-button color="primary" (click)="validate(document)">Valider</button><button mat-button color="warn" (click)="reject(document)">Refuser</button>
+        </ng-container>
+      </div>
+    </article>
+  </mat-card>
+
+  <mat-card *ngIf="canAdmin" class="panel">
+    <mat-card-title>Évaluations</mat-card-title>
+    <div class="item" *ngFor="let evaluation of intern.evaluations"><strong>{{evaluationLabels[evaluation.evaluation_type]}}</strong> — {{evaluation.overall_score|number:'1.1-1'}}/5<p>{{evaluation.comments}}</p></div>
+    <form [formGroup]="evaluationForm" (ngSubmit)="evaluate()" class="form-grid">
+      <mat-form-field appearance="outline"><mat-label>Type</mat-label><mat-select formControlName="evaluation_type"><mat-option value="INITIAL">Évaluation initiale</mat-option><mat-option value="MIDTERM">Évaluation à mi-parcours</mat-option><mat-option value="FINAL">Évaluation finale</mat-option></mat-select></mat-form-field>
+      <mat-form-field appearance="outline" *ngFor="let score of [['technical_skills','Compétences techniques'],['autonomy','Autonomie'],['communication','Communication'],['teamwork','Travail en équipe'],['deadline_respect','Respect des délais'],['work_quality','Qualité du travail'],['professionalism','Professionnalisme']]">
+        <mat-label>{{score[1]}} (0–5)</mat-label><input matInput type="number" min="0" max="5" [formControlName]="score[0]">
+      </mat-form-field>
+      <mat-form-field appearance="outline" class="wide"><mat-label>Commentaires</mat-label><textarea matInput formControlName="comments"></textarea></mat-form-field>
+      <button mat-flat-button color="primary">Enregistrer l’évaluation</button>
+    </form>
+  </mat-card>
+</ng-container>

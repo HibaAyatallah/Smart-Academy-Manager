@@ -53,34 +53,29 @@ export const routes: Routes = [
     canActivate: [authGuard],
     loadComponent: () => import('./layouts/main-layout/main-layout.component').then(m => m.MainLayoutComponent),
     children: [
-      { path: 'espace-personnel', data: { title: 'Mon espace personnel' }, loadComponent: () => import('./features/personal-space/personal-space.component').then(m => m.PersonalSpaceComponent) },
+      { path: 'espace-personnel', redirectTo: 'profile', pathMatch: 'full' },
+      { path: 'profile', data: { title: 'Mon profil' }, loadComponent: () => import('./features/personal-space/personal-space.component').then(m => m.PersonalSpaceComponent) },
       {
         path: 'dashboard',
         pathMatch: 'full',
         loadComponent: () => import('./features/dashboard/dashboard-redirect.component').then(m => m.DashboardRedirectComponent),
       },
       {
-        path: 'applications/my',
-        canActivate: [roleGuard],
-        data: { roles: ['CANDIDATE'], title: 'Mes candidatures' },
-        loadComponent: () => import('./features/applications/candidate-applications/candidate-applications.component').then(m => m.CandidateApplicationsComponent),
-      },
-      {
         path: 'applications/:id',
         canActivate: [roleGuard],
-        data: { roles: ['SUPER_ADMIN', 'HR'], title: 'Détail de la candidature' },
+        data: { roles: ['SUPER_ADMIN'], title: 'Détail de la candidature' },
         loadComponent: () => import('./features/applications/application-detail/application-detail.component').then(m => m.ApplicationDetailComponent),
       },
       {
         path: 'applications',
         canActivate: [roleGuard],
-        data: { roles: ['SUPER_ADMIN', 'HR'], title: 'Candidatures' },
+        data: { roles: ['SUPER_ADMIN'], title: 'Candidatures' },
         loadComponent: () => import('./features/applications/hr-application-list/hr-application-list.component').then(m => m.HrApplicationListComponent),
       },
       {
         path: 'offers',
         canActivate: [roleGuard],
-        data: { roles: ['SUPER_ADMIN', 'HR', 'CANDIDATE'], title: 'Offres' },
+        data: { roles: ['SUPER_ADMIN'], title: 'Offres' },
         children: [
           {
             path: '',
@@ -89,7 +84,7 @@ export const routes: Routes = [
           {
             path: 'new',
             canActivate: [roleGuard],
-            data: { roles: ['SUPER_ADMIN', 'HR'] },
+            data: { roles: ['SUPER_ADMIN'] },
             loadComponent: () => import('./features/offers/offer-form/offer-form.component').then(m => m.OfferFormComponent),
           },
           {
@@ -99,7 +94,7 @@ export const routes: Routes = [
           {
             path: ':id/edit',
             canActivate: [roleGuard],
-            data: { roles: ['SUPER_ADMIN', 'HR'] },
+            data: { roles: ['SUPER_ADMIN'] },
             loadComponent: () => import('./features/offers/offer-form/offer-form.component').then(m => m.OfferFormComponent),
           },
         ]
@@ -131,6 +126,12 @@ export const routes: Routes = [
         loadComponent: () => import('./features/users/user-list/user-list').then(m => m.UserList),
       },
       {
+        path: 'users/bulk-import',
+        canActivate: [roleGuard],
+        data: { roles: ['SUPER_ADMIN'], title: 'Importation en masse' },
+        loadComponent: () => import('./features/users/bulk-import/bulk-import.component').then(m => m.BulkImportComponent),
+      },
+      {
         path: 'my-business-unit/trainings',
         canActivate: [roleGuard],
         data: { roles: ['EMPLOYEE'], title: 'Formations de ma Business Unit' },
@@ -139,19 +140,19 @@ export const routes: Routes = [
       {
         path: 'trainings',
         canActivate: [roleGuard],
-        data: { roles: ['SUPER_ADMIN', 'HR', 'BU_MANAGER', 'TRAINER_TUTOR', 'EMPLOYEE', 'INTERN'], title: 'Formations' },
+        data: { roles: ['SUPER_ADMIN', 'HR', 'BU_MANAGER', 'TRAINER_TUTOR'], title: 'Formations' },
         loadComponent: () => import('./features/trainings/training-workspace/training-workspace.component').then(m => m.TrainingWorkspaceComponent),
       },
       {
         path: 'training-enrollments',
         canActivate: [roleGuard],
-        data: { roles: ['SUPER_ADMIN', 'HR', 'BU_MANAGER', 'TRAINER_TUTOR', 'EMPLOYEE', 'INTERN'], title: 'Inscriptions aux formations' },
+        data: { roles: ['SUPER_ADMIN', 'BU_MANAGER', 'TRAINER_TUTOR'], title: 'Inscriptions aux formations' },
         loadComponent: () => import('./features/trainings/enrollment-workflow/enrollment-workflow.component').then(m => m.EnrollmentWorkflowComponent),
       },
       {
         path: 'attendance-certificates',
         canActivate: [roleGuard],
-        data: { roles: ['SUPER_ADMIN', 'HR', 'TRAINER_TUTOR', 'EMPLOYEE', 'INTERN'], title: 'Présences et certificats' },
+        data: { roles: ['SUPER_ADMIN', 'BU_MANAGER', 'TRAINER_TUTOR'], title: 'Présences et certificats' },
         loadComponent: () => import('./features/trainings/attendance-certificates/attendance-certificates.component').then(m => m.AttendanceCertificatesComponent),
       },
       {
@@ -159,6 +160,24 @@ export const routes: Routes = [
         canActivate: [roleGuard],
         data: { roles: ['CLIENT'], title: 'Formations client' },
         loadComponent: () => import('./features/trainings/client-training-view/client-training-view.component').then(m => m.ClientTrainingViewComponent),
+      },
+      {
+        path: 'hr/interns',
+        canActivate: [roleGuard],
+        data: { roles: ['HR'], title: 'Stagiaires acceptés' },
+        loadComponent: () => import('./features/hr/hr-intern-list/hr-intern-list.component').then(m => m.HrInternListComponent),
+      },
+      {
+        path: 'hr/interns/:id',
+        canActivate: [roleGuard],
+        data: { roles: ['HR'], title: 'Détail du stagiaire' },
+        loadComponent: () => import('./features/hr/hr-intern-detail/hr-intern-detail.component').then(m => m.HrInternDetailComponent),
+      },
+      {
+        path: 'hr/collaborators',
+        canActivate: [roleGuard],
+        data: { roles: ['HR'], title: 'Collaborateurs par Business Unit' },
+        loadComponent: () => import('./features/hr/hr-collaborators/hr-collaborators.component').then(m => m.HrCollaboratorsComponent),
       },
       {
         path: 'internships/me',
@@ -169,13 +188,13 @@ export const routes: Routes = [
       {
         path: 'internships/:id',
         canActivate: [roleGuard],
-        data: { roles: ['SUPER_ADMIN', 'HR', 'BU_MANAGER', 'EMPLOYEE'], title: 'Dossier de stage' },
+        data: { roles: ['SUPER_ADMIN', 'BU_MANAGER'], title: 'Dossier de stage' },
         loadComponent: () => import('./features/internships/intern-detail/intern-detail.component').then(m => m.InternDetailComponent),
       },
       {
         path: 'internships',
         canActivate: [roleGuard],
-        data: { roles: ['SUPER_ADMIN', 'HR', 'BU_MANAGER', 'EMPLOYEE'], title: 'Stagiaires' },
+        data: { roles: ['SUPER_ADMIN', 'BU_MANAGER'], title: 'Stagiaires' },
         loadComponent: () => import('./features/internships/intern-list/intern-list.component').then(m => m.InternListComponent),
       },
       {
@@ -187,32 +206,20 @@ export const routes: Routes = [
       {
         path: 'projects/:id',
         canActivate: [roleGuard],
-        data: { roles: ['SUPER_ADMIN', 'HR', 'EMPLOYEE', 'INTERN'], title: 'Projet' },
+        data: { roles: ['SUPER_ADMIN', 'EMPLOYEE'], title: 'Projet' },
         loadComponent: () => import('./features/projects/project-detail/project-detail.component').then(m => m.ProjectDetailComponent),
       },
       {
         path: 'projects',
         canActivate: [roleGuard],
-        data: { roles: ['SUPER_ADMIN', 'HR', 'EMPLOYEE', 'INTERN'], title: 'Projets' },
+        data: { roles: ['SUPER_ADMIN', 'EMPLOYEE'], title: 'Projets' },
         loadComponent: () => import('./features/projects/project-list/project-list.component').then(m => m.ProjectListComponent),
-      },
-      {
-        path: 'notifications',
-        canActivate: [roleGuard],
-        data: { roles: ['SUPER_ADMIN','HR','BU_MANAGER','TRAINER_TUTOR','EMPLOYEE','INTERN','CANDIDATE','CLIENT'], title: 'Notifications' },
-        loadComponent: () => import('./features/notifications/notification-center/notification-center.component').then(m => m.NotificationCenterComponent),
-      },
-      {
-        path: 'audit-logs',
-        canActivate: [roleGuard],
-        data: { roles: ['SUPER_ADMIN','HR'], title: "Journal d'audit" },
-        loadComponent: () => import('./features/notifications/audit-log/audit-log.component').then(m => m.AuditLogComponent),
       },
       // Business Units Routes
       {
         path: 'business-units',
         canActivate: [roleGuard],
-        data: { roles: ['SUPER_ADMIN', 'HR', 'BU_MANAGER'], title: 'Business Units' },
+        data: { roles: ['SUPER_ADMIN', 'BU_MANAGER', 'HR'], title: 'Business Units' },
         children: [
           {
             path: '',
@@ -234,12 +241,14 @@ export const routes: Routes = [
           },
           {
             path: 'needs',
-            data: { title: 'Besoins des Business Units' },
+            canActivate: [roleGuard],
+            data: { roles: ['SUPER_ADMIN', 'BU_MANAGER', 'HR'], title: 'Besoins des Business Units' },
             loadComponent: () => import('./features/business-units/bu-needs-list/bu-needs-list').then(m => m.BuNeedsList),
           },
           {
             path: ':id',
-            data: { title: 'Détail de la Business Unit' },
+            canActivate: [roleGuard],
+            data: { roles: ['SUPER_ADMIN', 'BU_MANAGER', 'HR'], title: 'Détail de la Business Unit' },
             loadComponent: () => import('./features/business-units/bu-detail/bu-detail').then(m => m.BuDetail),
           },
           {
@@ -250,7 +259,8 @@ export const routes: Routes = [
           },
           {
             path: ':id/needs/:needId',
-            data: { title: 'Détail du besoin' },
+            canActivate: [roleGuard],
+            data: { roles: ['SUPER_ADMIN', 'BU_MANAGER', 'HR'], title: 'Détail du besoin' },
             loadComponent: () => import('./features/business-units/bu-need-detail/bu-need-detail').then(m => m.BuNeedDetail),
           },
         ]

@@ -32,7 +32,7 @@ src/environments/environment.ts
 Valeur actuelle :
 
 ```text
-http://127.0.0.1:8000/api/
+http://127.0.0.1:8001/api/
 ```
 
 ## Installation
@@ -49,7 +49,7 @@ Verification :
 
 - application Angular : http://127.0.0.1:4200/
 - formulaire public : http://127.0.0.1:4200/apply
-- backend Django lance : http://127.0.0.1:8000/api/docs/
+- backend Django lance : http://127.0.0.1:8001/api/docs/
 
 La build de production utilise le chemin relatif `/api/`. L'hebergeur devra
 router ce chemin vers le backend Django HTTPS; aucun domaine de production

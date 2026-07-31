@@ -24,6 +24,15 @@ staticfiles/
 .env.*
 !.env.example
 
+# Secrets and local credentials
+*.pem
+*.key
+*.p12
+*.pfx
+credentials*.json
+service-account*.json
+secrets*.json
+
 # Node / Angular
 node_modules/
 dist/
@@ -31,6 +40,17 @@ dist/
 coverage/
 *.tsbuildinfo
 npm-debug.log*
+
+# Local reports and temporary artifacts
+*_test_output.txt
+test_output.txt
+build_output.txt
+frontend_build_output.txt
+flake8_report.txt
+git_diff.txt
+temp_*.py
+*.tmp
+*.temp
 
 # IDE / OS
 .idea/

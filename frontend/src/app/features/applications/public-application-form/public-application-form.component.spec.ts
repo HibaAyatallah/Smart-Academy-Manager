@@ -7,6 +7,7 @@ import { of, throwError } from 'rxjs';
 
 
 import { ApplicationService } from '../../../core/services/application.service';
+import { OfferService } from '../../../core/services/offer.service';
 import { PublicApplicationFormComponent } from './public-application-form.component';
 
 describe('PublicApplicationFormComponent', () => {
@@ -22,6 +23,12 @@ describe('PublicApplicationFormComponent', () => {
           provide: ApplicationService,
           useValue: {
             submitPublicApplication: jasmine.createSpy().and.returnValue(of({})),
+          },
+        },
+        {
+          provide: OfferService,
+          useValue: {
+            getOffers: jasmine.createSpy().and.returnValue(of({ results: [] })),
           },
         },
         {

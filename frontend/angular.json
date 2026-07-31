@@ -33,6 +33,10 @@
             ],
             "styles": [
               "src/styles.scss"
+            ],
+            "allowedCommonJsDependencies": [
+              "file-saver",
+              "papaparse"
             ]
           },
           "configurations": {
@@ -67,6 +71,9 @@
         },
         "serve": {
           "builder": "@angular/build:dev-server",
+          "options": {
+            "proxyConfig": "proxy.conf.json"
+          },
           "configurations": {
             "production": {
               "buildTarget": "smart-academy-manager-frontend:build:production"
@@ -104,4 +111,3 @@
     "analytics": "e8cceaaf-ff2d-4189-905e-dbf57a474f23"
   }
 }
-

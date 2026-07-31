@@ -5,8 +5,9 @@
   <form [formGroup]="form" class="dialog-form">
     <mat-form-field appearance="outline" class="full-width">
       <mat-label>Date et heure</mat-label>
-      <input matInput type="datetime-local" formControlName="scheduled_at">
-      <mat-error>Date et heure requises.</mat-error>
+      <input matInput type="datetime-local" formControlName="scheduled_at" [min]="minDateTimeStr">
+      <mat-error *ngIf="form.get('scheduled_at')?.hasError('required')">Date et heure requises.</mat-error>
+      <mat-error *ngIf="form.get('scheduled_at')?.hasError('minToday')">La date ne peut pas être antérieure à aujourd’hui.</mat-error>
     </mat-form-field>
 
     <mat-form-field appearance="outline" class="full-width">

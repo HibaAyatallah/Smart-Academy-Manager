@@ -1,6 +1,6 @@
 from django.contrib.auth import get_user_model
 from rest_framework import viewsets
-from rest_framework.generics import GenericAPIView, RetrieveUpdateAPIView
+from rest_framework.generics import GenericAPIView, RetrieveAPIView
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
 from rest_framework_simplejwt.views import TokenObtainPairView
@@ -12,11 +12,15 @@ from .roles import is_super_admin
 from .serializers import (
     MeSerializer,
     ChangePasswordSerializer,
+    ContactDetailsSerializer,
+    PreferredLanguageSerializer,
     SmartAcademyTokenObtainPairSerializer,
     UserCreateSerializer,
     UserSerializer,
 )
-from .throttles import LoginRateThrottle
+from .throttles import LoginRateThrottle, SensitiveAccountRateThrottle
+from .models import AccountSecurityLog
+from apps.notifications.services import queue_email
 
 User = get_user_model()
 
@@ -26,8 +30,8 @@ class SmartAcademyTokenObtainPairView(TokenObtainPairView):
     throttle_classes = [LoginRateThrottle]
 
 
-class MeAPIView(RetrieveUpdateAPIView):
-    """All authenticated users can read and update their own profile."""
+class MeAPIView(RetrieveAPIView):
+    """All authenticated users can read their own profile."""
     serializer_class = MeSerializer
     permission_classes = [IsAuthenticated]
 
@@ -39,12 +43,47 @@ class ChangePasswordAPIView(GenericAPIView):
     """All authenticated users can change their own password."""
     serializer_class = ChangePasswordSerializer
     permission_classes = [IsAuthenticated]
+    throttle_classes = [SensitiveAccountRateThrottle]
 
     def post(self, request):
         serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)
-        serializer.save()
+        user = serializer.save()
+        AccountSecurityLog.objects.create(
+            actor=user, action="PASSWORD_CHANGED", metadata={"source": "self_service"}
+        )
+        queue_email(recipient=user, event="password.changed", event_key=f"password-changed:{user.pk}:{user.updated_at.isoformat()}", context={"message":"Votre mot de passe vient d'être modifié."})
         return Response({"detail": "Mot de passe modifié avec succès."})
+
+
+class ContactDetailsAPIView(GenericAPIView):
+    serializer_class = ContactDetailsSerializer
+    permission_classes = [IsAuthenticated]
+    throttle_classes = [SensitiveAccountRateThrottle]
+
+    def patch(self, request):
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        user, changed = serializer.save()
+        if changed:
+            AccountSecurityLog.objects.create(
+                actor=user,
+                action="CONTACT_DETAILS_CHANGED",
+                metadata={"changed_fields": changed},
+            )
+            if "email" in changed:
+                queue_email(recipient=user, event="email.changed", event_key=f"email-changed:{user.pk}:{user.updated_at.isoformat()}", context={"message":"Votre adresse e-mail de connexion a été modifiée."})
+        return Response(MeSerializer(user).data)
+
+
+class PreferredLanguageAPIView(GenericAPIView):
+    serializer_class = PreferredLanguageSerializer
+    permission_classes = [IsAuthenticated]
+    def patch(self, request):
+        serializer = self.get_serializer(request.user, data=request.data)
+        serializer.is_valid(raise_exception=True)
+        serializer.save()
+        return Response(serializer.data)
 
 
 class UserViewSet(viewsets.ModelViewSet):
@@ -77,7 +116,7 @@ class UserViewSet(viewsets.ModelViewSet):
         instance.save(update_fields=["is_active", "updated_at"])
 
 
-from rest_framework.parsers import MultiPartParser
+from rest_framework.parsers import MultiPartParser, FormParser
 from rest_framework.decorators import action
 from .permissions import IsSuperAdminOnly
 from .services.bulk_import import parse_and_validate_file, execute_import
@@ -86,7 +125,7 @@ from django.db import transaction
 class UserImportViewSet(viewsets.ViewSet):
     permission_classes = [IsSuperAdminOnly]
     
-    @action(detail=False, methods=["post"], parser_classes=[MultiPartParser])
+    @action(detail=False, methods=["post"], parser_classes=[MultiPartParser, FormParser])
     def preview(self, request):
         file_obj = request.FILES.get("file")
         if not file_obj:
@@ -104,16 +143,15 @@ class UserImportViewSet(viewsets.ViewSet):
 
     @action(detail=False, methods=["post"])
     def confirm(self, request):
-        # We expect the valid_rows to be sent back, or better yet, we should 
-        # normally cache the file on server side. But since this is a stateless API,
-        # we can accept the 'valid_rows' payload from the frontend.
         valid_rows = request.data.get("valid_rows", [])
+        create_missing_bus = request.data.get("create_missing_bus", False)
+        
         if not valid_rows:
             return Response({"error": "Aucune ligne valide à importer."}, status=400)
             
         try:
             with transaction.atomic():
-                results = execute_import(valid_rows, request.user)
+                results = execute_import(valid_rows, request.user, create_missing_bus=create_missing_bus)
             return Response({"results": results})
         except Exception as e:
             return Response({"error": f"Erreur lors de l'import: {str(e)}"}, status=400)
