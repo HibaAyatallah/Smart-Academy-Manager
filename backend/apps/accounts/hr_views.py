@@ -12,6 +12,7 @@ from rest_framework import serializers
 from rest_framework.generics import ListAPIView, RetrieveAPIView
 from rest_framework.response import Response
 from rest_framework.views import APIView
+from drf_spectacular.utils import extend_schema
 
 from apps.accounts.choices import UserRole
 from apps.accounts.permissions import IsHROnly
@@ -186,6 +187,7 @@ class HRCollaboratorsByBUView(APIView):
     """
     permission_classes = [IsHROnly]
 
+    @extend_schema(responses=HRBUGroupSerializer(many=True))
     def get(self, request):
         groups = []
 

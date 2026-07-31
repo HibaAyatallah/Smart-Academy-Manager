@@ -135,11 +135,12 @@
         </div>
         <div class="panel-content">
           <div class="chart-container">
-            <div class="internship-data-gap">
+            <canvas id="internshipChart" #chartCanvas *ngIf="report.series['monthly_internships']?.length"></canvas>
+            <div class="internship-data-gap" *ngIf="!report.series['monthly_internships']?.length">
               <div class="data-gap-icon"><mat-icon>query_stats</mat-icon></div>
               <div>
-                <strong>Données mensuelles non disponibles</strong>
-                <p>L’API actuelle ne fournit pas de série mensuelle distinguant stages à venir, stagiaires actifs et stages terminés. Le graphique sera activé lorsque cette série sera disponible.</p>
+                <strong>Aucune donnée sur la période</strong>
+                <p>Aucun stage à venir, actif ou terminé n’est disponible pour la période sélectionnée.</p>
               </div>
             </div>
           </div>

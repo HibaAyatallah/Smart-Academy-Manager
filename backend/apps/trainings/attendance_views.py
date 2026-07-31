@@ -13,6 +13,7 @@ from .permissions import IsTrainingOperationsUser
 
 
 class SessionAttendanceViewSet(viewsets.ModelViewSet):
+    queryset = SessionAttendance.objects.none()
     serializer_class = SessionAttendanceSerializer
     permission_classes = [IsTrainingOperationsUser]
     filter_backends = [DjangoFilterBackend, filters.OrderingFilter]
@@ -92,6 +93,7 @@ class SessionAttendanceViewSet(viewsets.ModelViewSet):
 
 
 class TrainingCertificateViewSet(viewsets.ReadOnlyModelViewSet):
+    queryset = TrainingCertificate.objects.none()
     serializer_class = TrainingCertificateSerializer
     permission_classes = [IsTrainingOperationsUser]
     filter_backends = [DjangoFilterBackend, filters.OrderingFilter]

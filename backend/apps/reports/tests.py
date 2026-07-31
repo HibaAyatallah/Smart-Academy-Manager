@@ -18,7 +18,7 @@ class ReportTests(APITestCase):
 
     def test_super_admin_gets_global_multidomain_summary(self):
         self.client.force_authenticate(self.admin); response=self.client.get("/api/reports/summary/")
-        self.assertEqual(response.status_code,status.HTTP_200_OK); self.assertEqual(response.data["cards"]["projects"],1); self.assertIn("attendance",response.data["series"]); self.assertIn("certificate_rate",response.data["kpis"])
+        self.assertEqual(response.status_code,status.HTTP_200_OK); self.assertEqual(response.data["cards"]["projects"],1); self.assertIn("attendance",response.data["series"]); self.assertIn("monthly_internships",response.data["series"]); self.assertIn("certificate_rate",response.data["kpis"])
 
     def test_hr_cannot_access_global_reports(self):
         self.client.force_authenticate(self.hr); self.assertEqual(self.client.get("/api/reports/summary/").status_code,status.HTTP_403_FORBIDDEN)

@@ -446,6 +446,7 @@ class InternProfileViewSet(viewsets.ModelViewSet):
 
 
 class InternDocumentViewSet(viewsets.ModelViewSet):
+    queryset = InternDocument.objects.none()
     serializer_class = InternDocumentSerializer
     permission_classes = [IsInternshipParticipant]
     

@@ -19,6 +19,7 @@ export interface ReportData {
   series: Record<string, ReportPoint[]> & {
     applications_by_bu_status?: any[];
     workforce_by_bu?: any[];
+    monthly_internships?: { label: string; upcoming: number; active: number; completed: number }[];
   };
   kpis: {
     average_project_progress: number;

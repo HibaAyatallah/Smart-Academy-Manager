@@ -178,6 +178,23 @@ export class DashboardComponent implements OnDestroy, OnInit, AfterViewInit {
         options: { responsive: true, maintainAspectRatio: false, interaction: { mode: 'index', intersect: false }, plugins: { tooltip: { enabled: true } } }
       }));
     }
+
+    const internshipCanvas = canvases.find(c => c.nativeElement.id === 'internshipChart');
+    const internshipData = this.reportData.series.monthly_internships ?? [];
+    if (internshipCanvas && internshipData.length) {
+      this.chartInstances.push(new (window as any).Chart(internshipCanvas.nativeElement, {
+        type: 'line',
+        data: {
+          labels: internshipData.map(item => item.label),
+          datasets: [
+            { label: 'Stages à venir', data: internshipData.map(item => item.upcoming), borderColor: '#8b5cf6', tension: 0.35 },
+            { label: 'Stagiaires actifs', data: internshipData.map(item => item.active), borderColor: '#10b981', tension: 0.35 },
+            { label: 'Stages terminés', data: internshipData.map(item => item.completed), borderColor: '#64748b', tension: 0.35 },
+          ],
+        },
+        options: { responsive: true, maintainAspectRatio: false, interaction: { mode: 'index', intersect: false }, plugins: { tooltip: { enabled: true } } },
+      }));
+    }
   }
 
   private loadDashboardData(role: string): void {

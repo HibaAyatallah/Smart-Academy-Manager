@@ -8,6 +8,7 @@ from .models import AuditLog, Notification, NotificationPreference
 from .serializers import AuditLogSerializer, NotificationPreferenceSerializer, NotificationSerializer
 
 class NotificationViewSet(viewsets.ReadOnlyModelViewSet):
+    queryset = Notification.objects.none()
     serializer_class = NotificationSerializer
     filter_backends = [DjangoFilterBackend, filters.OrderingFilter]
     filterset_fields = ["category"]
@@ -26,11 +27,13 @@ class NotificationViewSet(viewsets.ReadOnlyModelViewSet):
         return Response({"updated": count})
 
 class NotificationPreferenceViewSet(mixins.RetrieveModelMixin, mixins.UpdateModelMixin, viewsets.GenericViewSet):
+    queryset = NotificationPreference.objects.none()
     serializer_class = NotificationPreferenceSerializer
     def get_object(self):
         return NotificationPreference.objects.get_or_create(user=self.request.user)[0]
 
 class AuditLogViewSet(viewsets.ReadOnlyModelViewSet):
+    queryset = AuditLog.objects.none()
     serializer_class = AuditLogSerializer
     filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
     filterset_fields = ["method", "status_code", "actor"]

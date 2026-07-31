@@ -8,12 +8,15 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 from rest_framework import status
 from rest_framework.exceptions import PermissionDenied
+from drf_spectacular.types import OpenApiTypes
+from drf_spectacular.utils import extend_schema
 
 from apps.accounts.choices import UserRole
 from apps.accounts.models import User
 from apps.business_units.models import BusinessUnit, BusinessUnitMembership, BusinessUnitNeed
 from apps.projects.models import Project
 from apps.recruitment.models import Application, InternProfile
+from apps.recruitment.choices import InternshipStatus
 from apps.trainings.models import SessionAttendance, Training, TrainingCertificate, TrainingEnrollment, TrainingSession
 from apps.notifications.models import AuditLog
 from apps.accounts.permissions import IsHROnly
@@ -79,6 +82,27 @@ def report_data(params):
         {"label": row["month"].strftime("%Y-%m"), "value": row["count"]}
         for row in monthly_apps_qs if row["month"]
     ]
+
+    internship_months = {}
+    internship_series = (
+        ("upcoming", interns.filter(current_status=InternshipStatus.UPCOMING), "internship_start"),
+        ("active", interns.filter(current_status=InternshipStatus.ACTIVE), "internship_start"),
+        ("completed", interns.filter(current_status=InternshipStatus.COMPLETED), "internship_end"),
+    )
+    for series_name, queryset, date_field in internship_series:
+        rows = (
+            queryset.exclude(**{f"{date_field}__isnull": True})
+            .annotate(month=TruncMonth(date_field))
+            .values("month")
+            .annotate(count=Count("id"))
+            .order_by("month")
+        )
+        for row in rows:
+            label = row["month"].strftime("%Y-%m")
+            internship_months.setdefault(
+                label, {"label": label, "upcoming": 0, "active": 0, "completed": 0}
+            )[series_name] = row["count"]
+    monthly_internships = [internship_months[key] for key in sorted(internship_months)]
 
     recent_apps_qs = applications.select_related("candidate_profile", "candidate_profile__user", "offer", "offer__business_unit").order_by("-submitted_at")[:10]
     recent_applications = [
@@ -150,6 +174,7 @@ def report_data(params):
             ],
             "candidates_by_bu": grouped(applications, "offer__business_unit__name"),
             "monthly_applications": monthly_applications,
+            "monthly_internships": monthly_internships,
             "applications_by_bu_status": applications_by_bu_status,
             "workforce_by_bu": workforce_by_bu,
         },
@@ -174,9 +199,11 @@ class ReportView(APIView):
     def initial(self,request,*args,**kwargs):
         super().initial(request,*args,**kwargs)
         if request.user.role != UserRole.SUPER_ADMIN: raise PermissionDenied("Access denied.")
+    @extend_schema(responses=OpenApiTypes.OBJECT)
     def get(self,request): return Response(report_data(request.query_params))
 
 class ReportExportView(ReportView):
+    @extend_schema(responses={(200, "text/csv"): OpenApiTypes.BINARY, (200, "application/pdf"): OpenApiTypes.BINARY})
     def get(self,request,export_format):
         data=report_data(request.query_params); rows=[("section","label","value")]+[("cards",k,v) for k,v in data["cards"].items()]+[(section,item.get("label", str(item)),item.get("value", "")) for section,items in data.get("series", {}).items() for item in items]+[("kpis",k,v) for k,v in data["kpis"].items()]
         if export_format=="csv":
@@ -188,6 +215,7 @@ class ReportExportView(ReportView):
 class HRDashboardView(APIView):
     permission_classes = [IsHROnly]
 
+    @extend_schema(responses=OpenApiTypes.OBJECT)
     def get(self, request):
         active_interns_qs = InternProfile.objects.filter(user__role=UserRole.INTERN, user__is_active=True).prefetch_related("documents")
         active_interns = active_interns_qs.count()

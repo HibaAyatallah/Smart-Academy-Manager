@@ -7,7 +7,7 @@ from .serializers import ConversationSerializer,AskSerializer
 from .services import build_safe_context,get_provider
 class ChatThrottle(UserRateThrottle):scope="chatbot"
 class ConversationViewSet(mixins.ListModelMixin,mixins.RetrieveModelMixin,mixins.DestroyModelMixin,viewsets.GenericViewSet):
-    serializer_class=ConversationSerializer;throttle_classes=[ChatThrottle]
+    queryset=Conversation.objects.none();serializer_class=ConversationSerializer;throttle_classes=[ChatThrottle]
     def get_queryset(self):return Conversation.objects.filter(user=self.request.user).prefetch_related("messages")
     @action(detail=False,methods=["get"])
     def suggestions(self,request):return Response({"suggestions":build_safe_context(request.user).suggestions})

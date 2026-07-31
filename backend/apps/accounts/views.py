@@ -1,5 +1,5 @@
 from django.contrib.auth import get_user_model
-from rest_framework import viewsets
+from rest_framework import serializers, viewsets
 from rest_framework.generics import GenericAPIView, RetrieveAPIView
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
@@ -122,8 +122,13 @@ from .permissions import IsSuperAdminOnly
 from .services.bulk_import import parse_and_validate_file, execute_import
 from django.db import transaction
 
+class UserImportSchemaSerializer(serializers.Serializer):
+    """Schema marker for import preview and confirmation actions."""
+
+
 class UserImportViewSet(viewsets.ViewSet):
     permission_classes = [IsSuperAdminOnly]
+    serializer_class = UserImportSchemaSerializer
     
     @action(detail=False, methods=["post"], parser_classes=[MultiPartParser, FormParser])
     def preview(self, request):

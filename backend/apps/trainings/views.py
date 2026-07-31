@@ -246,6 +246,7 @@ class ClientTrainingSessionViewSet(viewsets.ReadOnlyModelViewSet):
 
 
 class TrainingEnrollmentViewSet(viewsets.ModelViewSet):
+    queryset = TrainingEnrollment.objects.none()
     permission_classes = [IsTrainingOperationsUser]
     filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
     filterset_fields = ["status", "training", "session"]

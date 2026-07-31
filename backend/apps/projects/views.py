@@ -28,6 +28,7 @@ def visible_projects(user):
 
 
 class ProjectViewSet(viewsets.ModelViewSet):
+    queryset = Project.objects.none()
     serializer_class = ProjectSerializer
     permission_classes = [IsProjectParticipant]
     filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
@@ -77,6 +78,7 @@ class ProjectViewSet(viewsets.ModelViewSet):
 
 
 class ProjectDeliverableViewSet(viewsets.ModelViewSet):
+    queryset = ProjectDeliverable.objects.none()
     serializer_class = ProjectDeliverableSerializer
     permission_classes = [IsProjectParticipant]
     filter_backends = [DjangoFilterBackend]
@@ -97,6 +99,7 @@ class ProjectDeliverableViewSet(viewsets.ModelViewSet):
 
 
 class ProjectCommentViewSet(viewsets.ModelViewSet):
+    queryset = ProjectComment.objects.none()
     serializer_class = ProjectCommentSerializer; permission_classes = [IsProjectParticipant]; http_method_names = ["get", "post", "head", "options"]
     def get_queryset(self): return ProjectComment.objects.filter(project__in=visible_projects(self.request.user)).select_related("project", "author")
     def perform_create(self, serializer):
@@ -106,6 +109,7 @@ class ProjectCommentViewSet(viewsets.ModelViewSet):
 
 
 class ProjectDocumentViewSet(viewsets.ModelViewSet):
+    queryset = ProjectDocument.objects.none()
     serializer_class = ProjectDocumentSerializer; permission_classes = [IsProjectParticipant]; parser_classes = [MultiPartParser, FormParser, JSONParser]; http_method_names = ["get", "post", "head", "options"]
     def get_queryset(self): return ProjectDocument.objects.filter(project__in=visible_projects(self.request.user)).select_related("project", "uploaded_by")
     def perform_create(self, serializer):

@@ -33,7 +33,9 @@ describe('TrainingService', () => {
   });
   it('loads the isolated client endpoint', () => {
     service.getClientTrainings().subscribe();
-    http.expectOne(`${environment.apiBaseUrl}client/trainings/`).flush({ count: 0, next: null, previous: null, results: [] });
+    const request = http.expectOne(`${environment.apiBaseUrl}client/trainings/`);
+    expect(request.request.method).toBe('GET');
+    request.flush({ count: 0, next: null, previous: null, results: [] });
   });
   it('records and validates session attendance', () => {
     service.recordAttendance(12, '2026-07-31', 'PRESENT', 'On time').subscribe();
