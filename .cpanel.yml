@@ -1,0 +1,10 @@
+---
+deployment:
+  tasks:
+    - export DEPLOYPATH=/home/capskill/smart_academy_backend/
+    - /bin/cp -R backend/apps $DEPLOYPATH
+    - /bin/cp -R backend/config $DEPLOYPATH
+    - /bin/cp -R backend/requirements $DEPLOYPATH
+    - /bin/cp -R backend/templates $DEPLOYPATH
+    - /bin/cp backend/manage.py $DEPLOYPATH
+    - /bin/cp backend/.env.example $DEPLOYPATH
