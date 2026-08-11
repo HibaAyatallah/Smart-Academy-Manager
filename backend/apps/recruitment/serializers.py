@@ -4,6 +4,7 @@ from django.conf import settings
 from django.db import transaction
 from django.utils import timezone
 from rest_framework import serializers
+from drf_spectacular.utils import extend_schema_field
 
 from apps.accounts.choices import UserRole
 from apps.business_units.models import BusinessUnit
@@ -149,7 +150,7 @@ class ApplicationDocumentSerializer(serializers.ModelSerializer):
             "uploaded_at",
         ]
 
-    def get_download_url(self, obj):
+    def get_download_url(self, obj) -> str:
         request = self.context.get("request")
         path = f"/api/application-documents/{obj.pk}/download/"
         if request:
@@ -686,7 +687,8 @@ class InternProfileSerializer(serializers.ModelSerializer):
             raise serializers.ValidationError("La progression doit être comprise entre 0 et 100.")
         return value
 
-    def get_document_requirements(self, obj):
+    @extend_schema_field(InternDocumentRequirementSerializer(many=True))
+    def get_document_requirements(self, obj) -> list[dict[str, object]]:
         requirements = InternDocumentRequirement.objects.filter(is_active=True)
         submissions = {}
         for submission in obj.documents.filter(requirement__isnull=False).order_by("requirement_id", "-uploaded_at"):

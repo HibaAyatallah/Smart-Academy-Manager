@@ -102,7 +102,7 @@ Le super utilisateur cree par la commande aura le role `SUPER_ADMIN` automatique
 ## 7. Lancer le serveur
 
 ```powershell
-python manage.py runserver
+python manage.py runserver 8001
 ```
 
 Verification dans le navigateur :

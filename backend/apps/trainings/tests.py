@@ -1,3 +1,6 @@
+from datetime import timedelta
+
+from django.utils import timezone
 from rest_framework.test import APITestCase
 from rest_framework import status
 from apps.accounts.models import User
@@ -8,6 +11,8 @@ from .choices import TrainingType, DeliveryMode, TrainingStatus, SessionStatus, 
 
 class TrainingsAPITestCase(APITestCase):
     def setUp(self):
+        # Clean up database from migration seeds
+        Training.objects.all().delete()
         # Create Super Admin
         self.super_admin = User.objects.create_user(
             email="admin@test.com", password="pwd", role=UserRole.SUPER_ADMIN
@@ -250,7 +255,7 @@ class TrainingsAPITestCase(APITestCase):
     def test_session_actions(self):
         t1 = Training.objects.create(**self.training_data)
         s1 = TrainingSession.objects.create(
-            training=t1, start_date="2026-01-01", end_date="2026-01-05",
+            training=t1, start_date=timezone.localdate() + timedelta(days=5), end_date=timezone.localdate() + timedelta(days=9),
             start_time="09:00", end_time="17:00", maximum_participants=10,
             location="Room A"
         )
@@ -290,6 +295,8 @@ class TrainingsAPITestCase(APITestCase):
 
 class TrainingEnrollmentAPITestCase(APITestCase):
     def setUp(self):
+        # Clean up database from migration seeds
+        Training.objects.all().delete()
         self.super_admin = User.objects.create_user(email="admin_e@test.com", password="pwd", role=UserRole.SUPER_ADMIN)
         self.hr = User.objects.create_user(email="hr_e@test.com", password="pwd", role=UserRole.HR)
         
@@ -316,7 +323,7 @@ class TrainingEnrollmentAPITestCase(APITestCase):
             level="Beginner"
         )
         self.session = TrainingSession.objects.create(
-            training=self.training, start_date="2025-01-01", end_date="2025-01-02",
+            training=self.training, start_date=timezone.localdate() - timedelta(days=2), end_date=timezone.localdate() - timedelta(days=1),
             start_time="09:00", end_time="17:00", maximum_participants=2, trainer=self.trainer,
             location="Room A"
         )
@@ -422,6 +429,19 @@ class TrainingEnrollmentAPITestCase(APITestCase):
         self.client.force_authenticate(user=self.trainer)
         res = self.client.get("/api/enrollments/")
         self.assertEqual(len(res.data['results']), 1)
+
+    def test_generic_enrollment_mutations_are_disabled(self):
+        enrollment = TrainingEnrollment.objects.create(
+            user=self.employee1, training=self.training, session=self.session
+        )
+        self.client.force_authenticate(user=self.manager1)
+        response = self.client.patch(
+            f"/api/enrollments/{enrollment.id}/",
+            {"status": EnrollmentStatus.ENROLLED},
+        )
+        self.assertEqual(response.status_code, status.HTTP_405_METHOD_NOT_ALLOWED)
+        enrollment.refresh_from_db()
+        self.assertEqual(enrollment.status, EnrollmentStatus.PENDING_MANAGER)
         
         # Employee sees only own
         self.client.force_authenticate(user=self.employee2)
@@ -432,3 +452,65 @@ class TrainingEnrollmentAPITestCase(APITestCase):
         self.client.force_authenticate(user=self.super_admin)
         res = self.client.get("/api/enrollments/")
         self.assertEqual(len(res.data['results']), 1)
+
+
+from django.test import TestCase
+
+class TrainingsCatalogSeedingTests(TestCase):
+    def test_catalogue_seeded_successfully(self):
+        """Les formations et modules doivent exister en base après la migration."""
+        # Main trainings
+        main_titles = ["CCNA", "DCCOR", "ENCOR", "SCOR", "Infoblox", "Palo Alto", "PMP"]
+        for title in main_titles:
+            self.assertTrue(
+                Training.objects.filter(title=title).exists(),
+                f"La formation principale {title} devrait être enregistrée."
+            )
+
+        # Verifier les catégories
+        self.assertEqual(Training.objects.get(title="CCNA").category, "Réseaux")
+        self.assertEqual(Training.objects.get(title="DCCOR").category, "CCNP")
+        self.assertEqual(Training.objects.get(title="ENCOR").category, "CCNP")
+        self.assertEqual(Training.objects.get(title="SCOR").category, "CCNP")
+        self.assertEqual(Training.objects.get(title="Infoblox").category, "Réseaux")
+        self.assertEqual(Training.objects.get(title="Palo Alto").category, "Sécurité")
+        self.assertEqual(Training.objects.get(title="PMP").category, "Gestion de projet")
+
+        # Modules check
+        ccna_mod_count = Training.objects.filter(category="CCNA").count()
+        self.assertEqual(ccna_mod_count, 12, "CCNA doit avoir 12 modules.")
+
+        dccor_mod_count = Training.objects.filter(category="DCCOR").count()
+        self.assertEqual(dccor_mod_count, 6, "DCCOR doit avoir 6 modules.")
+
+        encor_mod_count = Training.objects.filter(category="ENCOR").count()
+        self.assertEqual(encor_mod_count, 11, "ENCOR doit avoir 11 modules.")
+
+        scor_mod_count = Training.objects.filter(category="SCOR").count()
+        self.assertEqual(scor_mod_count, 5, "SCOR doit avoir 5 modules.")
+
+        infoblox_mod_count = Training.objects.filter(category="Infoblox").count()
+        self.assertEqual(infoblox_mod_count, 3, "Infoblox doit avoir 3 modules.")
+
+        palo_alto_mod_count = Training.objects.filter(category="Palo Alto").count()
+        self.assertEqual(palo_alto_mod_count, 4, "Palo Alto doit avoir 4 modules.")
+
+        pmp_mod_count = Training.objects.filter(category="PMP").count()
+        self.assertEqual(pmp_mod_count, 4, "PMP doit avoir 4 modules.")
+
+    def test_catalogue_idempotence(self):
+        """Exécuter à nouveau la logique de seed ne doit pas créer de doublons."""
+        initial_count = Training.objects.count()
+
+        # Simuler un second appel à seed_catalogue en utilisant importlib
+        import importlib
+        seed_module = importlib.import_module("apps.trainings.migrations.0007_seed_internal_trainings")
+        seed_catalogue = seed_module.seed_catalogue
+
+        class DummyApp:
+            def get_model(self, app_label, model_name):
+                return Training
+        seed_catalogue(DummyApp(), None)
+
+        final_count = Training.objects.count()
+        self.assertEqual(initial_count, final_count, "Le seed ne doit pas recréer de doublons.")

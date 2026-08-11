@@ -10,6 +10,7 @@ import { MatIconModule } from '@angular/material/icon';
       <mat-icon aria-hidden="true">{{ icon }}</mat-icon>
       <h2>{{ title }}</h2>
       <p>{{ message }}</p>
+      <ng-content />
     </section>
   `,
   styles: [`
@@ -22,5 +23,6 @@ import { MatIconModule } from '@angular/material/icon';
 export class EmptyStateComponent {
   @Input() icon = 'inbox';
   @Input({ required: true }) title = '';
-  @Input({ required: true }) message = '';
+  @Input() message = '';
+  @Input() set description(value: string) { this.message = value; }
 }

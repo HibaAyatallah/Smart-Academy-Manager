@@ -12,7 +12,7 @@ from rest_framework import serializers
 from rest_framework.generics import ListAPIView, RetrieveAPIView
 from rest_framework.response import Response
 from rest_framework.views import APIView
-from drf_spectacular.utils import extend_schema
+from drf_spectacular.utils import extend_schema, extend_schema_field
 
 from apps.accounts.choices import UserRole
 from apps.accounts.permissions import IsHROnly
@@ -58,17 +58,20 @@ class HRInternProfileSerializer(serializers.ModelSerializer):
             "document_submission_status",
         ]
 
-    def get_business_unit(self, obj):
+    @extend_schema_field(serializers.DictField(allow_null=True))
+    def get_business_unit(self, obj) -> dict[str, object] | None:
         if not obj.business_unit:
             return None
         return {"id": obj.business_unit_id, "name": obj.business_unit.name, "code": obj.business_unit.code}
 
-    def get_supervisor(self, obj):
+    @extend_schema_field(serializers.DictField(allow_null=True))
+    def get_supervisor(self, obj) -> dict[str, object] | None:
         if not obj.supervisor:
             return None
         return {"id": obj.supervisor_id, "full_name": obj.supervisor.full_name, "email": obj.supervisor.email}
 
-    def get_document_submission_status(self, obj):
+    @extend_schema_field(serializers.DictField())
+    def get_document_submission_status(self, obj) -> dict[str, object]:
         documents = list(obj.documents.all())
         return {
             "submitted_count": len(documents),
@@ -107,11 +110,11 @@ class HRCollaboratorSerializer(serializers.ModelSerializer):
             ).first()
         return None
 
-    def get_position(self, obj):
+    def get_position(self, obj) -> str:
         m = self._get_membership(obj)
         return m.position if m else ""
 
-    def get_joined_at(self, obj):
+    def get_joined_at(self, obj) -> str | None:
         m = self._get_membership(obj)
         return m.joined_at if m else None
 

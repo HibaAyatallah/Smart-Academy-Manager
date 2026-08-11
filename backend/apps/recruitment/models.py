@@ -427,3 +427,51 @@ class SensitiveAuditLog(models.Model):
 
     def __str__(self) -> str:
         return self.action
+
+
+class CVAnalysis(models.Model):
+    application = models.OneToOneField(Application, on_delete=models.CASCADE, related_name="cv_analysis")
+    skills = models.JSONField(default=list)
+    experiences = models.JSONField(default=list)
+    diplomas = models.JSONField(default=list)
+    contact_details = models.JSONField(default=dict)
+    source_sha256 = models.CharField(max_length=64)
+    extractor_version = models.CharField(max_length=32, default="rules-v1")
+    human_validated = models.BooleanField(default=False)
+    validated_by = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL)
+    validated_at = models.DateTimeField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+
+class ApplicationMatch(models.Model):
+    application = models.ForeignKey(Application, on_delete=models.CASCADE, related_name="matches")
+    offer = models.ForeignKey(Offer, on_delete=models.CASCADE, related_name="candidate_matches")
+    score = models.DecimalField(max_digits=5, decimal_places=2)
+    matched_skills = models.JSONField(default=list)
+    missing_skills = models.JSONField(default=list)
+    explanation = models.TextField()
+    algorithm_version = models.CharField(max_length=32, default="skills-v1")
+    human_decision = models.CharField(max_length=16, choices=[("PENDING","Pending"),("APPROVED","Approved"),("REJECTED","Rejected")], default="PENDING")
+    reviewed_by = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL)
+    reviewed_at = models.DateTimeField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        constraints = [models.UniqueConstraint(fields=["application", "offer"], name="unique_application_offer_match")]
+        ordering = ["-score", "-created_at"]
+
+
+class TrainingRecommendation(models.Model):
+    application = models.ForeignKey(Application, on_delete=models.CASCADE, related_name="training_recommendations")
+    training = models.ForeignKey("trainings.Training", on_delete=models.CASCADE, related_name="candidate_recommendations")
+    score = models.DecimalField(max_digits=5, decimal_places=2)
+    skill_gaps = models.JSONField(default=list)
+    explanation = models.TextField()
+    algorithm_version = models.CharField(max_length=32, default="skill-gap-v1")
+    human_decision = models.CharField(max_length=16, choices=[("PENDING","Pending"),("APPROVED","Approved"),("REJECTED","Rejected")], default="PENDING")
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        constraints = [models.UniqueConstraint(fields=["application", "training"], name="unique_application_training_recommendation")]
+        ordering = ["-score", "-created_at"]

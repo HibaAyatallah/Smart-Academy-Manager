@@ -96,10 +96,10 @@ export class AttendanceCertificatesComponent implements OnInit {
   }
 
   download(item:TrainingCertificate){
-    this.service.downloadCertificate(item.id).subscribe(blob=>{
+    this.service.downloadCertificate(item.id).subscribe({next:blob=>{
       const url=URL.createObjectURL(blob);const anchor=document.createElement('a');
       anchor.href=url;anchor.download=`${item.certificate_number}.pdf`;anchor.click();URL.revokeObjectURL(url);
-    });
+    },error:()=>this.snack.open('Téléchargement du certificat impossible.','Fermer',{duration:4000})});
   }
 
   private upsert(item:SessionAttendance){

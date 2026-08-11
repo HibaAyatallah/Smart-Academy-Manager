@@ -20,11 +20,32 @@ class ReportTests(APITestCase):
         self.client.force_authenticate(self.admin); response=self.client.get("/api/reports/summary/")
         self.assertEqual(response.status_code,status.HTTP_200_OK); self.assertEqual(response.data["cards"]["projects"],1); self.assertIn("attendance",response.data["series"]); self.assertIn("monthly_internships",response.data["series"]); self.assertIn("certificate_rate",response.data["kpis"])
 
-    def test_hr_cannot_access_global_reports(self):
-        self.client.force_authenticate(self.hr); self.assertEqual(self.client.get("/api/reports/summary/").status_code,status.HTTP_403_FORBIDDEN)
+    def test_hr_can_access_read_only_global_summary(self):
+        self.client.force_authenticate(self.hr)
+        response = self.client.get("/api/reports/summary/")
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data["recent_activities"], [])
 
     def test_other_roles_are_denied(self):
         self.client.force_authenticate(self.employee); self.assertEqual(self.client.get("/api/reports/summary/").status_code,status.HTTP_403_FORBIDDEN)
+
+    def test_manager_summary_is_scoped_to_managed_business_unit(self):
+        self.bu.manager = self.manager
+        self.bu.save(update_fields=["manager"])
+        self.client.force_authenticate(self.manager)
+        response = self.client.get("/api/reports/summary/")
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data["cards"]["projects"], 1)
+        self.assertEqual(response.data["filters"]["business_unit"], "")
+
+    def test_summary_exposes_smart_cards_filters_and_insights(self):
+        self.client.force_authenticate(self.admin)
+        response = self.client.get("/api/reports/summary/?training_type=INTERNAL")
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertIn("active_offers", response.data["cards"])
+        self.assertIn("validated_attendance", response.data["cards"])
+        self.assertIn("filter_options", response.data)
+        self.assertIn("insights", response.data)
 
     def test_business_unit_filter_scopes_cards(self):
         self.client.force_authenticate(self.admin); response=self.client.get(f"/api/reports/summary/?business_unit={self.bu.id}")

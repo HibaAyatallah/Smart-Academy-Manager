@@ -5,7 +5,12 @@ import sys
 
 
 def main() -> None:
-    os.environ.setdefault("DJANGO_SETTINGS_MODULE", "config.settings.local")
+    settings_module = (
+        "config.settings.test"
+        if len(sys.argv) > 1 and sys.argv[1] == "test"
+        else "config.settings.local"
+    )
+    os.environ.setdefault("DJANGO_SETTINGS_MODULE", settings_module)
 
     if len(sys.argv) > 1 and sys.argv[1] == "runserver" and len(sys.argv) == 2:
         sys.argv.append("0.0.0.0:8001")
@@ -21,4 +26,3 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
-

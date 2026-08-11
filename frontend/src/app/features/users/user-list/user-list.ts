@@ -6,6 +6,7 @@ import { MatCardModule } from '@angular/material/card';
 import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatInputModule } from '@angular/material/input';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
+import { MatPaginatorModule, PageEvent } from '@angular/material/paginator';
 import { MatSelectModule } from '@angular/material/select';
 import { MatTableModule } from '@angular/material/table';
 import { RouterLink } from '@angular/router';
@@ -17,7 +18,7 @@ import { PageHeaderComponent } from '../../../shared/components/page-header/page
 
 @Component({
   selector: 'app-user-list', standalone: true,
-  imports: [MatButtonModule, MatCardModule, MatFormFieldModule, MatInputModule, MatProgressSpinnerModule, MatSelectModule, MatTableModule, NgFor, NgIf, PageHeaderComponent, ReactiveFormsModule, RouterLink],
+  imports: [MatButtonModule, MatCardModule, MatFormFieldModule, MatInputModule, MatPaginatorModule, MatProgressSpinnerModule, MatSelectModule, MatTableModule, NgFor, NgIf, PageHeaderComponent, ReactiveFormsModule, RouterLink],
   templateUrl: './user-list.html', styleUrl: './user-list.scss',
 })
 export class UserList implements OnInit {
@@ -30,18 +31,27 @@ export class UserList implements OnInit {
   users: UserProfile[] = [];
   isLoading = true;
   errorMessage = '';
+  total = 0;
+  pageIndex = 0;
+  readonly pageSize = 20;
 
   ngOnInit(): void { this.loadUsers(); }
 
-  loadUsers(): void {
+  loadUsers(page = 1): void {
     this.isLoading = true; this.errorMessage = '';
-    this.service.getUsers(this.filters.getRawValue()).pipe(finalize(() => this.isLoading = false)).subscribe({
-      next: response => this.users = response.results ?? [],
+    this.service.getUsers({ ...this.filters.getRawValue(), page }).pipe(finalize(() => this.isLoading = false)).subscribe({
+      next: response => {
+        this.users = response.results ?? [];
+        this.total = response.count ?? this.users.length;
+        this.pageIndex = page - 1;
+      },
       error: () => this.errorMessage = 'Impossible de charger les utilisateurs.',
     });
   }
 
   reset(): void { this.filters.reset({ search: '', role: '', is_active: '' }); this.loadUsers(); }
+
+  onPageChange(event: PageEvent): void { this.loadUsers(event.pageIndex + 1); }
 
   getRoleLabel(role: UserRole): string { return ROLE_LABELS[role]; }
 

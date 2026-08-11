@@ -33,17 +33,71 @@
 
 <div class="workspace" *ngIf="!loading">
   <section class="catalog">
-    <mat-card *ngFor="let training of trainings" class="training-card" (click)="select(training)" [class.selected]="selected?.id===training.id">
-      <mat-card-title>{{ training.title }}</mat-card-title><mat-card-subtitle>{{ training.category }} · {{ training.duration }} h</mat-card-subtitle>
-      <p>{{ training.description }}</p><mat-chip>{{ trainingLabels[training.status] || training.status }}</mat-chip>
-    </mat-card><p *ngIf="!trainings.length">Aucune formation disponible.</p>
+    <mat-card *ngFor="let training of mainTrainings" class="training-card hover-lift" (click)="select(training)" [class.selected]="selected?.id===training.id">
+      <div class="card-header" style="display: flex; justify-content: space-between; align-items: flex-start; gap: 8px;">
+        <mat-card-title style="margin: 0; font-size: 1.15rem; font-weight: 700;">{{ training.title }}</mat-card-title>
+        <span class="type-badge" [class.internal]="training.training_type === 'INTERNAL'" style="padding: 2px 8px; border-radius: 9999px; font-size: 0.72rem; font-weight: 600; text-transform: uppercase;" [style.background]="training.training_type === 'INTERNAL' ? 'var(--app-success-soft)' : 'var(--app-info-soft)'" [style.color]="training.training_type === 'INTERNAL' ? 'var(--app-success)' : 'var(--app-primary-strong)'">
+          {{ training.training_type === 'INTERNAL' ? 'Interne' : 'Client' }}
+        </span>
+      </div>
+      <mat-card-subtitle style="margin-top: 4px; font-size: 0.8rem; color: var(--app-text-muted);">
+        {{ training.category }} · {{ training.duration }} h
+        <span *ngIf="getModulesCount(training.title) > 0" style="font-weight: 600; color: #1689C7;">
+          · {{ getModulesCount(training.title) }} module(s)
+        </span>
+      </mat-card-subtitle>
+      <p style="margin: 10px 0; font-size: 0.88rem; line-height: 1.5; color: var(--app-text);">{{ training.description }}</p>
+      <mat-chip-listbox><mat-chip-option [selectable]="false" [selected]="training.status === 'PUBLISHED'" [style.background-color]="training.status === 'PUBLISHED' ? '#eaf8f2' : 'var(--app-surface-subtle)'" [style.color]="training.status === 'PUBLISHED' ? '#17865f' : 'var(--app-text-muted)'">{{ trainingLabels[training.status] || training.status }}</mat-chip-option></mat-chip-listbox>
+    </mat-card>
+    <p *ngIf="!mainTrainings.length" class="empty">Aucune formation disponible.</p>
   </section>
 
   <section *ngIf="selected" class="detail">
-    <mat-card><mat-card-title>{{ selected.title }}</mat-card-title><p>{{ selected.objectives }}</p><p><strong>Mode :</strong> {{ selected.delivery_mode }} · <strong>Niveau :</strong> {{ selected.level }}</p>
-      <div class="actions" *ngIf="canManage"><button mat-stroked-button (click)="editTraining(selected)">Modifier</button><button mat-button *ngIf="selected.status==='DRAFT'" (click)="trainingAction(selected,'publish')">Publier</button><button mat-button *ngIf="selected.status!=='ARCHIVED'" (click)="trainingAction(selected,'archive')">Archiver</button><button mat-flat-button color="primary" (click)="newSession()">Nouvelle session</button></div>
+    <mat-card class="detail-card" style="border-left: 4px solid #1689C7;">
+      <mat-card-title style="font-size: 1.4rem; font-weight: 800; color: #0b1f33;">{{ selected.title }}</mat-card-title>
+      <p style="margin: 12px 0; line-height: 1.6; color: var(--app-text-muted);">{{ selected.description }}</p>
+      <div class="meta-grid" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 12px; margin: 16px 0; padding: 12px; background: #fafbfe; border-radius: 10px;">
+        <div><strong style="color: var(--app-text-muted);">Mode:</strong> {{ selected.delivery_mode }}</div>
+        <div><strong style="color: var(--app-text-muted);">Niveau:</strong> {{ selected.level }}</div>
+        <div *ngIf="selected.project_name"><strong style="color: var(--app-text-muted);">Projet:</strong> {{ selected.project_name }}</div>
+      </div>
+      <div class="objectives-box" *ngIf="selected.objectives" style="margin-bottom: 16px; padding: 12px; background: #f0f6fa; border-radius: 10px;">
+        <strong style="color: #0b1f33;">Objectifs :</strong>
+        <p style="margin: 6px 0 0; line-height: 1.5; color: var(--app-text);">{{ selected.objectives }}</p>
+      </div>
+      <div class="actions" *ngIf="canManage" style="display: flex; gap: 10px; justify-content: flex-end; border-top: 1px solid var(--app-border); padding-top: 14px;">
+        <button mat-stroked-button (click)="editTraining(selected)">Modifier</button>
+        <button mat-button *ngIf="selected.status==='DRAFT'" (click)="trainingAction(selected,'publish')">Publier</button>
+        <button mat-button *ngIf="selected.status!=='ARCHIVED'" (click)="trainingAction(selected,'archive')">Archiver</button>
+        <button mat-flat-button color="primary" (click)="newSession()">Nouvelle session</button>
+      </div>
     </mat-card>
-    <mat-card *ngIf="showSessionForm" class="editor"><mat-card-title>{{ editingSessionId ? 'Modifier' : 'Créer' }} une session</mat-card-title>
+
+    <!-- Modules Accordion -->
+    <div class="modules-section" *ngIf="selectedModules.length > 0" style="margin-top: 18px;">
+      <h3 style="font-size: 1.1rem; font-weight: 750; color: #0b1f33; margin-bottom: 12px;">Modules de formation ({{ selectedModules.length }})</h3>
+      <mat-accordion class="premium-accordion">
+        <mat-expansion-panel *ngFor="let m of selectedModules; let i = index" style="margin-bottom: 6px; border: 1px solid var(--app-border); border-radius: 10px !important; overflow: hidden; box-shadow: none !important;">
+          <mat-expansion-panel-header style="min-height: 52px;">
+            <mat-panel-title style="display: flex; align-items: center; gap: 8px;">
+              <mat-icon style="color: #1689C7; font-size: 20px; width: 20px; height: 20px;">import_contacts</mat-icon>
+              <strong style="color: var(--app-text); font-size: 0.92rem;">{{ m.title }}</strong>
+            </mat-panel-title>
+            <mat-panel-description style="justify-content: flex-end; color: var(--app-text-muted); font-weight: 500;">
+              {{ m.duration }} h
+            </mat-panel-description>
+          </mat-expansion-panel-header>
+          <p style="margin: 8px 0; color: var(--app-text-muted); font-size: 0.88rem; line-height: 1.55;">{{ m.description }}</p>
+          <div *ngIf="m.objectives" style="margin-top: 10px; padding: 10px; background: var(--app-surface-subtle); border-radius: 8px; border-left: 3px solid var(--app-border);">
+            <strong style="font-size: 0.8rem; color: var(--app-text-muted); text-transform: uppercase; letter-spacing: 0.5px;">Objectifs :</strong>
+            <p style="margin: 4px 0 0; color: var(--app-text); font-size: 0.85rem; line-height: 1.5;">{{ m.objectives }}</p>
+          </div>
+        </mat-expansion-panel>
+      </mat-accordion>
+    </div>
+
+    <!-- Session Form -->
+    <mat-card *ngIf="showSessionForm" class="editor" style="margin-top: 18px;"><mat-card-title>{{ editingSessionId ? 'Modifier' : 'Créer' }} une session</mat-card-title>
       <form [formGroup]="sessionForm" (ngSubmit)="saveSession()" class="form-grid">
         <mat-form-field appearance="outline">
           <mat-label>Début</mat-label>
@@ -64,9 +118,34 @@
         <div class="wide actions"><button mat-button type="button" (click)="showSessionForm=false">Annuler</button><button mat-flat-button color="primary" [disabled]="saving">Enregistrer</button></div>
       </form>
     </mat-card>
-    <h2>Sessions</h2>
-    <mat-card *ngFor="let session of selected.sessions" class="session-card"><div><strong>{{ session.start_date | date:'dd/MM/yyyy' }}</strong> · {{ session.start_time }}–{{ session.end_time }}<br>{{ session.location || session.online_link || 'Lieu à confirmer' }} · {{ session.remaining_capacity }} place(s)</div><mat-chip>{{ sessionLabels[session.status] || session.status }}</mat-chip>
-      <div class="actions"><button *ngIf="canRequest && session.status==='OPEN'" mat-flat-button color="primary" (click)="enroll(session)">Demander l'inscription</button><ng-container *ngIf="canManage"><button mat-button (click)="editSession(session)">Modifier</button><button mat-button *ngIf="session.status==='PLANNED'" (click)="sessionAction(session,'open_registration')">Ouvrir</button><button mat-button *ngIf="session.status==='OPEN'" (click)="sessionAction(session,'close_registration')">Clôturer</button><button mat-button (click)="sessionAction(session,'complete')">Terminer</button><button mat-button color="warn" (click)="sessionAction(session,'cancel')">Annuler</button></ng-container></div>
-    </mat-card><p *ngIf="!selected.sessions.length">Aucune session planifiée.</p>
+
+    <h2 style="font-size: 1.15rem; font-weight: 800; color: #0b1f33; margin: 24px 0 12px;">Sessions</h2>
+    <mat-card *ngFor="let session of selected.sessions" class="session-card" style="margin-bottom: 12px; padding: 16px;">
+      <div style="display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; width: 100%;">
+        <div>
+          <strong style="font-size: 0.95rem; color: #0b1f33;">{{ session.start_date | date:'dd/MM/yyyy' }}</strong>
+          <span style="color: var(--app-text-muted); font-size: 0.85rem; margin-left: 8px;">· {{ session.start_time }}–{{ session.end_time }}</span>
+          <div style="margin-top: 4px; font-size: 0.88rem; color: var(--app-text-muted);">
+            <mat-icon style="font-size: 16px; width: 16px; height: 16px; vertical-align: middle; margin-right: 4px; color: var(--app-text-muted);">{{ session.location ? 'place' : 'videocam' }}</mat-icon>
+            {{ session.location || session.online_link || 'Lieu à confirmer' }}
+          </div>
+          <div style="margin-top: 4px; font-size: 0.82rem; font-weight: 600; color: #1689C7;">
+            {{ session.remaining_capacity }} place(s) restante(s) sur {{ session.maximum_participants }}
+          </div>
+        </div>
+        <mat-chip-listbox><mat-chip-option [selectable]="false" [selected]="session.status === 'OPEN'" [style.background-color]="session.status === 'OPEN' ? '#eaf8f2' : '#fff7e6'" [style.color]="session.status === 'OPEN' ? '#17865f' : '#a86608'">{{ sessionLabels[session.status] || session.status }}</mat-chip-option></mat-chip-listbox>
+      </div>
+      <div class="actions" style="display: flex; gap: 10px; justify-content: flex-end; margin-top: 14px; padding-top: 10px; border-top: 1px dashed var(--app-border);">
+        <button *ngIf="canRequest && session.status==='OPEN'" mat-flat-button color="primary" (click)="enroll(session)">Demander l'inscription</button>
+        <ng-container *ngIf="canManage">
+          <button mat-button (click)="editSession(session)">Modifier</button>
+          <button mat-button *ngIf="session.status==='PLANNED'" (click)="sessionAction(session,'open_registration')">Ouvrir</button>
+          <button mat-button *ngIf="session.status==='OPEN'" (click)="sessionAction(session,'close_registration')">Clôturer</button>
+          <button mat-button (click)="sessionAction(session,'complete')">Terminer</button>
+          <button mat-button color="warn" (click)="sessionAction(session,'cancel')">Annuler</button>
+        </ng-container>
+      </div>
+    </mat-card>
+    <p *ngIf="!selected.sessions.length" class="empty" style="padding: 16px; border: 1px dashed var(--app-border); border-radius: 10px; background: #fafbfe; color: var(--app-text-muted); text-align: center;">Aucune session planifiée.</p>
   </section>
 </div>

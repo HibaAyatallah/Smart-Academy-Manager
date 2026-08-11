@@ -2,6 +2,7 @@ from django.contrib.auth import get_user_model
 from django.db import models
 from django.contrib.auth.password_validation import validate_password
 from rest_framework import serializers
+from drf_spectacular.utils import extend_schema_field
 from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
 
 from .choices import UserRole
@@ -14,7 +15,8 @@ class UserBusinessUnitMixin:
     business_units = serializers.SerializerMethodField()
     business_unit_id = serializers.IntegerField(write_only=True, required=False, allow_null=True)
 
-    def get_business_units(self, obj):
+    @extend_schema_field(serializers.ListField(child=serializers.DictField()))
+    def get_business_units(self, obj) -> list[dict[str, object]]:
         from apps.business_units.models import BusinessUnit
 
         return list(

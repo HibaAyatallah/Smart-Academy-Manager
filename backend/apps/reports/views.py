@@ -1,8 +1,9 @@
 import csv
 from io import StringIO
-from datetime import datetime, timedelta
-from django.db.models import Count, Avg, F
+from datetime import timedelta
+from django.db.models import Count, Avg, Q
 from django.db.models.functions import TruncMonth
+from django.utils import timezone
 from django.http import HttpResponse
 from rest_framework.response import Response
 from rest_framework.views import APIView
@@ -15,9 +16,11 @@ from apps.accounts.choices import UserRole
 from apps.accounts.models import User
 from apps.business_units.models import BusinessUnit, BusinessUnitMembership, BusinessUnitNeed
 from apps.projects.models import Project
-from apps.recruitment.models import Application, InternProfile
-from apps.recruitment.choices import InternshipStatus
+from apps.recruitment.models import Application, InternProfile, Offer
+from apps.recruitment.choices import ApplicationStatus, InternshipStatus, OfferStatus
+from apps.business_units.choices import NeedStatus
 from apps.trainings.models import SessionAttendance, Training, TrainingCertificate, TrainingEnrollment, TrainingSession
+from apps.trainings.choices import TrainingType
 from apps.notifications.models import AuditLog
 from apps.accounts.permissions import IsHROnly
 
@@ -29,8 +32,18 @@ def dated(qs, field, start, end):
     if end: qs=qs.filter(**{f"{field}__date__lte":end})
     return qs
 
-def report_data(params):
+def report_data(params, user=None):
     start,end,bu=params.get("date_from"),params.get("date_to"),params.get("business_unit")
+    status_filter = params.get("status")
+    training_type = params.get("training_type")
+    today = timezone.localdate()
+    scoped_bu_ids = None
+    if user and user.role == UserRole.BU_MANAGER:
+        scoped_bu_ids = list(user.managed_business_units.values_list("id", flat=True))
+        if bu and str(bu).isdigit() and int(bu) not in scoped_bu_ids:
+            raise PermissionDenied("Access denied for this Business Unit.")
+        if not bu:
+            bu = scoped_bu_ids
     
     applications = dated(Application.objects.all(), "submitted_at", start, end)
     interns = dated(InternProfile.objects.all(), "created_at", start, end)
@@ -43,19 +56,31 @@ def report_data(params):
     users = dated(User.objects.all(), "created_at", start, end)
     bus = BusinessUnit.objects.all()
     needs = dated(BusinessUnitNeed.objects.all(), "created_at", start, end)
+    offers = dated(Offer.objects.all(), "created_at", start, end)
     
     if bu:
-        applications = applications.filter(offer__business_unit_id=bu)
-        interns = interns.filter(business_unit_id=bu)
-        projects = projects.filter(business_unit_id=bu)
-        trainings = trainings.filter(business_unit_id=bu)
-        sessions = sessions.filter(training__business_unit_id=bu)
-        enrollments = enrollments.filter(training__business_unit_id=bu)
-        attendance = attendance.filter(enrollment__training__business_unit_id=bu)
-        certificates = certificates.filter(enrollment__training__business_unit_id=bu)
-        users = users.filter(bu_memberships__business_unit_id=bu, bu_memberships__is_active=True).distinct()
-        bus = bus.filter(id=bu)
-        needs = needs.filter(business_unit_id=bu)
+        lookup = "__in" if isinstance(bu, list) else ""
+        applications = applications.filter(**{f"offer__business_unit_id{lookup}": bu})
+        interns = interns.filter(**{f"business_unit_id{lookup}": bu})
+        projects = projects.filter(**{f"business_unit_id{lookup}": bu})
+        trainings = trainings.filter(**{f"business_unit_id{lookup}": bu})
+        sessions = sessions.filter(**{f"training__business_unit_id{lookup}": bu})
+        enrollments = enrollments.filter(**{f"training__business_unit_id{lookup}": bu})
+        attendance = attendance.filter(**{f"enrollment__training__business_unit_id{lookup}": bu})
+        certificates = certificates.filter(**{f"enrollment__training__business_unit_id{lookup}": bu})
+        users = users.filter(**{f"bu_memberships__business_unit_id{lookup}": bu}, bu_memberships__is_active=True).distinct()
+        bus = bus.filter(**{f"id{lookup}": bu})
+        needs = needs.filter(**{f"business_unit_id{lookup}": bu})
+        offers = offers.filter(**{f"business_unit_id{lookup}": bu})
+
+    if status_filter:
+        applications = applications.filter(status=status_filter)
+    if training_type:
+        trainings = trainings.filter(training_type=training_type)
+        sessions = sessions.filter(training__training_type=training_type)
+        enrollments = enrollments.filter(training__training_type=training_type)
+        attendance = attendance.filter(enrollment__training__training_type=training_type)
+        certificates = certificates.filter(enrollment__training__training_type=training_type)
 
     active_interns = interns.filter(user__is_active=True, user__role=UserRole.INTERN)
     active_collaborators = users.filter(is_active=True, role=UserRole.EMPLOYEE)
@@ -69,9 +94,9 @@ def report_data(params):
             "created_at": log.created_at
         }
         for log in AuditLog.objects.select_related("actor").order_by("-created_at")[:10]
-    ]
+    ] if user and user.role == UserRole.SUPER_ADMIN else []
 
-    twelve_months_ago = datetime.now().date() - timedelta(days=365)
+    twelve_months_ago = today - timedelta(days=365)
     monthly_apps_qs = applications.filter(submitted_at__date__gte=twelve_months_ago) \
         .annotate(month=TruncMonth("submitted_at")) \
         .values("month") \
@@ -142,10 +167,40 @@ def report_data(params):
         workforce_dict[bu_name]["collaborators"] = row["count"]
     workforce_by_bu = list(workforce_dict.values())
 
+    pending_statuses = [ApplicationStatus.RECEIVED, ApplicationStatus.UNDER_REVIEW]
+    open_need_statuses = [NeedStatus.SUBMITTED, NeedStatus.UNDER_REVIEW, NeedStatus.ACCEPTED]
+    ending_soon = active_interns.filter(
+        internship_end__gte=today, internship_end__lte=today + timedelta(days=15)
+    ).count()
+    sessions_this_week = sessions.filter(
+        start_date__gte=today, start_date__lte=today + timedelta(days=7)
+    ).count()
+    top_intern_bu = max(workforce_by_bu, key=lambda item: item["interns"], default=None)
+    insights = []
+    if top_intern_bu and top_intern_bu["interns"]:
+        insights.append(f'{top_intern_bu["business_unit"]} compte actuellement le plus de stagiaires actifs ({top_intern_bu["interns"]}).')
+    if ending_soon:
+        insights.append(f"{ending_soon} stage(s) se termineront dans les 15 prochains jours.")
+    pending_count = applications.filter(status__in=pending_statuses).count()
+    if pending_count:
+        insights.append(f"{pending_count} candidature(s) attendent une revue.")
+    if sessions_this_week:
+        insights.append(f"{sessions_this_week} session(s) de formation commencent dans les 7 prochains jours.")
+
     return {
-        "filters": {"date_from": start or "", "date_to": end or "", "business_unit": bu or ""},
+        "filters": {"date_from": start or "", "date_to": end or "", "business_unit": params.get("business_unit", ""), "status": status_filter or "", "training_type": training_type or ""},
+        "filter_options": {
+            "business_units": list(bus.values("id", "name")),
+            "application_statuses": [{"value": value, "label": label} for value, label in ApplicationStatus.choices],
+            "training_types": [{"value": value, "label": label} for value, label in TrainingType.choices],
+        },
         "cards": {
+            "total_offers": offers.count(),
+            "active_offers": offers.filter(status=OfferStatus.PUBLISHED).count(),
             "applications": applications.count(),
+            "pending_applications": pending_count,
+            "accepted_candidates": applications.filter(status=ApplicationStatus.ACCEPTED).count(),
+            "rejected_candidates": applications.filter(status=ApplicationStatus.REJECTED).count(),
             "interns": interns.count(),
             "projects": projects.count(),
             "trainings": trainings.count(),
@@ -156,8 +211,15 @@ def report_data(params):
             "business_units": bus.count(),
             "users": users.count(),
             "active_interns": active_interns.count(),
+            "upcoming_internships": interns.filter(current_status=InternshipStatus.UPCOMING).count(),
+            "internships_ending_soon": ending_soon,
             "active_collaborators": active_collaborators.count(),
-            "open_bu_needs": needs.filter(status__in=["SUBMITTED", "ACCEPTED"]).count(),
+            "open_bu_needs": needs.filter(status__in=open_need_statuses).count(),
+            "closed_bu_needs": needs.filter(status__in=[NeedStatus.SATISFIED, NeedStatus.CLOSED]).count(),
+            "internal_trainings": trainings.filter(training_type=TrainingType.INTERNAL).count(),
+            "external_trainings": trainings.exclude(training_type=TrainingType.INTERNAL).count(),
+            "upcoming_sessions": sessions.filter(start_date__gte=today, status__in=["PLANNED", "OPEN"]).count(),
+            "validated_attendance": attendance.filter(validated=True).count(),
         },
         "series": {
             "recruitment": grouped(applications, "status"),
@@ -177,14 +239,24 @@ def report_data(params):
             "monthly_internships": monthly_internships,
             "applications_by_bu_status": applications_by_bu_status,
             "workforce_by_bu": workforce_by_bu,
+            "interns_by_bu": grouped(active_interns, "business_unit__name"),
+            "employees_by_bu": grouped(BusinessUnitMembership.objects.filter(user__in=active_collaborators, is_active=True), "business_unit__name"),
+            "needs_by_status": grouped(needs, "status"),
+            "needs_by_bu": grouped(needs, "business_unit__name"),
+            "trainings_by_type": grouped(trainings, "training_type"),
+            "certificates_over_time": grouped(certificates.annotate(month=TruncMonth("issued_at")), "month"),
         },
+        "insights": insights,
         "recent_activities": recent_activities,
         "recent_applications": recent_applications,
         "kpis": {
             "average_project_progress": round(projects.aggregate(v=Avg("progress"))["v"] or 0, 1),
             "attendance_validation_rate": round(100 * attendance.filter(validated=True).count() / max(attendance.count(), 1), 1),
             "certificate_rate": round(100 * certificates.count() / max(enrollments.count(), 1), 1),
-            "active_memberships": BusinessUnitMembership.objects.filter(is_active=True, **({"business_unit_id": bu} if bu else {})).count()
+            "active_memberships": BusinessUnitMembership.objects.filter(
+                is_active=True,
+                **({"business_unit_id__in" if isinstance(bu, list) else "business_unit_id": bu} if bu else {}),
+            ).count()
         }
     }
 
@@ -198,14 +270,17 @@ def pdf_bytes(lines):
 class ReportView(APIView):
     def initial(self,request,*args,**kwargs):
         super().initial(request,*args,**kwargs)
-        if request.user.role != UserRole.SUPER_ADMIN: raise PermissionDenied("Access denied.")
+        if request.user.role not in [UserRole.SUPER_ADMIN, UserRole.HR, UserRole.BU_MANAGER]:
+            raise PermissionDenied("Access denied.")
     @extend_schema(responses=OpenApiTypes.OBJECT)
-    def get(self,request): return Response(report_data(request.query_params))
+    def get(self,request): return Response(report_data(request.query_params, request.user))
 
 class ReportExportView(ReportView):
     @extend_schema(responses={(200, "text/csv"): OpenApiTypes.BINARY, (200, "application/pdf"): OpenApiTypes.BINARY})
     def get(self,request,export_format):
-        data=report_data(request.query_params); rows=[("section","label","value")]+[("cards",k,v) for k,v in data["cards"].items()]+[(section,item.get("label", str(item)),item.get("value", "")) for section,items in data.get("series", {}).items() for item in items]+[("kpis",k,v) for k,v in data["kpis"].items()]
+        if request.user.role != UserRole.SUPER_ADMIN:
+            raise PermissionDenied("Exports are restricted to Super Admin.")
+        data=report_data(request.query_params, request.user); rows=[("section","label","value")]+[("cards",k,v) for k,v in data["cards"].items()]+[(section,item.get("label", str(item)),item.get("value", "")) for section,items in data.get("series", {}).items() for item in items]+[("kpis",k,v) for k,v in data["kpis"].items()]
         if export_format=="csv":
             output=StringIO(); writer=csv.writer(output); writer.writerows(rows); response=HttpResponse(output.getvalue(),content_type="text/csv"); response["Content-Disposition"]='attachment; filename="smart-academy-report.csv"'; return response
         if export_format=="pdf":
@@ -240,7 +315,7 @@ class HRDashboardView(APIView):
             "business_unit__name"
         )
         
-        today = datetime.now().date()
+        today = timezone.localdate()
         upcoming_starts = active_interns_qs.filter(internship_start__gte=today).order_by("internship_start")[:5]
         upcoming_ends = active_interns_qs.filter(internship_end__gte=today).order_by("internship_end")[:5]
 

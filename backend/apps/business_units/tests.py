@@ -1,6 +1,9 @@
+from datetime import timedelta
+
 from django.contrib.auth import get_user_model
 from django.core.exceptions import ValidationError
 from django.urls import reverse
+from django.utils import timezone
 from rest_framework import status
 from rest_framework.test import APITestCase
 
@@ -32,8 +35,8 @@ class BusinessUnitTests(APITestCase):
             email="cand@test.com", password="pwd", role=UserRole.CANDIDATE
         )
 
-        self.bu1 = BusinessUnit.objects.create(name="BU 1", code="BU1", manager=self.manager1)
-        self.bu2 = BusinessUnit.objects.create(name="BU 2", code="BU2", manager=self.manager2)
+        self.bu1 = BusinessUnit.objects.create(name="NetSEC", code="NetSEC", manager=self.manager1)
+        self.bu2 = BusinessUnit.objects.create(name="System", code="System", manager=self.manager2)
 
         self.membership1 = BusinessUnitMembership.objects.create(
             business_unit=self.bu1, user=self.employee1, position="Developer"
@@ -54,9 +57,9 @@ class BusinessUnitTests(APITestCase):
     def test_unique_name_and_code(self):
         """Test unique constraints for BU"""
         with self.assertRaises(Exception):
-            BusinessUnit.objects.create(name="BU 1", code="BU3", manager=self.manager1)
+            BusinessUnit.objects.create(name="NetSEC", code="Software", manager=self.manager1)
         with self.assertRaises(Exception):
-            BusinessUnit.objects.create(name="BU 3", code="BU1", manager=self.manager1)
+            BusinessUnit.objects.create(name="Software", code="NetSEC", manager=self.manager1)
 
     def test_superadmin_can_see_all_bus(self):
         """SuperAdmin can see all BUs"""
@@ -84,7 +87,7 @@ class BusinessUnitTests(APITestCase):
         response = self.client.get(reverse("business-unit-list"))
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertEqual(len(response.data["results"]), 1)
-        self.assertEqual(response.data["results"][0]["code"], "BU1")
+        self.assertEqual(response.data["results"][0]["code"], "NetSEC")
 
     def test_employee_can_see_own_bu_memberships(self):
         """Collaborator can see BUs they are members of"""
@@ -92,7 +95,7 @@ class BusinessUnitTests(APITestCase):
         response = self.client.get(reverse("business-unit-list"))
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertEqual(len(response.data["results"]), 1)
-        self.assertEqual(response.data["results"][0]["code"], "BU1")
+        self.assertEqual(response.data["results"][0]["code"], "NetSEC")
 
     def test_candidate_cannot_access_bu(self):
         """Candidate has no access to BU data"""
@@ -222,11 +225,20 @@ class BusinessUnitTests(APITestCase):
         self.client.force_authenticate(user=self.manager1)
         response = self.client.patch(
             reverse("business-unit-detail", args=[self.bu1.id]),
-            {"code": "HACKED"},
+            {"code": "System"},
         )
         self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
         self.bu1.refresh_from_db()
-        self.assertEqual(self.bu1.code, "BU1")
+        self.assertEqual(self.bu1.code, "NetSEC")
+
+    def test_super_admin_cannot_create_non_canonical_business_unit(self):
+        self.client.force_authenticate(user=self.superadmin)
+        response = self.client.post(
+            reverse("business-unit-list"),
+            {"name": "BI", "code": "BI", "manager": self.manager1.id},
+        )
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertFalse(BusinessUnit.objects.filter(code="BI").exists())
 
     def test_manager_cannot_deactivate_own_bu(self):
         """BU Manager cannot deactivate their own BU"""
@@ -270,7 +282,7 @@ class BusinessUnitTests(APITestCase):
                 "need_type": NeedType.TRAINING,
                 "requester": self.employee1.id,
                 "priority": NeedPriority.HIGH,
-                "expected_date": "2026-09-01",
+                "expected_date": timezone.localdate() + timedelta(days=30),
             },
         )
         self.assertEqual(response.status_code, status.HTTP_201_CREATED)
@@ -325,8 +337,8 @@ class BusinessUnitTests(APITestCase):
         patch_response = self.client.patch(
             reverse("business-unit-need-detail", args=[training.id]),
             {
-                "training_start_date": "2026-09-10",
-                "training_end_date": "2026-09-12",
+                "training_start_date": timezone.localdate() + timedelta(days=30),
+                "training_end_date": timezone.localdate() + timedelta(days=32),
                 "training_link": "https://example.com/training",
                 "trainer": trainer.id,
             },

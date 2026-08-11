@@ -1,22 +1,21 @@
 <section class="dashboard" *ngIf="user$ | async as user">
   <app-page-header
-    [title]="'Bonjour ' + user.first_name"
-    [subtitle]="'Bienvenue dans votre espace ' + roleLabels[user.role].toLowerCase() + '.'"
+    [title]="'dashboard.greeting' | translate:{name:user.first_name}"
+    [subtitle]="'dashboard.welcome' | translate:{role:(('role.' + user.role) | translate)}"
   />
 
   <!-- Premium Super Admin Dashboard -->
-  <ng-container *ngIf="user.role === 'SUPER_ADMIN'">
+  <ng-container *ngIf="user.role === 'SUPER_ADMIN' || user.role === 'BU_MANAGER'">
     <div class="loading" *ngIf="reportLoading">
       <mat-spinner diameter="36"></mat-spinner>
     </div>
-    
     <p class="error-state" *ngIf="!reportLoading && reportError">
       {{ reportError }}
     </p>
 
     <section class="super-admin-dashboard" *ngIf="!reportLoading && !reportError && reportData as report">
     <div class="dashboard-toolbar" aria-label="Filtrer le tableau de bord par période">
-      <div><span class="toolbar-label">Période d’analyse</span><strong>Données consolidées</strong></div>
+      <div><span class="toolbar-label">{{'dashboard.analysisPeriod'|translate}}</span><strong>{{'dashboard.consolidated'|translate}}</strong></div>
       <div class="period-filter" role="group" aria-label="Période">
         <button *ngFor="let period of periods" type="button"
           [class.active]="selectedPeriod === period.value"
@@ -24,13 +23,21 @@
           (click)="selectPeriod(period.value)">{{ period.label }}</button>
       </div>
     </div>
+    <div class="dashboard-filters" aria-label="Filtres analytiques">
+      <mat-form-field appearance="outline"><mat-label>{{'common.from'|translate}}</mat-label><input matInput type="date" [(ngModel)]="dashboardFilters.date_from"></mat-form-field>
+      <mat-form-field appearance="outline"><mat-label>{{'common.to'|translate}}</mat-label><input matInput type="date" [(ngModel)]="dashboardFilters.date_to"></mat-form-field>
+      <mat-form-field appearance="outline"><mat-label>{{'dashboard.businessUnit'|translate}}</mat-label><mat-select [(ngModel)]="dashboardFilters.business_unit"><mat-option value="">{{'common.all'|translate}}</mat-option><mat-option *ngFor="let bu of report.filter_options.business_units" [value]="bu.id">{{bu.name}}</mat-option></mat-select></mat-form-field>
+      <mat-form-field appearance="outline"><mat-label>{{'dashboard.applicationStatus'|translate}}</mat-label><mat-select [(ngModel)]="dashboardFilters.status"><mat-option value="">{{'common.all'|translate}}</mat-option><mat-option *ngFor="let option of report.filter_options.application_statuses" [value]="option.value">{{option.label}}</mat-option></mat-select></mat-form-field>
+      <mat-form-field appearance="outline"><mat-label>{{'dashboard.trainingType'|translate}}</mat-label><mat-select [(ngModel)]="dashboardFilters.training_type"><mat-option value="">{{'common.all'|translate}}</mat-option><mat-option *ngFor="let option of report.filter_options.training_types" [value]="option.value">{{option.label}}</mat-option></mat-select></mat-form-field>
+      <button mat-flat-button color="primary" type="button" (click)="applyDashboardFilters()"><mat-icon>filter_alt</mat-icon>{{'common.apply'|translate}}</button>
+    </div>
     <!-- Row 1: KPI Cards -->
     <div class="kpi-grid animate-on-scroll is-visible">
       <a class="kpi-card hover-lift glass-panel kpi-link" routerLink="/applications" aria-label="Voir toutes les candidatures">
         <div class="kpi-icon"><mat-icon>description</mat-icon></div>
         <div class="kpi-content">
           <span class="kpi-value">{{ report.cards['applications'] || 0 }}</span>
-          <span class="kpi-label">Total des candidatures</span>
+          <span class="kpi-label">{{'dashboard.totalApplications'|translate}}</span>
         </div>
         <mat-icon class="kpi-arrow">arrow_forward</mat-icon>
       </a>
@@ -38,7 +45,7 @@
         <div class="kpi-icon"><mat-icon>person</mat-icon></div>
         <div class="kpi-content">
           <span class="kpi-value">{{ report.cards['active_interns'] || 0 }}</span>
-          <span class="kpi-label">Stagiaires actifs</span>
+          <span class="kpi-label">{{'dashboard.activeInterns'|translate}}</span>
         </div>
         <mat-icon class="kpi-arrow">arrow_forward</mat-icon>
       </a>
@@ -46,7 +53,7 @@
         <div class="kpi-icon"><mat-icon>work</mat-icon></div>
         <div class="kpi-content">
           <span class="kpi-value">{{ report.cards['active_collaborators'] || 0 }}</span>
-          <span class="kpi-label">Collaborateurs actifs</span>
+          <span class="kpi-label">{{'dashboard.activeEmployees'|translate}}</span>
         </div>
         <mat-icon class="kpi-arrow">arrow_forward</mat-icon>
       </a>
@@ -54,13 +61,17 @@
         <div class="kpi-icon highlight"><mat-icon>business_center</mat-icon></div>
         <div class="kpi-content">
           <span class="kpi-value">{{ report.cards['open_bu_needs'] || 0 }}</span>
-          <span class="kpi-label">Besoins BU ouverts</span>
+          <span class="kpi-label">{{'dashboard.openNeeds'|translate}}</span>
         </div>
         <mat-icon class="kpi-arrow">arrow_forward</mat-icon>
       </a>
+      <a class="kpi-card kpi-link" routerLink="/offers"><div class="kpi-icon"><mat-icon>campaign</mat-icon></div><div class="kpi-content"><span class="kpi-value">{{report.cards['active_offers'] || 0}}</span><span class="kpi-label">{{'dashboard.activeOffers'|translate}}</span></div></a>
+      <a class="kpi-card kpi-link" routerLink="/applications"><div class="kpi-icon"><mat-icon>hourglass_top</mat-icon></div><div class="kpi-content"><span class="kpi-value">{{report.cards['pending_applications'] || 0}}</span><span class="kpi-label">{{'dashboard.pendingApplications'|translate}}</span></div></a>
+      <a class="kpi-card kpi-link" routerLink="/trainings"><div class="kpi-icon"><mat-icon>event_upcoming</mat-icon></div><div class="kpi-content"><span class="kpi-value">{{report.cards['upcoming_sessions'] || 0}}</span><span class="kpi-label">{{'dashboard.upcomingSessions'|translate}}</span></div></a>
+      <a class="kpi-card kpi-link" routerLink="/attendance-certificates"><div class="kpi-icon"><mat-icon>workspace_premium</mat-icon></div><div class="kpi-content"><span class="kpi-value">{{report.cards['certificates'] || 0}}</span><span class="kpi-label">Certificats délivrés</span></div></a>
     </div>
 
-    <!-- Row 2, 3, 4: BI Grid -->
+    <!-- Grille analytique -->
     <div class="dashboard-grid animate-on-scroll is-visible mt-4">
       
       <!-- Évolution Mensuelle -->
@@ -79,7 +90,7 @@
       <div class="premium-panel glass-panel recent-apps-panel">
         <div class="panel-header">
           <h3>Candidatures récentes</h3>
-          <button mat-button color="primary">Voir tout</button>
+          <a mat-button color="primary" routerLink="/applications">Voir tout</a>
         </div>
         <div class="panel-content p-0">
           <div class="table-responsive">
@@ -99,7 +110,7 @@
                     <strong>{{ app.offer_title }}</strong>
                     <div class="text-muted" style="font-size: 0.75rem;">{{ app.business_unit }}</div>
                   </td>
-                  <td>{{ app.submitted_at | date:'dd/MM/yyyy' }}</td>
+                  <td>{{ app.submitted_at | localizedDate:'shortDate' }}</td>
                   <td>
                     <span class="status-chip" [ngClass]="getStatusClass(app.status)">
                       {{ getStatusLabel(app.status) }}
@@ -172,7 +183,7 @@
             </div>
             <div class="training-item">
               <span class="label">Sessions à venir</span>
-              <span class="value">{{ report.cards['sessions'] || 0 }}</span>
+              <span class="value">{{ report.cards['upcoming_sessions'] || 0 }}</span>
             </div>
             <div class="training-item">
               <span class="label">Inscriptions</span>
@@ -180,7 +191,7 @@
             </div>
             <div class="training-item">
               <span class="label">Présences validées</span>
-              <span class="value">{{ report.cards['attendance_records'] || 0 }}</span>
+              <span class="value">{{ report.cards['validated_attendance'] || 0 }}</span>
             </div>
             <div class="training-item">
               <span class="label">Certificats délivrés</span>
@@ -190,8 +201,16 @@
         </div>
       </div>
 
+      <div class="premium-panel insights-panel">
+        <div class="panel-header"><h3>Insights opérationnels</h3><mat-icon>lightbulb</mat-icon></div>
+        <div class="panel-content insights-list">
+          <div *ngFor="let insight of report.insights"><mat-icon>trending_up</mat-icon><span>{{insight}}</span></div>
+          <p class="text-muted" *ngIf="!report.insights.length">Aucune alerte notable pour les filtres sélectionnés.</p>
+        </div>
+      </div>
+
       <!-- Actions rapides -->
-      <div class="premium-panel glass-panel activities-panel quick-actions-panel">
+      <div class="premium-panel glass-panel activities-panel quick-actions-panel" *ngIf="user.role === 'SUPER_ADMIN'">
         <div class="panel-header">
           <h3>Actions rapides</h3>
           <span class="panel-kicker">Raccourcis administrateur</span>
@@ -290,7 +309,7 @@
                 <mat-icon>login</mat-icon>
                 <div class="activity-details">
                   <span class="activity-action">{{ start.name }} ({{ start.bu }})</span>
-                  <span class="activity-date">{{ start.date | date:'dd/MM/yyyy' }}</span>
+                  <span class="activity-date">{{ start.date | localizedDate:'shortDate' }}</span>
                 </div>
               </div>
               <p *ngIf="!hrData.internship_timeline.starts.length" class="text-muted">Aucune arrivée.</p>
@@ -300,7 +319,7 @@
                 <mat-icon>logout</mat-icon>
                 <div class="activity-details">
                   <span class="activity-action">{{ end.name }} ({{ end.bu }})</span>
-                  <span class="activity-date">{{ end.date | date:'dd/MM/yyyy' }}</span>
+                  <span class="activity-date">{{ end.date | localizedDate:'shortDate' }}</span>
                 </div>
               </div>
               <p *ngIf="!hrData.internship_timeline.ends.length" class="text-muted">Aucun départ.</p>
@@ -312,7 +331,7 @@
   </ng-container>
 
   <app-empty-state
-    *ngIf="user.role !== 'CANDIDATE' && user.role !== 'INTERN' && user.role !== 'SUPER_ADMIN' && user.role !== 'HR'"
+    *ngIf="user.role !== 'CANDIDATE' && user.role !== 'INTERN' && user.role !== 'SUPER_ADMIN' && user.role !== 'BU_MANAGER' && user.role !== 'HR'"
     icon="dashboard"
     title="Aucune donnée opérationnelle à afficher"
     message="Votre espace est prêt. Utilisez la navigation pour accéder aux fonctionnalités disponibles pour votre rôle."
@@ -331,7 +350,7 @@
       </div>
       <mat-card class="intern-overview">
         <div><span class="eyebrow">Votre stage</span><h2>{{intern.subject_title||'Sujet à définir'}}</h2><mat-chip>{{internshipStatuses[intern.current_status]}}</mat-chip></div>
-        <div class="application-grid"><p><strong>Manager BU</strong><span>{{intern.manager_name||'Non affecté'}}</span></p><p><strong>Encadrant</strong><span>{{intern.supervisor_email||'Non affecté'}}</span></p><p><strong>Début</strong><span>{{intern.internship_start|date:'dd/MM/yyyy'}}</span></p><p><strong>Fin</strong><span>{{intern.internship_end|date:'dd/MM/yyyy'}}</span></p></div>
+        <div class="application-grid"><p><strong>{{'intern.manager'|translate}}</strong><span>{{intern.manager_name||('intern.unassigned'|translate)}}</span></p><p><strong>{{'intern.supervisor'|translate}}</strong><span>{{intern.supervisor_email||('intern.unassigned'|translate)}}</span></p><p><strong>{{'intern.start'|translate}}</strong><span>{{intern.internship_start|localizedDate:'shortDate'}}</span></p><p><strong>{{'intern.end'|translate}}</strong><span>{{intern.internship_end|localizedDate:'shortDate'}}</span></p></div>
         <strong>Progression : {{intern.progress}}%</strong><div class="intern-progress"><span [style.width.%]="intern.progress"></span></div>
         <a mat-flat-button color="primary" routerLink="/internships/me">Consulter mon stage</a>
       </mat-card>
@@ -396,7 +415,7 @@
             <span>{{ application.candidate_profile.study_level_other }}</span>
           </p>
           <p><strong>Filière / Domaine</strong><span>{{ application.candidate_profile.study_field }}</span></p>
-          <p><strong>Date de dépôt</strong><span>{{ application.submitted_at | date:'dd/MM/yyyy HH:mm' }}</span></p>
+          <p><strong>{{'candidate.date'|translate}}</strong><span>{{ application.submitted_at | localizedDate:'short' }}</span></p>
         </div>
 
         <div class="optional-grid">
@@ -441,17 +460,17 @@
           <div class="step" [ngClass]="stepState(application, 0)">
             <strong>T0</strong>
             <span>Candidature reçue</span>
-            <small>{{ application.submitted_at | date:'dd/MM/yyyy HH:mm' }}</small>
+            <small>{{ application.submitted_at | localizedDate:'short' }}</small>
             <small>Dossier en cours d’étude.</small>
           </div>
           <div class="step" [ngClass]="stepState(application, 1)">
             <strong>T1</strong>
             <span>Présélection / entretien</span>
             <small *ngIf="historyDate(application, ['PRESELECTED', 'INTERVIEW_SCHEDULED', 'INTERVIEW_COMPLETED']) as t1Date">
-              {{ t1Date | date:'dd/MM/yyyy HH:mm' }}
+              {{ t1Date | localizedDate:'short' }}
             </small>
             <small *ngIf="latestInterview(application) as interview">
-              {{ interview.scheduled_at | date:'dd/MM/yyyy HH:mm' }}
+              {{ interview.scheduled_at | localizedDate:'short' }}
               - {{ interview.location || interview.meeting_link || 'À préciser' }}
             </small>
           </div>
@@ -459,7 +478,7 @@
             <strong>T2</strong>
             <span>Décision finale</span>
             <small *ngIf="historyDate(application, ['ACCEPTED', 'REJECTED']) as t2Date">
-              {{ t2Date | date:'dd/MM/yyyy HH:mm' }}
+              {{ t2Date | localizedDate:'short' }}
             </small>
             <small *ngIf="application.status === 'ACCEPTED'">
               Candidature acceptée. {{ acceptedTargetLabel(application) }}.
@@ -486,7 +505,7 @@
           <p *ngIf="application.status === 'ACCEPTED'">
             Affectation : {{ acceptedTargetLabel(application) }}
             <span *ngIf="application.accepted_at">
-              depuis le {{ application.accepted_at | date:'dd/MM/yyyy HH:mm' }}
+              {{ application.accepted_at | localizedDate:'short' }}
             </span>
           </p>
         </div>

@@ -7,7 +7,7 @@ class NotificationSerializer(serializers.ModelSerializer):
         model = Notification
         fields = ["id", "category", "title", "message", "link", "target_type", "target_id", "is_read", "read_at", "created_at"]
         read_only_fields = fields
-    def get_is_read(self, obj): return obj.read_at is not None
+    def get_is_read(self, obj) -> bool: return obj.read_at is not None
 
 class NotificationPreferenceSerializer(serializers.ModelSerializer):
     class Meta:

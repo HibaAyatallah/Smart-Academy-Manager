@@ -13,6 +13,8 @@ import { TimeoutError, timeout } from 'rxjs';
 import { finalize } from 'rxjs/operators';
 
 import { AuthService } from '../../../core/services/auth.service';
+import { LanguageService } from '../../../core/i18n/language.service';
+import { TranslatePipe } from '../../../core/i18n/translate.pipe';
 
 @Component({
   selector: 'app-login',
@@ -26,6 +28,7 @@ import { AuthService } from '../../../core/services/auth.service';
     NgIf,
     ReactiveFormsModule,
     RouterLink,
+    TranslatePipe,
   ],
   templateUrl: './login.component.html',
   styleUrl: './login.component.scss',
@@ -36,6 +39,7 @@ export class LoginComponent {
   private readonly changeDetectorRef = inject(ChangeDetectorRef);
   private readonly formBuilder = inject(FormBuilder);
   private readonly router = inject(Router);
+  private readonly language = inject(LanguageService);
 
   readonly loginForm = this.formBuilder.nonNullable.group({
     email: ['', [Validators.required, Validators.email]],
@@ -78,17 +82,17 @@ export class LoginComponent {
 
   private resolveErrorMessage(error: unknown): string {
     if (error instanceof TimeoutError) {
-      return 'Le backend ne répond pas. Vérifiez qu\'il est bien démarré.';
+      return this.language.translate('api.timeout');
     }
     if (!(error instanceof HttpErrorResponse)) {
-      return 'La connexion a échoué. Réessayez dans un instant.';
+      return this.language.translate('api.requestFailed');
     }
     if (error.status === 401) {
-      return 'Email ou mot de passe incorrect.';
+      return this.language.translate('api.invalidCredentials');
     }
     if (error.status === 0) {
-      return 'Impossible de joindre le backend. Vérifiez qu\'il est bien démarré.';
+      return this.language.translate('api.serverUnavailable');
     }
-    return 'La connexion a échoué. Réessayez dans un instant.';
+    return this.language.translate('api.requestFailed');
   }
 }

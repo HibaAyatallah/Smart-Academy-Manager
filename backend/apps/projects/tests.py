@@ -1,6 +1,8 @@
 import tempfile
+from datetime import timedelta
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test import override_settings
+from django.utils import timezone
 from rest_framework import status
 from rest_framework.test import APITestCase
 from apps.accounts.choices import UserRole
@@ -26,7 +28,8 @@ class ProjectWorkflowTests(APITestCase):
         BusinessUnitMembership.objects.create(business_unit=self.bu,user=self.employee)
         BusinessUnitMembership.objects.create(business_unit=self.other_bu,user=self.outsider)
         InternProfile.objects.create(user=self.intern,business_unit=self.bu,supervisor=self.supervisor)
-        self.payload={"title":"Academy Portal","description":"Delivery project","business_unit":self.bu.id,"supervisor":self.supervisor.id,"assignee_ids":[self.employee.id,self.intern.id],"start_date":"2026-08-01","end_date":"2026-12-01","status":"ACTIVE","progress":10}
+        self.today = timezone.localdate()
+        self.payload={"title":"Academy Portal","description":"Delivery project","business_unit":self.bu.id,"supervisor":self.supervisor.id,"assignee_ids":[self.employee.id,self.intern.id],"start_date":self.today + timedelta(days=5),"end_date":self.today + timedelta(days=90),"status":"ACTIVE","progress":10}
 
     def create_project(self):
         self.client.force_authenticate(self.admin)
@@ -62,7 +65,7 @@ class ProjectWorkflowTests(APITestCase):
 
     def test_deliverable_workflow_enforces_supervisor_and_participant_fields(self):
         project=self.create_project();self.client.force_authenticate(self.supervisor)
-        created=self.client.post("/api/project-deliverables/",{"project":project.id,"title":"Prototype","due_date":"2026-09-01"},format="json")
+        created=self.client.post("/api/project-deliverables/",{"project":project.id,"title":"Prototype","due_date":self.today + timedelta(days=30)},format="json")
         self.assertEqual(created.status_code,status.HTTP_201_CREATED)
         deliverable=ProjectDeliverable.objects.get()
         self.client.force_authenticate(self.employee)
@@ -82,6 +85,30 @@ class ProjectWorkflowTests(APITestCase):
         self.assertEqual(download.status_code,status.HTTP_200_OK)
         self.assertEqual(ProjectComment.objects.get().author,self.employee)
         self.assertEqual(ProjectDocument.objects.get().uploaded_by,self.employee)
+
+    @override_settings(PROJECT_MAX_UPLOAD_SIZE_MB=1)
+    def test_project_documents_reject_unsafe_types_and_oversized_files(self):
+        project = self.create_project()
+        self.client.force_authenticate(self.employee)
+        executable = SimpleUploadedFile(
+            "payload.exe", b"MZ", content_type="application/octet-stream"
+        )
+        rejected_type = self.client.post(
+            "/api/project-documents/",
+            {"project": project.id, "file": executable},
+            format="multipart",
+        )
+        self.assertEqual(rejected_type.status_code, status.HTTP_400_BAD_REQUEST)
+
+        oversized = SimpleUploadedFile(
+            "large.pdf", b"%PDF-1.4" + b"0" * (1024 * 1024), content_type="application/pdf"
+        )
+        rejected_size = self.client.post(
+            "/api/project-documents/",
+            {"project": project.id, "file": oversized},
+            format="multipart",
+        )
+        self.assertEqual(rejected_size.status_code, status.HTTP_400_BAD_REQUEST)
 
     def test_assignment_rejects_users_outside_business_unit(self):
         self.payload["assignee_ids"]=[self.outsider.id]

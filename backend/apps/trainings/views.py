@@ -248,6 +248,8 @@ class ClientTrainingSessionViewSet(viewsets.ReadOnlyModelViewSet):
 class TrainingEnrollmentViewSet(viewsets.ModelViewSet):
     queryset = TrainingEnrollment.objects.none()
     permission_classes = [IsTrainingOperationsUser]
+    # Workflow state changes must go through the explicit audited actions below.
+    http_method_names = ["get", "post", "head", "options"]
     filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
     filterset_fields = ["status", "training", "session"]
     search_fields = ["user__email", "user__first_name", "user__last_name", "training__title"]

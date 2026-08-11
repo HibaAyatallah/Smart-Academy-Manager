@@ -3,10 +3,12 @@ from django.contrib.auth import get_user_model
 
 from apps.accounts.choices import UserRole
 from apps.business_units.permissions import is_bu_manager
+from .choices import ALLOWED_BUSINESS_UNITS
 from .models import BusinessUnit, BusinessUnitMembership, BusinessUnitNeed, BusinessUnitNeedHistory
 
 
 class BusinessUnitSerializer(serializers.ModelSerializer):
+    code = serializers.CharField(max_length=50)
     manager_email = serializers.EmailField(source="manager.email", read_only=True)
     manager_name = serializers.CharField(source="manager.full_name", read_only=True)
 
@@ -26,13 +28,47 @@ class BusinessUnitSerializer(serializers.ModelSerializer):
         ]
 
     def validate_manager(self, value):
+        request = self.context.get("request")
+        if value is None:
+            if request and is_bu_manager(request.user):
+                raise serializers.ValidationError(
+                    "Vous ne pouvez pas retirer le manager de votre Business Unit."
+                )
+            return value
         if value.role != UserRole.BU_MANAGER:
             raise serializers.ValidationError("Le manager doit avoir le role BU_MANAGER.")
-        request = self.context.get("request")
         if request and is_bu_manager(request.user):
             if self.instance is None or value.pk != self.instance.manager_id:
                 raise serializers.ValidationError("Vous ne pouvez pas reassigner la Business Unit.")
         return value
+
+    def validate_code(self, value):
+        request = self.context.get("request")
+        if (
+            request
+            and is_bu_manager(request.user)
+            and self.instance
+            and value != self.instance.code
+        ):
+            from rest_framework.exceptions import PermissionDenied
+
+            raise PermissionDenied("Vous ne pouvez pas modifier le code de la Business Unit.")
+        return value
+
+    def validate(self, attrs):
+        attrs = super().validate(attrs)
+        code = attrs.get("code", getattr(self.instance, "code", None))
+        name = attrs.get("name", getattr(self.instance, "name", None))
+        expected_name = ALLOWED_BUSINESS_UNITS.get(code)
+        if expected_name is None:
+            raise serializers.ValidationError({
+                "code": "Valeurs autorisées : NetSEC, System, Software, Achat."
+            })
+        if name != expected_name:
+            raise serializers.ValidationError({
+                "name": f"Le nom doit être « {expected_name} » pour le code {code}."
+            })
+        return attrs
 
 
 class BusinessUnitMembershipSerializer(serializers.ModelSerializer):
@@ -343,7 +379,7 @@ class BusinessUnitNeedWorkflowSerializer(BusinessUnitNeedSerializer):
             raise serializers.ValidationError({"training_end_date": "La date ne peut pas être antérieure à aujourd'hui."})
         return attrs
 
-    def get_training_recipient_emails(self, obj):
+    def get_training_recipient_emails(self, obj) -> list[str]:
         return list(obj.training_recipients.values_list("email", flat=True))
 
     def create(self, validated_data):

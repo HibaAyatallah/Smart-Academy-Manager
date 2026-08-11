@@ -35,6 +35,7 @@ from .models import (
     Offer,
 )
 from apps.business_units.models import BusinessUnit, BusinessUnitMembership
+from apps.notifications.models import EmailDeliveryLog
 
 User = get_user_model()
 TEST_MEDIA_ROOT = tempfile.mkdtemp()
@@ -87,6 +88,22 @@ class RecruitmentAPITests(APITestCase):
         self.assertNotIn("password", response.data)
         self.assertNotIn("file", response.data["documents"][0])
         self.assertIn("download_url", response.data["documents"][0])
+
+    def test_public_application_sends_one_application_confirmation_email(self):
+        with self.captureOnCommitCallbacks(execute=True):
+            response = self.client.post(
+                "/api/applications/public-submit/",
+                self.public_application_payload(email="single-email@example.com"),
+                format="multipart",
+            )
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        application_logs = EmailDeliveryLog.objects.filter(
+            recipient="single-email@example.com",
+            event__startswith="application.",
+        )
+        self.assertEqual(application_logs.count(), 1)
+        self.assertEqual(application_logs.get().event, "application.submitted")
 
     def test_public_application_creation_links_offer_to_application(self):
         bu_manager = User.objects.create_user(
@@ -859,7 +876,8 @@ class InternshipWorkflowTests(APITestCase):
         self.client.force_authenticate(self.hr)
         response = self.client.patch(f"/api/interns/{self.profile.id}/", {
             "business_unit": self.bu.id, "supervisor": self.other_supervisor.id,
-            "internship_start": "2026-08-01", "internship_end": "2026-12-01",
+            "internship_start": timezone.localdate() + timedelta(days=5),
+            "internship_end": timezone.localdate() + timedelta(days=95),
             "current_status": "ACTIVE", "progress": 15,
         })
         self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)

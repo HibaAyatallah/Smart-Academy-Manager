@@ -12,8 +12,14 @@ export interface ActivityLog {
 }
 
 export interface ReportData {
-  filters: { date_from: string; date_to: string; business_unit: string };
+  filters: { date_from: string; date_to: string; business_unit: string; status: string; training_type: string };
+  filter_options: {
+    business_units: { id: number; name: string }[];
+    application_statuses: { value: string; label: string }[];
+    training_types: { value: string; label: string }[];
+  };
   cards: Record<string, number>;
+  insights: string[];
   recent_activities?: ActivityLog[];
   recent_applications?: any[]; // For table
   series: Record<string, ReportPoint[]> & {

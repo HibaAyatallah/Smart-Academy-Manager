@@ -33,7 +33,7 @@ class AttendanceCertificateTests(APITestCase):
     def test_assigned_trainer_records_and_validates_with_history(self):
         self.client.force_authenticate(self.trainer)
         created = self.client.post("/api/attendance/", {"enrollment": self.enrollment.id, "date": date.today(), "status": "PRESENT", "note": "On time"})
-        self.assertEqual(created.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(created.status_code, status.HTTP_201_CREATED, created.data)
         validated = self.client.post(f"/api/attendance/{created.data['id']}/validate/", {})
         self.assertEqual(validated.status_code, status.HTTP_200_OK)
         self.assertTrue(validated.data["validated"])
@@ -65,7 +65,7 @@ class AttendanceCertificateTests(APITestCase):
             "date": date.today(),
             "status": "PRESENT",
         })
-        self.assertEqual(created.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(created.status_code, status.HTTP_201_CREATED, created.data)
 
         self.session.end_date = date.today() + timedelta(days=1)
         self.session.save(update_fields=["end_date"])

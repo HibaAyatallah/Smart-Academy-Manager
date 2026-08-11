@@ -1,6 +1,9 @@
+from datetime import timedelta
+
 from django.contrib.auth import get_user_model
 from django.core.cache import cache
 from django.urls import reverse
+from django.utils import timezone
 from rest_framework import status
 from rest_framework.test import APITestCase, override_settings
 from rest_framework_simplejwt.tokens import AccessToken
@@ -388,8 +391,8 @@ class HREndpointTests(APITestCase):
             business_unit=self.bu,
             supervisor=self.employee,
             subject_title="Plateforme RH",
-            internship_start="2026-02-01",
-            internship_end="2026-07-31",
+            internship_start=timezone.localdate() - timedelta(days=180),
+            internship_end=timezone.localdate() + timedelta(days=180),
         )
         BusinessUnitMembership.objects.create(
             business_unit=self.bu, user=self.employee, is_active=True, position="Developer"

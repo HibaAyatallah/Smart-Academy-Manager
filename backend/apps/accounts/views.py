@@ -1,3 +1,5 @@
+import logging
+
 from django.contrib.auth import get_user_model
 from rest_framework import serializers, viewsets
 from rest_framework.generics import GenericAPIView, RetrieveAPIView
@@ -23,6 +25,7 @@ from .models import AccountSecurityLog
 from apps.notifications.services import queue_email
 
 User = get_user_model()
+logger = logging.getLogger(__name__)
 
 
 class SmartAcademyTokenObtainPairView(TokenObtainPairView):
@@ -140,7 +143,15 @@ class UserImportViewSet(viewsets.ViewSet):
         if file_obj.size > 5 * 1024 * 1024:
             return Response({"error": "Le fichier dépasse la taille maximale autorisée (5MB)."}, status=400)
             
-        result = parse_and_validate_file(file_obj, file_obj.name)
+        try:
+            result = parse_and_validate_file(file_obj, file_obj.name)
+        except Exception:
+            # A malformed workbook must be reported as a validation error and
+            # must never escape the preview endpoint as an HTTP 500.
+            return Response(
+                {"error": "Le fichier contient une structure de colonnes invalide."},
+                status=400,
+            )
         if "error" in result:
             return Response({"error": result["error"]}, status=400)
             
@@ -149,14 +160,17 @@ class UserImportViewSet(viewsets.ViewSet):
     @action(detail=False, methods=["post"])
     def confirm(self, request):
         valid_rows = request.data.get("valid_rows", [])
-        create_missing_bus = request.data.get("create_missing_bus", False)
         
         if not valid_rows:
             return Response({"error": "Aucune ligne valide à importer."}, status=400)
             
         try:
             with transaction.atomic():
-                results = execute_import(valid_rows, request.user, create_missing_bus=create_missing_bus)
+                results = execute_import(valid_rows, request.user)
             return Response({"results": results})
-        except Exception as e:
-            return Response({"error": f"Erreur lors de l'import: {str(e)}"}, status=400)
+        except ValueError as exc:
+            logger.warning("Bulk import rejected error_type=%s", exc.__class__.__name__)
+            return Response({"error": "Les données d'import sont incohérentes."}, status=400)
+        except Exception as exc:
+            logger.error("Bulk import confirmation failed error_type=%s", exc.__class__.__name__)
+            return Response({"error": "L'import n'a pas pu être finalisé."}, status=500)

@@ -4,16 +4,28 @@ from django.db import models
 from django.utils import timezone
 
 from apps.accounts.choices import UserRole
-from .choices import NeedPriority, NeedRequiredLevel, NeedStatus, NeedType, TrainingAudience
+from .choices import (
+    ALLOWED_BUSINESS_UNITS,
+    BusinessUnitCode,
+    NeedPriority,
+    NeedRequiredLevel,
+    NeedStatus,
+    NeedType,
+    TrainingAudience,
+)
 
 
 class BusinessUnit(models.Model):
     name = models.CharField("Nom", max_length=255, unique=True)
-    code = models.CharField("Code", max_length=50, unique=True)
+    code = models.CharField(
+        "Code", max_length=50, unique=True, choices=BusinessUnitCode.choices
+    )
     description = models.TextField("Description", blank=True)
     manager = models.ForeignKey(
         settings.AUTH_USER_MODEL,
-        on_delete=models.PROTECT,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
         verbose_name="Manager",
         related_name="managed_business_units",
         limit_choices_to={"role": UserRole.BU_MANAGER},
@@ -31,6 +43,16 @@ class BusinessUnit(models.Model):
         return f"{self.name} ({self.code})"
 
     def clean(self):
+        expected_name = ALLOWED_BUSINESS_UNITS.get(self.code)
+        if expected_name is None:
+            raise ValidationError(
+                {"code": "Business Unit invalide. Valeurs autorisées : NetSEC, System, Software, Achat."}
+            )
+        if self.name != expected_name:
+            raise ValidationError(
+                {"name": f"Le nom doit être « {expected_name} » pour le code {self.code}."}
+            )
+        # manager is optional (BU can exist without an assigned manager initially)
         if self.manager_id and self.manager.role != UserRole.BU_MANAGER:
             raise ValidationError(
                 {"manager": "Le manager assigné doit avoir le rôle BU_MANAGER."}

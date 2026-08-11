@@ -14,7 +14,6 @@ EMAIL_TEXT={
   "password.changed":"Votre mot de passe a été modifié",
   "email.changed":"Votre adresse e-mail a été modifiée",
   "application.submitted":"Candidature reçue",
-  "application.confirmed":"Inscription confirmée",
   "notification":"Nouvelle notification Smart Academy",
  },
  "en":{
@@ -22,7 +21,6 @@ EMAIL_TEXT={
   "password.changed":"Your password was changed",
   "email.changed":"Your email address was changed",
   "application.submitted":"Application received",
-  "application.confirmed":"Registration confirmed",
   "notification":"New Smart Academy notification",
  },
  "ar":{
@@ -30,7 +28,6 @@ EMAIL_TEXT={
   "password.changed":"تم تغيير كلمة المرور",
   "email.changed":"تم تغير البريد الإلكتروني",
   "application.submitted":"تم استلام طلبك",
-  "application.confirmed":"تم تأكيد التسجيل",
   "notification":"إشعار جديد من Smart Academy",
  },
 }
@@ -43,23 +40,46 @@ def send_templated_email(*,recipient,event,event_key,context=None,subject=None):
             log=EmailDeliveryLog.objects.create(recipient=recipient.email,event=event,event_key=event_key,language=language)
     except IntegrityError:
         return None
-    context={"user":recipient,"language":language,"direction":"rtl" if language=="ar" else "ltr","frontend_url":settings.FRONTEND_URL,**(context or {})}
-    resolved_subject=subject or EMAIL_TEXT[language].get(event,EMAIL_TEXT[language]["notification"])
-    text=context.get("message",resolved_subject)
-    html=render_to_string("emails/notification.html",{"subject":resolved_subject,**context})
     try:
-        message=EmailMultiAlternatives(resolved_subject,text,settings.DEFAULT_FROM_EMAIL,[recipient.email]);message.attach_alternative(html,"text/html");message.send(fail_silently=False)
+        context={"user":recipient,"language":language,"direction":"rtl" if language=="ar" else "ltr","frontend_url":settings.FRONTEND_URL,**(context or {})}
+        resolved_subject=subject or EMAIL_TEXT[language].get(event,EMAIL_TEXT[language]["notification"])
+        text=context.get("message",resolved_subject)
+        html=render_to_string("emails/notification.html",{"subject":resolved_subject,**context})
+        message=EmailMultiAlternatives(resolved_subject,text,settings.DEFAULT_FROM_EMAIL,[recipient.email])
+        message.attach_alternative(html,"text/html")
+        sent_count=message.send(fail_silently=False)
+        if sent_count != 1:
+            raise EmailDeliveryError("The email backend did not confirm delivery.")
         log.status="SENT";log.sent_at=timezone.now();log.save(update_fields=["status","sent_at"])
-    except Exception as exc: # no sensitive payload is logged
-        error_message=f"{exc.__class__.__name__}: {exc}"
+    except Exception as exc:
+        # Persist and log only the exception type. SMTP responses can contain
+        # provider details and must never leak credentials or message payloads.
+        error_code=exc.__class__.__name__[:120]
         log.status="FAILED";
-        log.error_code=error_message[:120]
+        log.error_code=error_code
         log.save(update_fields=["status","error_code"])
-        logger.warning("Email delivery failed event=%s code=%s message=%s", event, exc.__class__.__name__, str(exc))
+        logger.error(
+            "Email delivery failed event=%s delivery_log_id=%s error_type=%s",
+            event,
+            log.pk,
+            error_code,
+        )
+        if settings.EMAIL_RAISE_DELIVERY_ERRORS:
+            raise
     return log
 
 def queue_email(**kwargs):
+    """Send after the surrounding transaction commits.
+
+    This is deliberately synchronous until a real task queue is configured: a
+    failed SMTP delivery is logged with its traceback and can be surfaced in
+    development instead of disappearing in an unobserved background callback.
+    """
     transaction.on_commit(lambda: send_templated_email(**kwargs))
+
+
+class EmailDeliveryError(RuntimeError):
+    """Raised when an email backend does not confirm a delivery."""
 
 def notify(recipient,category,title,message,link="",target=None):
     if not recipient or not recipient.is_active:return None

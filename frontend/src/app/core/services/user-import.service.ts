@@ -33,10 +33,9 @@ export class UserImportService {
     return this.http.post<ImportPreviewResult>(`${this.apiUrl}preview/`, formData);
   }
 
-  confirmImport(validRows: any[], createMissingBus: boolean = false): Observable<ImportConfirmResult> {
-    return this.http.post<ImportConfirmResult>(`${this.apiUrl}confirm/`, { 
-      valid_rows: validRows,
-      create_missing_bus: createMissingBus
+  confirmImport(validRows: any[]): Observable<ImportConfirmResult> {
+    return this.http.post<ImportConfirmResult>(`${this.apiUrl}confirm/`, {
+      valid_rows: validRows
     });
   }
 }

@@ -1,6 +1,29 @@
 import { routes } from './app.routes';
 
-describe('Business Unit routes', () => {
+describe('Application routes', () => {
+  it('exposes connected routes before the wildcard', () => {
+    const privateShell = routes.find((route) => route.canActivate?.length && route.children);
+    const privatePaths = privateShell?.children?.map((route) => route.path) ?? [];
+    expect(privatePaths).not.toContain('candidate/applications');
+    expect(privatePaths).toContain('notifications');
+    expect(privatePaths).toContain('reports');
+    expect(privatePaths).toContain('audit-logs');
+    expect(routes.at(-1)?.path).toBe('**');
+  });
+
+  it('applies the requested role restrictions to connected routes', () => {
+    const privateShell = routes.find((route) => route.canActivate?.length && route.children);
+    const notifications = privateShell?.children?.find((route) => route.path === 'notifications');
+    const reports = privateShell?.children?.find((route) => route.path === 'reports');
+    const auditLogs = privateShell?.children?.find((route) => route.path === 'audit-logs');
+
+    expect(notifications?.data?.['roles']).toBeUndefined();
+    expect(notifications?.canActivate).toBeUndefined();
+    expect(reports?.data?.['roles']).toEqual(['SUPER_ADMIN']);
+    expect(reports?.canActivate?.length).toBeGreaterThan(0);
+    expect(auditLogs?.data?.['roles']).toEqual(['SUPER_ADMIN']);
+    expect(auditLogs?.canActivate?.length).toBeGreaterThan(0);
+  });
   it('restricts user management pages to the Super Admin', () => {
     const privateShell = routes.find((route) => route.canActivate?.length && route.children);
     for (const path of ['users', 'users/new', 'users/:id/edit']) {
@@ -14,12 +37,15 @@ describe('Business Unit routes', () => {
     const privateShell = routes.find((route) => route.canActivate?.length && route.children);
     const catalogue = privateShell?.children?.find((child) => child.path === 'trainings');
     const approvals = privateShell?.children?.find((child) => child.path === 'training-enrollments');
+    const participants = privateShell?.children?.find((child) => child.path === 'training-participants');
     const client = privateShell?.children?.find((child) => child.path === 'client-trainings');
     expect(catalogue?.data?.['roles']).toContain('TRAINER_TUTOR');
     expect(approvals?.data?.['roles']).toContain('BU_MANAGER');
     expect(client?.data?.['roles']).toEqual(['CLIENT']);
     const attendance = privateShell?.children?.find((child) => child.path === 'attendance-certificates');
     expect(attendance?.data?.['roles']).toEqual(['SUPER_ADMIN', 'BU_MANAGER', 'TRAINER_TUTOR']);
+    expect(approvals?.data?.['roles']).toEqual(['SUPER_ADMIN', 'BU_MANAGER', 'TRAINER_TUTOR']);
+    expect(participants?.data?.['roles']).toEqual(['SUPER_ADMIN']);
     expect(catalogue?.data?.['roles']).not.toContain('EMPLOYEE');
     expect(approvals?.data?.['roles']).not.toContain('EMPLOYEE');
   });

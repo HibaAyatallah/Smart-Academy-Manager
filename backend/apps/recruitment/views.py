@@ -1,3 +1,5 @@
+import logging
+
 from django.db.models import Q
 from django.http import FileResponse, Http404
 from django.utils import timezone
@@ -11,6 +13,8 @@ from rest_framework.response import Response
 
 from apps.accounts.throttles import PublicSubmissionRateThrottle
 from apps.accounts.choices import UserRole
+
+logger = logging.getLogger(__name__)
 
 from .choices import ApplicationStatus, OfferStatus
 from .models import (
@@ -107,6 +111,10 @@ class ApplicationViewSet(viewsets.ModelViewSet):
             "reject",
             "archive",
             "convert",
+            "analyze_cv",
+            "match_offers",
+            "review_match",
+            "validate_cv",
         }:
             return [IsRecruitmentManager()]
         return super().get_permissions()
@@ -147,6 +155,59 @@ class ApplicationViewSet(viewsets.ModelViewSet):
             )
         return queryset
 
+    @action(detail=True, methods=["post"], url_path="analyze-cv")
+    def analyze_cv(self, request, pk=None):
+        from .intelligence import extract_cv
+        try:
+            analysis = extract_cv(self.get_object())
+        except ValueError as exc:
+            raise DRFValidationError({"detail": str(exc)}) from exc
+        return Response({"id": analysis.id, "skills": analysis.skills, "experiences": analysis.experiences,
+                         "diplomas": analysis.diplomas, "contact_details": analysis.contact_details,
+                         "human_validated": analysis.human_validated, "extractor_version": analysis.extractor_version})
+
+    @action(detail=True, methods=["post"], url_path="match-offers")
+    def match_offers(self, request, pk=None):
+        from .intelligence import match_application
+        try:
+            matches = match_application(self.get_object())
+        except ValueError as exc:
+            raise DRFValidationError({"detail": str(exc)}) from exc
+        match_data = [{"id": item.id, "offer": item.offer_id, "score": item.score,
+                          "matched_skills": item.matched_skills, "missing_skills": item.missing_skills,
+                          "explanation": item.explanation, "human_decision": item.human_decision}
+                         for item in matches]
+        recommendations = self.get_object().training_recommendations.select_related("training")
+        return Response({"matches": match_data, "training_recommendations": [
+            {"id": item.id, "training": item.training_id, "training_title": item.training.title,
+             "score": item.score, "skill_gaps": item.skill_gaps, "explanation": item.explanation,
+             "human_decision": item.human_decision} for item in recommendations
+        ]})
+
+    @action(detail=True, methods=["post"], url_path="validate-cv")
+    def validate_cv(self, request, pk=None):
+        analysis = getattr(self.get_object(), "cv_analysis", None)
+        if not analysis:
+            raise DRFValidationError({"detail": "Analyse CV inexistante."})
+        analysis.human_validated = True
+        analysis.validated_by = request.user
+        analysis.validated_at = timezone.now()
+        analysis.save(update_fields=["human_validated", "validated_by", "validated_at", "updated_at"])
+        return Response({"id": analysis.id, "human_validated": True, "validated_at": analysis.validated_at})
+
+    @action(detail=True, methods=["post"], url_path="review-match")
+    def review_match(self, request, pk=None):
+        from .models import ApplicationMatch
+        decision = request.data.get("decision")
+        if decision not in {"APPROVED", "REJECTED"}:
+            raise DRFValidationError({"decision": "Décision attendue: APPROVED ou REJECTED."})
+        match = ApplicationMatch.objects.filter(application=self.get_object(), pk=request.data.get("match_id")).first()
+        if not match:
+            raise DRFValidationError({"match_id": "Résultat introuvable."})
+        match.human_decision = decision; match.reviewed_by = request.user; match.reviewed_at = timezone.now()
+        match.save(update_fields=["human_decision", "reviewed_by", "reviewed_at"])
+        return Response({"id": match.id, "human_decision": match.human_decision, "reviewed_at": match.reviewed_at})
+
     def create(self, request, *args, **kwargs):
         serializer = AuthenticatedApplicationCreateSerializer(
             data=request.data, context=self.get_serializer_context()
@@ -160,7 +221,6 @@ class ApplicationViewSet(viewsets.ModelViewSet):
             {"candidate_email": application.candidate.email},
         )
         queue_email(recipient=application.candidate,event="application.submitted",event_key=f"application:{application.pk}:submitted",subject="Candidature reçue",context={"message":"Votre candidature a bien été enregistrée."})
-        queue_email(recipient=application.candidate,event="application.confirmed",event_key=f"application:{application.pk}:confirmed",subject="Inscription confirmée",context={"message":"Votre inscription sur notre plateforme a bien été prise en compte. Nous vous remercions pour votre candidature."})
         return Response(
             ApplicationSerializer(application, context=self.get_serializer_context()).data,
             status=status.HTTP_201_CREATED,
@@ -185,13 +245,13 @@ class ApplicationViewSet(viewsets.ModelViewSet):
             serializer.is_valid(raise_exception=True)
             application = serializer.save()
             queue_email(recipient=application.candidate,event="application.submitted",event_key=f"application:{application.pk}:submitted",subject="Candidature reçue",context={"message":"Votre candidature a bien été enregistrée."})
-            queue_email(recipient=application.candidate,event="application.confirmed",event_key=f"application:{application.pk}:confirmed",subject="Inscription confirmée",context={"message":"Votre inscription sur notre plateforme a bien été prise en compte. Nous vous remercions pour votre candidature."})
         except DRFValidationError as exc:
             return Response(exc.detail, status=status.HTTP_400_BAD_REQUEST)
-        except Exception:  # pragma: no cover - defensive guard for unexpected API failures
+        except Exception as exc:  # pragma: no cover - defensive guard for unexpected API failures
+            logger.error("Public application submission failed error_type=%s", exc.__class__.__name__)
             return Response(
                 {"detail": "Impossible de traiter votre candidature. Veuillez réessayer plus tard."},
-                status=status.HTTP_400_BAD_REQUEST,
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
             )
 
         log_sensitive_action(
@@ -448,6 +508,7 @@ class InternProfileViewSet(viewsets.ModelViewSet):
 
 
 class InternDocumentViewSet(viewsets.ModelViewSet):
+    queryset = InternDocument.objects.none()
     serializer_class = InternDocumentSerializer
     permission_classes = [IsInternshipParticipant]
     

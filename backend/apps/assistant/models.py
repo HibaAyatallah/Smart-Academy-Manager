@@ -8,5 +8,5 @@ class Conversation(models.Model):
 class ChatMessage(models.Model):
     conversation=models.ForeignKey(Conversation,on_delete=models.CASCADE,related_name="messages")
     role=models.CharField(max_length=12,choices=[("USER","User"),("ASSISTANT","Assistant")])
-    content=models.TextField(max_length=4000);created_at=models.DateTimeField(auto_now_add=True)
+    content=models.TextField(max_length=4000);sources=models.JSONField(default=list,blank=True);request_id=models.UUIDField(null=True,blank=True,db_index=True);created_at=models.DateTimeField(auto_now_add=True)
     class Meta: ordering=["created_at"]

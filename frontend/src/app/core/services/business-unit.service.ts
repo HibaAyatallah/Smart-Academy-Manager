@@ -31,6 +31,8 @@ export class BusinessUnitService {
     return this.http.get<BusinessUnit>(`${this.baseUrl}business-units/${id}/`);
   }
 
+  // These mutations remain part of the active Django ViewSet contract even
+  // when no current Angular screen exposes every operation directly.
   createBusinessUnit(data: Partial<BusinessUnit>): Observable<BusinessUnit> {
     return this.http.post<BusinessUnit>(`${this.baseUrl}business-units/`, data);
   }

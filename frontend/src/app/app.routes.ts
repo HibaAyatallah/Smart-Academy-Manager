@@ -73,6 +73,23 @@ export const routes: Routes = [
         loadComponent: () => import('./features/applications/hr-application-list/hr-application-list.component').then(m => m.HrApplicationListComponent),
       },
       {
+        path: 'notifications',
+        data: { title: 'Notifications' },
+        loadComponent: () => import('./features/notifications/notification-center.component').then(m => m.NotificationCenterComponent),
+      },
+      {
+        path: 'reports',
+        canActivate: [roleGuard],
+        data: { roles: ['SUPER_ADMIN'], title: 'Rapports & KPI' },
+        loadComponent: () => import('./features/reports/reports.component').then(m => m.ReportsComponent),
+      },
+      {
+        path: 'audit-logs',
+        canActivate: [roleGuard],
+        data: { roles: ['SUPER_ADMIN'], title: 'Journaux d’audit' },
+        loadComponent: () => import('./features/administration/audit-logs.component').then(m => m.AuditLogsComponent),
+      },
+      {
         path: 'offers',
         canActivate: [roleGuard],
         data: { roles: ['SUPER_ADMIN'], title: 'Offres' },
@@ -148,6 +165,12 @@ export const routes: Routes = [
         canActivate: [roleGuard],
         data: { roles: ['SUPER_ADMIN', 'BU_MANAGER', 'TRAINER_TUTOR'], title: 'Inscriptions aux formations' },
         loadComponent: () => import('./features/trainings/enrollment-workflow/enrollment-workflow.component').then(m => m.EnrollmentWorkflowComponent),
+      },
+      {
+        path: 'training-participants',
+        canActivate: [roleGuard],
+        data: { roles: ['SUPER_ADMIN'], title: 'Personnes inscrites' },
+        loadComponent: () => import('./features/trainings/training-participants/training-participants.component').then(m => m.TrainingParticipantsComponent),
       },
       {
         path: 'attendance-certificates',

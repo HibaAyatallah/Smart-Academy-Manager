@@ -12,6 +12,7 @@ import {
   UserProfile,
 } from '../models/auth.models';
 import { ROLE_DASHBOARD_PATHS } from '../utils/role-dashboard';
+import { AppLanguage } from '../i18n/translations';
 import { TokenStorageService } from './token-storage.service';
 
 @Injectable({
@@ -112,8 +113,13 @@ export class AuthService {
     );
   }
 
-  updateLanguage(preferred_language: 'fr' | 'en' | 'ar'): Observable<{preferred_language:string}> {
-    return this.http.patch<{preferred_language:string}>(`${environment.apiBaseUrl}auth/language/`, {preferred_language});
+  updateLanguage(preferred_language: AppLanguage): Observable<{preferred_language: AppLanguage}> {
+    return this.http.patch<{preferred_language: AppLanguage}>(`${this.apiBaseUrl}auth/language/`, {preferred_language}).pipe(
+      tap(({ preferred_language: confirmedLanguage }) => {
+        const currentUser = this.currentUserSubject.value;
+        if (currentUser) this.currentUserSubject.next({...currentUser, preferred_language: confirmedLanguage});
+      }),
+    );
   }
 
   changePassword(payload: { current_password: string; new_password: string; confirmation: string }): Observable<{ detail: string }> {

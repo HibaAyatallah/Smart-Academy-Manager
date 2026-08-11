@@ -26,7 +26,7 @@ class TrainingSessionSerializer(serializers.ModelSerializer):
         ]
         read_only_fields = ["id", "status", "created_by", "created_at", "updated_at"]
 
-    def get_remaining_capacity(self, obj):
+    def get_remaining_capacity(self, obj) -> int:
         if hasattr(obj, 'participant_count'):
             count = obj.participant_count
         else:
@@ -129,17 +129,17 @@ class TrainingEnrollmentSerializer(serializers.ModelSerializer):
             "super_admin_comment", "super_admin_decided_by", "super_admin_decided_at",
             "final_status", "created_at", "updated_at", "history"
         ]
-
-    def get_user_name(self, obj):
-        return obj.user.get_full_name() or obj.user.email
-
-    def get_present_days(self, obj):
-        return obj.attendances.filter(status__in=["PRESENT", "LATE"]).count()
         read_only_fields = [
             "requested_at", "status", "manager_decision", "manager_decided_by",
             "manager_decided_at", "super_admin_decision", "super_admin_decided_by",
             "super_admin_decided_at", "final_status", "created_at", "updated_at"
         ]
+
+    def get_user_name(self, obj) -> str:
+        return obj.user.get_full_name() or obj.user.email
+
+    def get_present_days(self, obj) -> int:
+        return obj.attendances.filter(status__in=["PRESENT", "LATE"]).count()
 
 
 class TrainingEnrollmentCreateSerializer(serializers.ModelSerializer):
@@ -240,7 +240,7 @@ class SessionAttendanceSerializer(serializers.ModelSerializer):
             raise serializers.ValidationError("Attendance is limited to enrolled participants.")
         return enrollment
 
-    def get_user_name(self, obj):
+    def get_user_name(self, obj) -> str:
         return obj.enrollment.user.get_full_name() or obj.enrollment.user.email
 
     def validate(self, attrs):
@@ -265,5 +265,5 @@ class TrainingCertificateSerializer(serializers.ModelSerializer):
         fields = ["id", "enrollment", "user_email", "training_title", "session", "certificate_number", "issued_at", "issued_by", "download_url"]
         read_only_fields = fields
 
-    def get_download_url(self, obj):
+    def get_download_url(self, obj) -> str:
         return f"/api/certificates/{obj.pk}/download/"

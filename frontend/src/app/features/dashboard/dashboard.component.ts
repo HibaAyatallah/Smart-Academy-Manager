@@ -1,5 +1,6 @@
-import { AsyncPipe, DatePipe, NgClass, NgFor, NgIf } from '@angular/common';
+import { AsyncPipe, NgClass, NgFor, NgIf } from '@angular/common';
 import { Component, OnDestroy, OnInit, inject, ViewChildren, QueryList, ElementRef, AfterViewInit } from '@angular/core';
+import { FormsModule } from '@angular/forms';
 import { MatButtonModule } from '@angular/material/button';
 import { MatCardModule } from '@angular/material/card';
 import { MatChipsModule } from '@angular/material/chips';
@@ -7,6 +8,9 @@ import { MatPaginatorModule, PageEvent } from '@angular/material/paginator';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
 import { MatIconModule } from '@angular/material/icon';
+import { MatFormFieldModule } from '@angular/material/form-field';
+import { MatInputModule } from '@angular/material/input';
+import { MatSelectModule } from '@angular/material/select';
 import { MatTooltipModule } from '@angular/material/tooltip';
 import { ActivatedRoute, RouterLink } from '@angular/router';
 import { Observable } from 'rxjs';
@@ -28,6 +32,8 @@ import { ReportService } from '../../core/services/report.service';
 import { InternshipService } from '../../core/services/internship.service';
 import { InternProfile, INTERNSHIP_STATUS_LABELS } from '../../core/models/internship.models';
 import { PageHeaderComponent } from '../../shared/components/page-header/page-header.component';
+import { TranslatePipe } from '../../core/i18n/translate.pipe';
+import { LocalizedDatePipe } from '../../core/i18n/localized-date.pipe';
 import { EmptyStateComponent } from '../../shared/components/empty-state/empty-state.component';
 import {
   candidateApplicationStepLabel,
@@ -44,8 +50,8 @@ import {
   standalone: true,
   imports: [
     AsyncPipe,
-    DatePipe,
     EmptyStateComponent,
+    FormsModule,
     MatButtonModule,
     MatCardModule,
     MatChipsModule,
@@ -53,12 +59,17 @@ import {
     MatProgressSpinnerModule,
     MatSnackBarModule,
     MatIconModule,
+    MatFormFieldModule,
+    MatInputModule,
+    MatSelectModule,
     MatTooltipModule,
     NgClass,
     NgFor,
     NgIf,
     PageHeaderComponent,
     RouterLink,
+    TranslatePipe,
+    LocalizedDatePipe,
   ],
   templateUrl: './dashboard.component.html',
   styleUrl: './dashboard.component.scss',
@@ -90,6 +101,7 @@ export class DashboardComponent implements OnDestroy, OnInit, AfterViewInit {
     { value: 'year', label: 'Cette année' },
   ] as const;
   selectedPeriod: '7d' | '30d' | '3m' | 'year' = '30d';
+  dashboardFilters = { date_from: '', date_to: '', business_unit: '', status: '', training_type: '' };
   
   // HR Data
   hrReportData: HRDashboardData | null = null;
@@ -202,7 +214,7 @@ export class DashboardComponent implements OnDestroy, OnInit, AfterViewInit {
       this.loadCandidateApplications();
     } else if (role === 'INTERN') {
       this.loadInternDashboard();
-    } else if (role === 'SUPER_ADMIN') {
+    } else if (role === 'SUPER_ADMIN' || role === 'BU_MANAGER') {
       this.loadSuperAdminDashboard();
     } else if (role === 'HR') {
       this.loadHrDashboard();
@@ -252,7 +264,14 @@ export class DashboardComponent implements OnDestroy, OnInit, AfterViewInit {
     this.loadSuperAdminDashboard();
   }
 
+  applyDashboardFilters(): void {
+    this.loadSuperAdminDashboard();
+  }
+
   private periodFilters(): { date_from: string; date_to: string } {
+    if (this.dashboardFilters.date_from || this.dashboardFilters.date_to) {
+      return this.dashboardFilters as { date_from: string; date_to: string };
+    }
     const today = new Date();
     const from = new Date(today);
     if (this.selectedPeriod === '7d') from.setDate(from.getDate() - 6);
@@ -260,7 +279,7 @@ export class DashboardComponent implements OnDestroy, OnInit, AfterViewInit {
     if (this.selectedPeriod === '3m') from.setMonth(from.getMonth() - 3);
     if (this.selectedPeriod === 'year') from.setMonth(0, 1);
     const isoDate = (value: Date) => value.toISOString().slice(0, 10);
-    return { date_from: isoDate(from), date_to: isoDate(today) };
+    return { ...this.dashboardFilters, date_from: isoDate(from), date_to: isoDate(today) };
   }
 
   private loadHrDashboard(): void {

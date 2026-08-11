@@ -2,7 +2,7 @@ from django.contrib import admin
 from django.urls import include, path
 from drf_spectacular.views import SpectacularAPIView, SpectacularRedocView, SpectacularSwaggerView
 from rest_framework.routers import DefaultRouter
-from rest_framework_simplejwt.views import TokenRefreshView, TokenVerifyView
+from rest_framework_simplejwt.views import TokenBlacklistView, TokenRefreshView, TokenVerifyView
 
 from apps.accounts.views import ChangePasswordAPIView, ContactDetailsAPIView, MeAPIView, PreferredLanguageAPIView, UserViewSet, SmartAcademyTokenObtainPairView, UserImportViewSet
 from apps.recruitment.views import (
@@ -30,6 +30,7 @@ router.register("intern-evaluations", InternEvaluationViewSet, basename="intern-
 urlpatterns = [
     path("admin/", admin.site.urls),
     path("api/", include(router.urls)),
+    path("api/", include("apps.core.urls")),
     path("api/", include("apps.business_units.urls")),
     path("api/", include("apps.trainings.urls")),
     path("api/", include("apps.projects.urls")),
@@ -41,6 +42,7 @@ urlpatterns = [
     path("api/auth/token/", SmartAcademyTokenObtainPairView.as_view(), name="token_obtain_pair"),
     path("api/auth/token/refresh/", TokenRefreshView.as_view(), name="token_refresh"),
     path("api/auth/token/verify/", TokenVerifyView.as_view(), name="token_verify"),
+    path("api/auth/token/blacklist/", TokenBlacklistView.as_view(), name="token_blacklist"),
     path("api/auth/me/", MeAPIView.as_view(), name="auth_me"),
     path("api/auth/contact-details/", ContactDetailsAPIView.as_view(), name="auth_contact_details"),
     path("api/auth/language/", PreferredLanguageAPIView.as_view(), name="auth_language"),
