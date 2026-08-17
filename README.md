@@ -1,57 +1,68 @@
 # Smart Academy Manager
 
-Smart Academy Manager est une plateforme de gestion academique et RH construite avec Angular, Django REST Framework et PostgreSQL.
+Smart Academy Manager est une plateforme web de gestion académique et RH réalisée dans le cadre d’un **stage chez FINATECH** par **Hiba Ayatallah**.
 
-Le projet fournit une fondation technique et plusieurs workflows metier complets :
+Le projet centralise les parcours de recrutement, l’intégration et le suivi des stagiaires et collaborateurs, les formations, les projets et le pilotage des activités. Il propose des espaces adaptés aux différents profils et sécurise l’accès aux données selon le rôle et la Business Unit.
 
-- backend Django structure et evolutif ;
-- PostgreSQL configure via variables d'environnement ;
-- utilisateur personnalise avec roles metier ;
-- authentification JWT ;
-- permissions de base ;
-- documentation OpenAPI/Swagger ;
-- depot Git local initialise ;
-- module de gestion des candidatures.
+## Fonctionnalités principales
 
-## Architecture cible
+- authentification JWT, profils, rôles et permissions ;
+- gestion des utilisateurs, Business Units, membres et besoins ;
+- offres, candidatures, entretiens et conversion en stagiaire ou collaborateur ;
+- extraction structurée des CV PDF/DOCX, matching avec les offres et recommandations de formations ;
+- gestion des stages, projets, livrables et évaluations ;
+- formations, inscriptions, présences et certificats PDF ;
+- tableaux de bord, rapports, exports, notifications et journal d’audit ;
+- assistant métier Ollama avec historique privé et contexte filtré par utilisateur.
+
+## Architecture
+
+- **Frontend** : Angular, Angular Material et interface responsive.
+- **Backend** : Django et Django REST Framework, exposant une API REST.
+- **Base de données** : PostgreSQL.
+- **Sécurité** : authentification JWT, guards Angular et permissions backend.
+- **IA** : analyse des CV, matching, recommandations et assistant local Ollama.
+
+Les rôles principaux sont : Super Administrateur, RH, Responsable Business Unit, Collaborateur, Stagiaire, Candidat, Formateur/Tuteur et Client.
+
+## Structure du projet
 
 ```text
 Smart_Academy_Manager/
-  backend/
-    apps/
-      accounts/
-      core/
-    config/
-      settings/
-    requirements/
-  frontend/
-    src/
-      app/
-        core/
-        features/
-        layouts/
-        shared/
-  docs/
+├── backend/        API Django, modèles, règles métier et tests
+├── frontend/       application Angular
+├── deploy/         fichiers de déploiement
+├── scripts/        sauvegarde, restauration et déploiement
+└── docker-compose.yml
 ```
 
-Le frontend Angular contient l'authentification, les espaces par rôle, le recrutement, les Business Units, les offres, la gestion des utilisateurs et le workflow complet des formations.
+## Lancement rapide
 
-## Modules actuellement disponibles
+Prérequis : Python 3.12+, Node.js/npm et PostgreSQL. Copier les exemples d’environnement, puis renseigner les secrets et la connexion à la base.
 
-- authentification JWT, profil et changement de mot de passe ;
-- candidatures, documents, entretiens et conversion en stagiaire/collaborateur ;
-- offres rattachées aux Business Units ;
-- Business Units, membres et besoins ;
-- catalogue de formations et gestion des sessions ;
-- demandes d'inscription, validation Manager puis Super Admin et historique ;
-- gestion des stages : affectations, dates, progression, documents et évaluations ;
-- gestion des projets : affectations collaborateurs/stagiaires, livrables, progression, commentaires et documents ;
-- suivi des présences, validation formateur, complétion des formations et certificats PDF sécurisés ;
-- notifications internes configurables et journal d'audit sécurisé ;
-- tableaux de bord analytiques multi-domaines avec exports CSV et PDF ;
-- vues dédiées Formateur/Tuteur et Client externe ;
-- documentation OpenAPI/Swagger.
+```powershell
+cd backend
+python -m venv .venv
+.\.venv\Scripts\Activate.ps1
+pip install -r requirements/local.txt
+python manage.py migrate
+python manage.py runserver 8001
+```
 
-## Prochaine etape
+Dans un autre terminal :
 
-Suis le guide [backend/README.md](backend/README.md) pour creer l'environnement Python, installer les dependances, creer la base PostgreSQL et lancer les migrations.
+```powershell
+cd frontend
+npm install
+npm start
+```
+
+L’interface est disponible sur `http://localhost:4200` et l’API sur `http://localhost:8001/api/`.
+
+## Technologies principales
+
+Angular, TypeScript, Angular Material, Django, Django REST Framework, PostgreSQL, SimpleJWT, PyMuPDF, python-docx, Ollama, Docker et Nginx.
+
+## État actuel
+
+Le socle fonctionnel est complet et couvert par des tests backend et frontend. Le projet se trouve en phase finale de stabilisation et de validation du déploiement de production.
