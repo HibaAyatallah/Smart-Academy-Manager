@@ -126,6 +126,20 @@ export class AuthService {
     return this.http.post<{ detail: string }>(`${this.apiBaseUrl}auth/change-password/`, payload);
   }
 
+  requestPasswordReset(email: string): Observable<{ detail: string }> {
+    return this.http.post<{ detail: string }>(`${this.apiBaseUrl}auth/password-reset/request/`, { email });
+  }
+
+  validatePasswordResetToken(uid: string, token: string): Observable<{ valid: boolean }> {
+    return this.http.get<{ valid: boolean }>(
+      `${this.apiBaseUrl}auth/password-reset/validate/${encodeURIComponent(uid)}/${encodeURIComponent(token)}/`,
+    );
+  }
+
+  confirmPasswordReset(payload: { uid: string; token: string; new_password: string; confirmation: string }): Observable<{ detail: string }> {
+    return this.http.post<{ detail: string }>(`${this.apiBaseUrl}auth/password-reset/confirm/`, payload);
+  }
+
   logout(redirect = true): void {
     this.tokenStorage.clear();
     this.clearProfileState();

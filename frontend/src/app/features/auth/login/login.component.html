@@ -36,6 +36,8 @@
           <mat-error *ngIf="loginForm.controls.password.hasError('required')">{{'validation.required'|translate}}</mat-error>
         </mat-form-field>
 
+        <a class="forgot-password-link" routerLink="/forgot-password">Mot de passe oublié ?</a>
+
         <button mat-flat-button color="primary" type="submit" [disabled]="isSubmitting" class="btn btn-primary full-width mt-md">
           <mat-icon *ngIf="isSubmitting">hourglass_empty</mat-icon>
           {{ (isSubmitting ? 'auth.loggingIn' : 'auth.login') | translate }}

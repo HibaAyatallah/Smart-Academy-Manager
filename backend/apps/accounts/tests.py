@@ -1,12 +1,17 @@
 from datetime import timedelta
 
 from django.contrib.auth import get_user_model
+from django.contrib.auth.tokens import default_token_generator
 from django.core.cache import cache
+from django.core import mail
 from django.urls import reverse
+from django.utils.encoding import force_bytes
+from django.utils.http import urlsafe_base64_encode
 from django.utils import timezone
 from rest_framework import status
 from rest_framework.test import APITestCase, override_settings
-from rest_framework_simplejwt.tokens import AccessToken
+from rest_framework_simplejwt.token_blacklist.models import BlacklistedToken
+from rest_framework_simplejwt.tokens import AccessToken, RefreshToken
 
 from .choices import UserRole
 from .models import AccountSecurityLog
@@ -526,3 +531,129 @@ class ThrottleTests(APITestCase):
         self.client.force_authenticate(user=self.user)
         response = self.client.get(reverse("auth_me"))
         self.assertEqual(response.status_code, status.HTTP_200_OK)
+
+
+@override_settings(
+    EMAIL_BACKEND="django.core.mail.backends.locmem.EmailBackend",
+    EMAIL_RAISE_DELIVERY_ERRORS=True,
+    FRONTEND_URL="http://localhost:4200",
+    PASSWORD_RESET_TIMEOUT=1800,
+    REST_FRAMEWORK={
+        "DEFAULT_THROTTLE_CLASSES": (),
+        "DEFAULT_THROTTLE_RATES": {"login": "1000/minute"},
+    },
+)
+class PasswordResetTests(APITestCase):
+    def setUp(self):
+        cache.clear()
+        self.user = User.objects.create_user(
+            email="amira@example.com",
+            password="OldStrongPass123!",
+            first_name="Amira",
+            role=UserRole.HR,
+            is_active=True,
+        )
+
+    def _uid_token(self):
+        return (
+            urlsafe_base64_encode(force_bytes(self.user.pk)),
+            default_token_generator.make_token(self.user),
+        )
+
+    def test_request_is_enumeration_safe_and_sends_professional_email(self):
+        with self.captureOnCommitCallbacks(execute=True):
+            known = self.client.post(reverse("auth_password_reset_request"), {"email": self.user.email}, format="json")
+        with self.captureOnCommitCallbacks(execute=True):
+            unknown = self.client.post(reverse("auth_password_reset_request"), {"email": "absent@example.com"}, format="json")
+
+        self.assertEqual(known.status_code, status.HTTP_200_OK)
+        self.assertEqual(unknown.status_code, status.HTTP_200_OK)
+        self.assertEqual(known.data, unknown.data)
+        self.assertEqual(len(mail.outbox), 1)
+        self.assertIn("Amira", mail.outbox[0].alternatives[0].content)
+        self.assertIn("Oui, c’est moi", mail.outbox[0].alternatives[0].content)
+        self.assertIn("reset-password?token=", mail.outbox[0].alternatives[0].content)
+
+    def test_valid_token_can_reset_once_and_blacklists_refresh_tokens(self):
+        refresh = RefreshToken.for_user(self.user)
+        uid, token = self._uid_token()
+        validation = self.client.get(
+            reverse("auth_password_reset_validate", kwargs={"uid": uid, "token": token})
+        )
+        self.assertEqual(validation.status_code, status.HTTP_200_OK)
+        self.assertTrue(validation.data["valid"])
+
+        with self.captureOnCommitCallbacks(execute=True):
+            response = self.client.post(reverse("auth_password_reset_confirm"), {
+                "uid": uid,
+                "token": token,
+                "new_password": "NewStrongPass456!",
+                "confirmation": "NewStrongPass456!",
+            }, format="json")
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.user.refresh_from_db()
+        self.assertTrue(self.user.check_password("NewStrongPass456!"))
+        self.assertFalse(self.user.check_password("OldStrongPass123!"))
+        self.assertTrue(BlacklistedToken.objects.filter(token__jti=refresh["jti"]).exists())
+        self.assertEqual(len(mail.outbox), 1)
+        self.assertIn("a été modifié", mail.outbox[0].body)
+
+        login = self.client.post(reverse("token_obtain_pair"), {
+            "email": self.user.email,
+            "password": "NewStrongPass456!",
+        }, format="json")
+        self.assertEqual(login.status_code, status.HTTP_200_OK)
+        self.assertIn("access", login.data)
+
+        reused = self.client.post(reverse("auth_password_reset_confirm"), {
+            "uid": uid, "token": token,
+            "new_password": "AnotherStrongPass789!", "confirmation": "AnotherStrongPass789!",
+        }, format="json")
+        self.assertEqual(reused.status_code, status.HTTP_400_BAD_REQUEST)
+
+    def test_invalid_token_never_displays_the_password_form(self):
+        uid, _ = self._uid_token()
+        response = self.client.get(
+            reverse("auth_password_reset_validate", kwargs={"uid": uid, "token": "invalid-token"})
+        )
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertEqual(response.data, {"valid": False})
+
+    def test_password_confirmation_and_django_validators_are_enforced(self):
+        uid, token = self._uid_token()
+        mismatch = self.client.post(reverse("auth_password_reset_confirm"), {
+            "uid": uid, "token": token, "new_password": "NewStrongPass456!", "confirmation": "different",
+        }, format="json")
+        self.assertEqual(mismatch.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("confirmation", mismatch.data)
+
+        weak = self.client.post(reverse("auth_password_reset_confirm"), {
+            "uid": uid, "token": token, "new_password": "123", "confirmation": "123",
+        }, format="json")
+        self.assertEqual(weak.status_code, status.HTTP_400_BAD_REQUEST)
+
+    def test_inactive_account_has_same_response_and_receives_no_email(self):
+        self.user.is_active = False
+        self.user.save(update_fields=["is_active"])
+        with self.captureOnCommitCallbacks(execute=True):
+            response = self.client.post(reverse("auth_password_reset_request"), {"email": self.user.email}, format="json")
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(len(mail.outbox), 0)
+
+    def test_reset_request_is_available_to_every_login_role(self):
+        roles = list(UserRole.values)
+        users = []
+        for index, role in enumerate(roles):
+            users.append(User.objects.create_user(
+                email=f"role-{index}@example.com",
+                password="RoleStrongPass123!",
+                role=role,
+                is_active=True,
+            ))
+        with self.captureOnCommitCallbacks(execute=True):
+            responses = [
+                self.client.post(reverse("auth_password_reset_request"), {"email": user.email}, format="json")
+                for user in users
+            ]
+        self.assertTrue(all(response.status_code == status.HTTP_200_OK for response in responses))
+        self.assertEqual(len(mail.outbox), len(users))

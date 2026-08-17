@@ -44,7 +44,7 @@ def send_templated_email(*,recipient,event,event_key,context=None,subject=None):
         context={"user":recipient,"language":language,"direction":"rtl" if language=="ar" else "ltr","frontend_url":settings.FRONTEND_URL,**(context or {})}
         resolved_subject=subject or EMAIL_TEXT[language].get(event,EMAIL_TEXT[language]["notification"])
         text=context.get("message",resolved_subject)
-        html=render_to_string("emails/notification.html",{"subject":resolved_subject,**context})
+        html=render_to_string(context.get("template_name", "emails/notification.html"),{"subject":resolved_subject,**context})
         message=EmailMultiAlternatives(resolved_subject,text,settings.DEFAULT_FROM_EMAIL,[recipient.email])
         message.attach_alternative(html,"text/html")
         sent_count=message.send(fail_silently=False)

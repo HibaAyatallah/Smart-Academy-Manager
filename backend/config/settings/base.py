@@ -152,6 +152,7 @@ AUTH_PASSWORD_VALIDATORS = [
         "NAME": "django.contrib.auth.password_validation.NumericPasswordValidator",
     },
 ]
+PASSWORD_RESET_TIMEOUT = 30 * 60
 
 LANGUAGE_CODE = "fr-fr"
 TIME_ZONE = env("DJANGO_TIME_ZONE", default="Africa/Casablanca")
