@@ -3,34 +3,35 @@ import { navigationForRole } from './authenticated-navigation';
 const labelsFor = (role: Parameters<typeof navigationForRole>[0]) =>
   navigationForRole(role).flatMap((section) => section.items.map((item) => item.label));
 
+const iconFor = (role: Parameters<typeof navigationForRole>[0], label: string) =>
+  navigationForRole(role).flatMap((section) => section.items).find((item) => item.label === label)?.icon;
+
 describe('authenticated navigation', () => {
   it('reserves user management navigation for the Super Admin', () => {
     expect(labelsFor('SUPER_ADMIN')).toContain('Gestion des utilisateurs');
     expect(labelsFor('HR')).not.toContain('Gestion des utilisateurs');
   });
 
-  it('shows the complete existing administration workflow to Super Admin', () => {
+  it('shows only the retained administration workflow to Super Admin', () => {
     const labels = labelsFor('SUPER_ADMIN');
     expect(labels).toContain('Catalogue des formations');
     expect(labels).toContain('Personnes inscrites');
     expect(labels).not.toContain('Catalogue et sessions');
-    expect(labels).toContain('Inscriptions et validations');
-    expect(labels).toContain('Présences et certificats');
+    expect(labels).not.toContain('Inscriptions et validations');
+    expect(labels).not.toContain('Présences et certificats');
   });
 
-  it('limits candidate navigation to the dashboard only', () => {
-    expect(labelsFor('CANDIDATE')).toEqual(['Tableau de bord']);
+  it('limits candidate navigation to personal authenticated destinations', () => {
+    expect(labelsFor('CANDIDATE')).toEqual(['Tableau de bord', 'Mon CV', 'Notifications']);
     expect(labelsFor('CANDIDATE')).not.toContain('Mes candidatures');
-    expect(labelsFor('CANDIDATE')).not.toContain('Notifications');
     expect(labelsFor('CANDIDATE')).not.toContain('Business Units');
   });
 
-  it('gives BU Managers BU and training approval destinations', () => {
+  it('limits BU Managers to their operational BU destinations', () => {
     expect(labelsFor('BU_MANAGER')).toEqual([
       'Tableau de bord', 'Besoins de ma BU', 'Membres de ma BU',
-      'Catalogue et sessions', 'Inscriptions et validations',
-      'Présences et certificats', 'Gestion des stagiaires',
-      'Notifications',
+      'Inscriptions et validations', 'Présences et certificats',
+      'Gestion des stagiaires', 'Notifications',
     ]);
     expect(labelsFor('BU_MANAGER')).not.toContain('Business Units');
   });
@@ -71,19 +72,26 @@ describe('authenticated navigation', () => {
     expect(labelsFor('CLIENT')).toEqual(['Tableau de bord', 'Mes formations client', 'Notifications']);
   });
 
-  it('keeps notifications in non-candidate authenticated navigation', () => {
-    for (const role of ['SUPER_ADMIN','HR','BU_MANAGER','TRAINER_TUTOR','EMPLOYEE','INTERN','CLIENT'] as const) {
+  it('keeps notifications in authorized authenticated navigation', () => {
+    for (const role of ['SUPER_ADMIN','HR','BU_MANAGER','TRAINER_TUTOR','EMPLOYEE','INTERN','CANDIDATE','CLIENT'] as const) {
       expect(labelsFor(role)).toContain('Notifications');
     }
-    expect(labelsFor('CANDIDATE')).not.toContain('Notifications');
   });
 
-  it('reserves reports and audit logs for the Super Admin', () => {
-    expect(labelsFor('SUPER_ADMIN')).toContain('Rapports & KPI');
-    expect(labelsFor('SUPER_ADMIN')).toContain('Journaux d’audit');
+  it('does not expose reports and audit logs in role navigation', () => {
+    expect(labelsFor('SUPER_ADMIN')).not.toContain('Rapports & KPI');
+    expect(labelsFor('SUPER_ADMIN')).not.toContain('Journaux d’audit');
     for (const role of ['HR','BU_MANAGER','TRAINER_TUTOR','EMPLOYEE','INTERN','CANDIDATE','CLIENT'] as const) {
       expect(labelsFor(role)).not.toContain('Rapports & KPI');
       expect(labelsFor(role)).not.toContain('Journaux d’audit');
     }
+  });
+
+  it('uses consistent icons for shared user-space concepts', () => {
+    expect(iconFor('SUPER_ADMIN', 'Gestion des stagiaires')).toBe('badge');
+    expect(iconFor('HR', 'Stagiaires acceptés')).toBe('badge');
+    expect(iconFor('INTERN', 'Mon stage')).toBe('badge');
+    expect(iconFor('TRAINER_TUTOR', 'Catalogue et sessions')).toBe('school');
+    expect(iconFor('TRAINER_TUTOR', 'Présences et certificats')).toBe('card_membership');
   });
 });

@@ -26,15 +26,6 @@ const ALL: readonly UserRole[] = [
   'CLIENT',
 ];
 const ADMIN: readonly UserRole[] = ['SUPER_ADMIN'];
-const NOTIFICATION_ROLES: readonly UserRole[] = [
-  'SUPER_ADMIN',
-  'HR',
-  'BU_MANAGER',
-  'TRAINER_TUTOR',
-  'EMPLOYEE',
-  'INTERN',
-  'CLIENT',
-];
 
 const item = (
   label: string,
@@ -57,6 +48,7 @@ export const AUTHENTICATED_NAVIGATION: readonly NavigationSection[] = [
     items: [
       item('Offres', 'nav.offers', 'work', '/offers', ['SUPER_ADMIN']),
       item('Candidatures', 'nav.applications', 'assignment_ind', '/applications', ADMIN, true),
+      item('Mon CV', 'nav.myCv', 'description', '/cv-profile', ['CANDIDATE']),
     ],
   },
   {
@@ -77,9 +69,9 @@ export const AUTHENTICATED_NAVIGATION: readonly NavigationSection[] = [
     items: [
       item('Catalogue des formations', 'nav.trainingCatalog', 'school', '/trainings', ['SUPER_ADMIN']),
       item('Personnes inscrites', 'nav.trainingParticipants', 'groups', '/training-participants', ['SUPER_ADMIN']),
-      item('Catalogue et sessions', 'nav.catalog', 'school', '/trainings', ['HR', 'BU_MANAGER', 'TRAINER_TUTOR']),
-      item('Inscriptions et validations', 'nav.enrollments', 'how_to_reg', '/training-enrollments', ['SUPER_ADMIN', 'BU_MANAGER', 'TRAINER_TUTOR']),
-      item('Présences et certificats', 'nav.attendance', 'workspace_premium', '/attendance-certificates', ['SUPER_ADMIN', 'BU_MANAGER', 'TRAINER_TUTOR']),
+      item('Catalogue et sessions', 'nav.catalog', 'school', '/trainings', ['HR', 'TRAINER_TUTOR']),
+      item('Inscriptions et validations', 'nav.enrollments', 'how_to_reg', '/training-enrollments', ['BU_MANAGER', 'TRAINER_TUTOR']),
+      item('Présences et certificats', 'nav.attendance', 'card_membership', '/attendance-certificates', ['BU_MANAGER', 'TRAINER_TUTOR']),
       item('Mes formations client', 'nav.clientTrainings', 'business_center', '/client-trainings', ['CLIENT']),
     ],
   },
@@ -90,7 +82,7 @@ export const AUTHENTICATED_NAVIGATION: readonly NavigationSection[] = [
       item('Gestion des stagiaires', 'nav.internManagement', 'badge', '/internships', ['SUPER_ADMIN', 'BU_MANAGER']),
       item('Stagiaires acceptés', 'nav.acceptedInterns', 'badge', '/hr/interns', ['HR']),
       item('Collaborateurs par BU', 'nav.collaboratorsByBu', 'groups', '/hr/collaborators', ['HR']),
-      item('Mon stage', 'nav.myInternship', 'assignment', '/internships/me', ['INTERN']),
+      item('Mon stage', 'nav.myInternship', 'badge', '/internships/me', ['INTERN']),
     ],
   },
   {
@@ -102,9 +94,7 @@ export const AUTHENTICATED_NAVIGATION: readonly NavigationSection[] = [
     label: 'Outils',
     labelKey: 'nav.tools',
     items: [
-      item('Notifications', 'nav.notifications', 'notifications', '/notifications', NOTIFICATION_ROLES, true),
-      item('Rapports & KPI', 'nav.reports', 'query_stats', '/reports', ADMIN, true),
-      item('Journaux d’audit', 'nav.auditLogs', 'history', '/audit-logs', ADMIN, true),
+      item('Notifications', 'nav.notifications', 'notifications', '/notifications', ALL, true),
     ],
   },
 ];
