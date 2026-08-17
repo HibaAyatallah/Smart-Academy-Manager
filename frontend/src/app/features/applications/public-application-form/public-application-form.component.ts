@@ -18,6 +18,7 @@ import {
   ApplicationType,
   EDUCATION_LEVEL_LABELS,
   EducationLevel,
+  CVAnalysis,
 } from '../../../core/models/application.models';
 import { ApplicationService } from '../../../core/services/application.service';
 import { OfferService } from '../../../core/services/offer.service';
@@ -48,10 +49,9 @@ const FILE_RULES: Record<
 > = {
   cv: {
     label: 'CV',
-    extensions: ['.pdf', '.doc', '.docx'],
+    extensions: ['.pdf', '.docx'],
     mimeTypes: [
       'application/pdf',
-      'application/msword',
       'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
     ],
     maxSizeMb: 5,
@@ -136,7 +136,7 @@ export class PublicApplicationFormComponent {
       study_field: ['', Validators.required],
     }),
     professional: this.formBuilder.nonNullable.group({
-      application_type: ['PFA_INTERNSHIP' as ApplicationType, Validators.required],
+      application_type: ['' as ApplicationType | '', Validators.required],
       offer: [null as number | null],
       linkedin_url: [''],
       portfolio_url: [''],
@@ -161,6 +161,15 @@ export class PublicApplicationFormComponent {
   apiFieldErrors: Partial<Record<ApplicationFormField, string>> = {};
   generalError = '';
   isSubmitting = false;
+  isAnalyzingCV = false;
+  cvAnalysis: CVAnalysis | null = null;
+  readonly cvReviewForm = this.formBuilder.nonNullable.group({
+    skills: [''],
+    experiences: [''],
+    education: [''],
+    languages: [''],
+    certifications: [''],
+  });
 
   publishedOffers: Offer[] = [];
 
@@ -203,6 +212,16 @@ export class PublicApplicationFormComponent {
 
     this.setFile(target, file);
     this.documentsForm.controls[target].setValue(file);
+    if (target === 'cv' && file) {
+      this.isAnalyzingCV = true;
+      this.cvAnalysis = null;
+      this.applicationService.previewCV(file).pipe(finalize(() => this.isAnalyzingCV = false)).subscribe({
+        next: (analysis) => this.applyCVAnalysis(analysis),
+        error: (error) => {
+          this.fileErrors.cv = error.error?.detail || 'L\'analyse du CV a échoué. Vérifiez le fichier puis réessayez.';
+        },
+      });
+    }
   }
 
   removeFile(target: RequiredFileTarget, input: HTMLInputElement): void {
@@ -210,6 +229,10 @@ export class PublicApplicationFormComponent {
     this.fileErrors[target] = '';
     this.documentsForm.controls[target].setValue(null);
     input.value = '';
+    if (target === 'cv') {
+      this.cvAnalysis = null;
+      this.cvReviewForm.reset();
+    }
   }
 
   submit(): void {
@@ -283,22 +306,90 @@ export class PublicApplicationFormComponent {
       : this.requiredFileMessage('photo');
   }
 
-  private isDocumentStepValid(): boolean {
-    this.validateRequiredFiles();
-    this.documentsForm.markAllAsTouched();
-    return !this.hasFileErrors() && this.documentsForm.valid;
+  canContinueAfterCV(): boolean {
+    return Boolean(this.cvFile && this.cvAnalysis && !this.fileErrors.cv && !this.isAnalyzingCV);
   }
 
-  goToNextStep(stepper: MatStepper): void {
-    if (this.isDocumentStepValid()) {
+  continueAfterCV(stepper: MatStepper): void {
+    this.documentsForm.controls.cv.markAsTouched();
+    if (this.canContinueAfterCV()) {
       stepper.next();
     } else {
       this.snackBar.open(
-        'Veuillez télécharger tous les documents requis avant de passer à l’étape suivante.',
+        'Veuillez déposer un CV valide et attendre la fin de son analyse.',
         'Fermer',
         { duration: 5000 },
       );
     }
+  }
+
+  continueAfterDocuments(stepper: MatStepper): void {
+    this.fileErrors.cover = this.coverLetterFile ? this.fileErrors.cover : this.requiredFileMessage('cover');
+    this.fileErrors.photo = this.personalPhotoFile ? this.fileErrors.photo : this.requiredFileMessage('photo');
+    this.documentsForm.controls.cover.markAsTouched();
+    this.documentsForm.controls.photo.markAsTouched();
+    if (this.coverLetterFile && this.personalPhotoFile && !this.fileErrors.cover && !this.fileErrors.photo) {
+      stepper.next();
+      return;
+    }
+    this.snackBar.open('Veuillez ajouter la lettre de motivation et la photo.', 'Fermer', {
+      duration: 5000,
+    });
+  }
+
+  continueAfterVerification(stepper: MatStepper): void {
+    this.form.controls.personal.markAllAsTouched();
+    this.form.controls.academic.markAllAsTouched();
+    if (this.form.controls.personal.valid && this.form.controls.academic.valid) {
+      stepper.next();
+      return;
+    }
+    this.snackBar.open('Veuillez compléter les informations obligatoires avant de continuer.', 'Fermer', {
+      duration: 5000,
+    });
+  }
+
+  applicationTypeLabel(): string {
+    const value = this.form.controls.professional.controls.application_type.value;
+    return value ? APPLICATION_TYPE_LABELS[value] : '';
+  }
+
+  private applyCVAnalysis(analysis: CVAnalysis): void {
+    this.cvAnalysis = analysis;
+    const firstEducation = analysis.education[0];
+    this.form.controls.personal.patchValue({
+      first_name: analysis.first_name || '',
+      last_name: analysis.last_name || '',
+      email: analysis.email || '',
+      phone_number: analysis.phone || '',
+      address: analysis.location || '',
+    });
+    this.form.controls.academic.patchValue({
+      current_school: firstEducation?.institution || '',
+      study_field: firstEducation?.title || '',
+      study_level: this.inferStudyLevel(firstEducation?.title || ''),
+    });
+    this.cvReviewForm.patchValue({
+      skills: analysis.skills.join('\n'),
+      experiences: analysis.experiences.map((experience) => [
+        experience.position, experience.company, experience.start_date, experience.end_date,
+        experience.duration, experience.description,
+      ].join(' | ')).join('\n'),
+      education: analysis.education.map((education) => [
+        education.title, education.institution, education.start_date, education.end_date,
+      ].join(' | ')).join('\n'),
+      languages: analysis.languages.join('\n'),
+      certifications: analysis.certifications.join('\n'),
+    });
+  }
+
+  private inferStudyLevel(title: string): EducationLevel | '' {
+    const normalized = title.toLocaleLowerCase('fr');
+    if (/doctorat|ph\.?d/.test(normalized)) return 'DOCTORATE';
+    if (/ingénieur|ingenieur/.test(normalized)) return 'ENGINEERING';
+    if (/master|bac\s*\+\s*5/.test(normalized)) return 'MASTER';
+    if (/licence|bachelor|bac\s*\+\s*3/.test(normalized)) return 'BACHELOR';
+    return '';
   }
 
   private async validateFile(file: File | null, target: RequiredFileTarget): Promise<string> {
@@ -453,6 +544,13 @@ export class PublicApplicationFormComponent {
 
     if (this.cvFile) {
       formData.append('cv', this.cvFile);
+    }
+    if (this.cvAnalysis) {
+      const value=this.cvReviewForm.getRawValue(); const lines=(v:string|null)=> (v||'').split('\n').map(x=>x.trim()).filter(Boolean);
+      const experiences=lines(value.experiences).map(line=>{const[position='',company='',start_date='',end_date='',duration='',description='']=line.split('|').map(x=>x.trim());return{position,company,start_date,end_date,duration,description};});
+      const education=lines(value.education).map(line=>{const[title='',institution='',start_date='',end_date='']=line.split('|').map(x=>x.trim());return{title,institution,start_date,end_date};});
+      const personal = this.form.controls.personal.getRawValue();
+      formData.append('cv_review',JSON.stringify({first_name:personal.first_name,last_name:personal.last_name,full_name:`${personal.first_name} ${personal.last_name}`.trim(),email:personal.email,phone:personal.phone_number,location:personal.address,skills:lines(value.skills),experiences,education,diplomas:education.map(x=>x.title),companies:[...new Set(experiences.map(x=>x.company).filter(Boolean))],positions:[...new Set(experiences.map(x=>x.position).filter(Boolean))],languages:lines(value.languages),certifications:lines(value.certifications)}));
     }
     if (this.coverLetterFile) {
       formData.append('cover_letter', this.coverLetterFile);

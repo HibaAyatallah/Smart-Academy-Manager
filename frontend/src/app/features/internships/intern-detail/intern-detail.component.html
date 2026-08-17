@@ -33,7 +33,7 @@
     <mat-card-title>Configurer un document demandé</mat-card-title>
     <form [formGroup]="requirementForm" (ngSubmit)="createRequirement()" class="form-grid">
       <mat-form-field appearance="outline"><mat-label>Nom</mat-label><input matInput formControlName="name"></mat-form-field>
-      <mat-form-field appearance="outline"><mat-label>Type</mat-label><mat-select formControlName="document_type"><mat-option *ngFor="let value of ['CONVENTION','INSURANCE','SCHOOL_CERT','NDA','OTHER']" [value]="value">{{documentLabels[$any(value)]}}</mat-option></mat-select></mat-form-field>
+      <mat-form-field appearance="outline"><mat-label>Type</mat-label><mat-select formControlName="document_type"><mat-option *ngFor="let value of ['NATIONAL_ID','PERSONAL_PHOTO','ANTHROPOMETRIC_RECORD','CONVENTION','INSURANCE','SCHOOL_CERT','NDA','OTHER']" [value]="value">{{documentLabels[$any(value)]}}</mat-option></mat-select></mat-form-field>
       <mat-form-field appearance="outline"><mat-label>Date limite</mat-label><input matInput type="date" formControlName="due_date"></mat-form-field>
       <mat-form-field appearance="outline" class="wide"><mat-label>Description</mat-label><textarea matInput formControlName="description"></textarea></mat-form-field>
       <mat-slide-toggle formControlName="is_required">Obligatoire</mat-slide-toggle>
@@ -42,24 +42,27 @@
   </mat-card>
 
   <mat-card class="panel documents-panel">
-    <mat-card-title>Documents du stage</mat-card-title>
+    <mat-card-title>Documents obligatoires du stage</mat-card-title>
+    <p class="documents-help" *ngIf="role==='INTERN'">Pour chaque document, déposez un fichier ou indiquez qu’il a déjà été remis physiquement.</p>
     <p *ngIf="!intern.document_requirements.length">Aucun document n’a encore été configuré.</p>
     <article class="requirement" *ngFor="let requirement of intern.document_requirements">
       <div class="requirement-copy">
         <div><strong>{{requirement.name}}</strong><span class="required" *ngIf="requirement.is_required">Obligatoire</span></div>
         <p>{{requirement.description||'Aucune description.'}}</p>
         <small *ngIf="requirement.due_date">Date limite : {{requirement.due_date|date:'dd/MM/yyyy'}}</small>
+        <span class="submission-status" [attr.data-method]="requirement.latest_submission?.submission_method||'MISSING'"><mat-icon>{{submissionIcon(requirement)}}</mat-icon>{{submissionLabel(requirement)}}</span>
         <ng-container *ngIf="requirement.latest_submission as document">
-          <span class="document-status" [attr.data-status]="document.status">{{document.status==='VALIDATED'?'Validé':document.status==='REJECTED'?'Refusé':'En attente de validation'}}</span>
-          <small>Dernier dépôt : {{document.uploaded_at|date:'dd/MM/yyyy HH:mm'}} · {{document.original_name}}</small>
+          <small>{{document.submission_method==='PHYSICAL'?'Déclaré le':'Déposé le'}} {{document.submitted_at|date:'dd/MM/yyyy HH:mm'}}<ng-container *ngIf="document.original_name"> · {{document.original_name}}</ng-container></small>
+          <span class="document-status" [attr.data-status]="document.status" *ngIf="canAdmin">{{document.status==='VALIDATED'?'Validé':document.status==='REJECTED'?'Refusé':'En attente de validation'}}</span>
           <p class="rejection" *ngIf="document.status==='REJECTED'">{{document.comment}}</p>
         </ng-container>
       </div>
       <div class="actions">
-        <button mat-stroked-button *ngIf="requirement.latest_submission as document" (click)="download(document)">Consulter</button>
+        <button mat-stroked-button *ngIf="requirement.latest_submission as document" [disabled]="document.submission_method!=='ONLINE'" (click)="download(document)"><mat-icon>visibility</mat-icon>Consulter</button>
         <ng-container *ngIf="role==='INTERN'">
           <label class="file-button"><input type="file" accept=".pdf,.png,.jpg,.jpeg" (change)="fileSelected($event,requirement)">Choisir un fichier</label>
-          <button mat-flat-button color="primary" [disabled]="selectedRequirement?.id!==requirement.id||!selectedFile" (click)="upload(requirement)">{{requirement.latest_submission?'Remplacer':'Déposer'}}</button>
+          <button mat-flat-button color="primary" [disabled]="selectedRequirement?.id!==requirement.id||!selectedFile" (click)="upload(requirement)"><mat-icon>cloud_upload</mat-icon>{{requirement.latest_submission?'Remplacer':'Déposer en ligne'}}</button>
+          <button mat-stroked-button type="button" (click)="declarePhysical(requirement)"><mat-icon>inventory_2</mat-icon>Déjà remis physiquement</button>
         </ng-container>
         <ng-container *ngIf="canAdmin && requirement.latest_submission as document">
           <button mat-button color="primary" (click)="validate(document)">Valider</button><button mat-button color="warn" (click)="reject(document)">Refuser</button>

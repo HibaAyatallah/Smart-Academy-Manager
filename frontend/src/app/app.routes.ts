@@ -67,6 +67,12 @@ export const routes: Routes = [
         loadComponent: () => import('./features/applications/application-detail/application-detail.component').then(m => m.ApplicationDetailComponent),
       },
       {
+        path: 'cv-profile',
+        canActivate: [roleGuard],
+        data: { roles: ['CANDIDATE'], title: 'Mon CV' },
+        loadComponent: () => import('./features/applications/cv-review/cv-review.component').then(m => m.CVReviewComponent),
+      },
+      {
         path: 'applications',
         canActivate: [roleGuard],
         data: { roles: ['SUPER_ADMIN'], title: 'Candidatures' },

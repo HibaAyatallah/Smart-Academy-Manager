@@ -23,6 +23,28 @@ describe('PublicApplicationFormComponent', () => {
           provide: ApplicationService,
           useValue: {
             submitPublicApplication: jasmine.createSpy().and.returnValue(of({})),
+            previewCV: jasmine.createSpy().and.returnValue(of({
+              id: 0,
+              first_name: 'Jane',
+              last_name: 'Doe',
+              full_name: 'Jane Doe',
+              email: 'jane@example.com',
+              phone: '+212600000000',
+              location: 'Casablanca',
+              skills: ['Python', 'Django'],
+              experiences: [],
+              education: [{ title: 'Master Informatique', institution: 'ENSA', start_date: '', end_date: '' }],
+              diplomas: ['Master Informatique'],
+              companies: [],
+              positions: [],
+              languages: ['Français'],
+              certifications: [],
+              extraction_method: 'DOCX',
+              extraction_warnings: [],
+              extractor_version: 'test',
+              human_validated: false,
+              validated_at: null,
+            })),
           },
         },
         {
@@ -39,7 +61,7 @@ describe('PublicApplicationFormComponent', () => {
         },
         {
           provide: ActivatedRoute,
-          useValue: {},
+          useValue: { snapshot: { queryParamMap: { get: () => null } } },
         },
       ],
     }).compileComponents();
@@ -84,6 +106,28 @@ describe('PublicApplicationFormComponent', () => {
 
     expect(component.cvFile).toBeNull();
     expect(component.fileErrors.cv).toBe('Type de fichier non autorisé.');
+  });
+
+  it('analyzes the CV first and prefills candidate information', async () => {
+    const file = new File([new Uint8Array([0x50, 0x4b, 0x03, 0x04])], 'cv.docx', {
+      type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+    });
+
+    await component.onFileSelected({ target: { files: [file], value: 'cv.docx' } } as unknown as Event, 'cv');
+
+    expect(component.canContinueAfterCV()).toBeTrue();
+    expect(component.form.controls.personal.value).toEqual(jasmine.objectContaining({
+      first_name: 'Jane',
+      last_name: 'Doe',
+      email: 'jane@example.com',
+      phone_number: '+212600000000',
+    }));
+    expect(component.form.controls.academic.value).toEqual(jasmine.objectContaining({
+      current_school: 'ENSA',
+      study_field: 'Master Informatique',
+      study_level: 'MASTER',
+    }));
+    expect(component.cvReviewForm.controls.skills.value).toBe('Python\nDjango');
   });
 
   it('maps Django field errors to the matching fields and preserves general errors', () => {

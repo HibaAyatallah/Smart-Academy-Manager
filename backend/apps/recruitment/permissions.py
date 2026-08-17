@@ -40,7 +40,7 @@ class IsApplicationParticipant(BasePermission):
         if is_recruitment_manager(user):
             return True
         if is_candidate(user):
-            return request.method in SAFE_METHODS or view.action in {"create", "cancel", "add_document"}
+            return request.method in SAFE_METHODS or view.action in {"create", "cancel", "add_document", "upload_cv", "analyze_cv", "cv_analysis", "validate_cv"}
         return False
 
     def has_object_permission(self, request, view, obj) -> bool:
@@ -50,7 +50,7 @@ class IsApplicationParticipant(BasePermission):
         return bool(
             is_candidate(request.user)
             and application.candidate_profile.user_id == request.user.id
-            and (request.method in SAFE_METHODS or view.action in {"cancel", "add_document"})
+            and (request.method in SAFE_METHODS or view.action in {"cancel", "add_document", "upload_cv", "analyze_cv", "cv_analysis", "validate_cv"})
         )
 
 

@@ -4,7 +4,7 @@ from django.db import models
 class ApplicationType(models.TextChoices):
     PFA_INTERNSHIP = "PFA_INTERNSHIP", "Stage PFA"
     PFE_INTERNSHIP = "PFE_INTERNSHIP", "Stage PFE"
-    HIRING = "HIRING", "Candidature pour embauche"
+    HIRING = "HIRING", "Candidature spontanée"
 
 
 class ApplicationStatus(models.TextChoices):
@@ -52,6 +52,9 @@ class InternshipStatus(models.TextChoices):
 
 
 class InternDocumentType(models.TextChoices):
+    NATIONAL_ID = "NATIONAL_ID", "Carte nationale scannée"
+    PERSONAL_PHOTO = "PERSONAL_PHOTO", "Photo personnelle professionnelle"
+    ANTHROPOMETRIC_RECORD = "ANTHROPOMETRIC_RECORD", "Fiche anthropométrique"
     CONVENTION = "CONVENTION", "Convention de stage"
     INSURANCE = "INSURANCE", "Assurance"
     SCHOOL_CERT = "SCHOOL_CERT", "Attestation de scolarité"

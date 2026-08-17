@@ -3,6 +3,7 @@ export type AppLanguage = (typeof SUPPORTED_LANGUAGES)[number];
 export type TranslationParams = Record<string, string | number>;
 
 const fr: Record<string, string> = {
+  'nav.myCv':'Mon CV',
   'language.updateFailed':'La langue n’a pas pu être enregistrée. La langue précédente a été restaurée.',
   'language.fr':'Français','language.en':'Anglais',
   'common.loading':'Chargement…','common.save':'Enregistrer','common.cancel':'Annuler','common.confirm':'Confirmer','common.close':'Fermer','common.search':'Rechercher','common.actions':'Actions','common.status':'Statut','common.all':'Tous','common.none':'Aucun','common.notAssigned':'Non affecté','common.error':'Une erreur est survenue.','common.apply':'Appliquer','common.from':'Du','common.to':'Au','common.viewAll':'Voir tout','common.noData':'Aucune donnée disponible.',
@@ -22,6 +23,7 @@ const fr: Record<string, string> = {
 };
 
 const en: Record<string, string> = {
+  'nav.myCv':'My CV',
   'language.updateFailed':'The language could not be saved. The previous language has been restored.',
   'language.fr':'French','language.en':'English',
   'common.loading':'Loading…','common.save':'Save','common.cancel':'Cancel','common.confirm':'Confirm','common.close':'Close','common.search':'Search','common.actions':'Actions','common.status':'Status','common.all':'All','common.none':'None','common.notAssigned':'Not assigned','common.error':'An error occurred.','common.apply':'Apply','common.from':'From','common.to':'To','common.viewAll':'View all','common.noData':'No data available.',

@@ -51,6 +51,8 @@ from .serializers import (
     InternDocumentSerializer,
     InternDocumentRequirementSerializer,
     InternEvaluationSerializer,
+    CVAnalysisSerializer,
+    CVReviewSerializer,
 )
 
 
@@ -101,7 +103,7 @@ class ApplicationViewSet(viewsets.ModelViewSet):
     http_method_names = ["get", "post", "patch", "delete", "head", "options"]
 
     def get_permissions(self):
-        if self.action == "public_submit":
+        if self.action in {"public_submit", "preview_cv"}:
             return [AllowAny()]
         if self.action in {
             "mark_under_review",
@@ -111,10 +113,8 @@ class ApplicationViewSet(viewsets.ModelViewSet):
             "reject",
             "archive",
             "convert",
-            "analyze_cv",
             "match_offers",
             "review_match",
-            "validate_cv",
         }:
             return [IsRecruitmentManager()]
         return super().get_permissions()
@@ -159,12 +159,59 @@ class ApplicationViewSet(viewsets.ModelViewSet):
     def analyze_cv(self, request, pk=None):
         from .intelligence import extract_cv
         try:
-            analysis = extract_cv(self.get_object())
+            analysis = extract_cv(self.get_object(), force=request.data.get("force") is True)
         except ValueError as exc:
             raise DRFValidationError({"detail": str(exc)}) from exc
-        return Response({"id": analysis.id, "skills": analysis.skills, "experiences": analysis.experiences,
-                         "diplomas": analysis.diplomas, "contact_details": analysis.contact_details,
-                         "human_validated": analysis.human_validated, "extractor_version": analysis.extractor_version})
+        return Response(CVAnalysisSerializer(analysis).data)
+
+    @action(detail=True, methods=["get", "patch"], url_path="cv-analysis")
+    def cv_analysis(self, request, pk=None):
+        analysis = getattr(self.get_object(), "cv_analysis", None)
+        if not analysis:
+            raise DRFValidationError({"detail": "Analyse CV inexistante."})
+        if request.method == "PATCH":
+            if analysis.human_validated:
+                raise DRFValidationError({"detail": "Les informations sont déjà validées. Relancez l’analyse pour les modifier."})
+            serializer = CVReviewSerializer(analysis, data=request.data, partial=True)
+            serializer.is_valid(raise_exception=True)
+            first_name = serializer.validated_data.pop("first_name", None)
+            last_name = serializer.validated_data.pop("last_name", None)
+            analysis = serializer.save()
+            user = analysis.application.candidate_profile.user
+            changed = []
+            if first_name is not None: user.first_name = first_name; changed.append("first_name")
+            if last_name is not None: user.last_name = last_name; changed.append("last_name")
+            if changed: user.save(update_fields=[*changed, "updated_at"])
+        return Response(CVAnalysisSerializer(analysis).data)
+
+    @action(detail=True, methods=["post"], url_path="upload-cv", parser_classes=[MultiPartParser, FormParser])
+    def upload_cv(self, request, pk=None):
+        application = self.get_object()
+        serializer = ApplicationDocumentUploadSerializer(data={"document_type": "CV", "file": request.FILES.get("file")})
+        serializer.is_valid(raise_exception=True)
+        uploaded = serializer.validated_data["file"]
+        document = ApplicationDocument.objects.create(application=application, document_type="CV", file=uploaded,
+            original_name=uploaded.name.rsplit("/", 1)[-1].rsplit("\\", 1)[-1], content_type=getattr(uploaded, "content_type", ""),
+            size=uploaded.size, uploaded_by=request.user)
+        try:
+            from .intelligence import extract_cv
+            analysis = extract_cv(application, force=True)
+        except ValueError as exc:
+            return Response({"document": ApplicationDocumentSerializer(document, context=self.get_serializer_context()).data,
+                             "analysis": None, "analysis_error": str(exc)}, status=status.HTTP_201_CREATED)
+        return Response({"document": ApplicationDocumentSerializer(document, context=self.get_serializer_context()).data,
+                         "analysis": CVAnalysisSerializer(analysis).data, "analysis_error": ""}, status=status.HTTP_201_CREATED)
+
+    @action(detail=False, methods=["post"], url_path="preview-cv", throttle_classes=[PublicSubmissionRateThrottle], parser_classes=[MultiPartParser, FormParser])
+    def preview_cv(self, request):
+        serializer = ApplicationDocumentUploadSerializer(data={"document_type": "CV", "file": request.FILES.get("file")})
+        serializer.is_valid(raise_exception=True)
+        from .intelligence import extract_cv_data
+        try:
+            data = extract_cv_data(serializer.validated_data["file"])
+        except ValueError as exc:
+            raise DRFValidationError({"detail": str(exc)}) from exc
+        return Response(data)
 
     @action(detail=True, methods=["post"], url_path="match-offers")
     def match_offers(self, request, pk=None):
@@ -189,11 +236,25 @@ class ApplicationViewSet(viewsets.ModelViewSet):
         analysis = getattr(self.get_object(), "cv_analysis", None)
         if not analysis:
             raise DRFValidationError({"detail": "Analyse CV inexistante."})
+        serializer = CVReviewSerializer(analysis, data=request.data, partial=True)
+        serializer.is_valid(raise_exception=True)
+        first_name = serializer.validated_data.pop("first_name", None)
+        last_name = serializer.validated_data.pop("last_name", None)
+        analysis = serializer.save()
+        profile = analysis.application.candidate_profile
+        user = profile.user
+        if first_name is not None: user.first_name = first_name
+        if last_name is not None: user.last_name = last_name
+        if analysis.email and analysis.email != user.email and not type(user).objects.filter(email=analysis.email).exclude(pk=user.pk).exists(): user.email = analysis.email
+        if analysis.phone: profile.phone_number = analysis.phone
+        if analysis.location: profile.address = analysis.location
+        user.save(update_fields=["first_name", "last_name", "email", "updated_at"])
+        profile.save(update_fields=["phone_number", "address", "updated_at"])
         analysis.human_validated = True
         analysis.validated_by = request.user
         analysis.validated_at = timezone.now()
         analysis.save(update_fields=["human_validated", "validated_by", "validated_at", "updated_at"])
-        return Response({"id": analysis.id, "human_validated": True, "validated_at": analysis.validated_at})
+        return Response(CVAnalysisSerializer(analysis).data)
 
     @action(detail=True, methods=["post"], url_path="review-match")
     def review_match(self, request, pk=None):
@@ -540,6 +601,7 @@ class InternDocumentViewSet(viewsets.ModelViewSet):
         uploaded_file = serializer.validated_data["file"]
         serializer.save(
             document_type=requirement.document_type,
+            submission_method=InternDocument.SubmissionMethod.ONLINE,
             original_name=uploaded_file.name.rsplit("/", 1)[-1].rsplit("\\", 1)[-1],
             content_type=getattr(uploaded_file, "content_type", ""),
             size=uploaded_file.size,
@@ -548,6 +610,33 @@ class InternDocumentViewSet(viewsets.ModelViewSet):
             validator=None,
             validated_at=None,
         )
+
+    @action(detail=False, methods=["post"], url_path="declare-physical")
+    def declare_physical(self, request):
+        intern_id = request.data.get("intern")
+        requirement_id = request.data.get("requirement")
+        try:
+            intern = InternProfile.objects.get(pk=intern_id)
+            requirement = InternDocumentRequirement.objects.get(pk=requirement_id, is_active=True)
+        except (InternProfile.DoesNotExist, InternDocumentRequirement.DoesNotExist, TypeError, ValueError):
+            return Response({"detail": "Stagiaire ou document demandé invalide."}, status=status.HTTP_400_BAD_REQUEST)
+        if is_intern(request.user) and intern.user_id != request.user.id:
+            raise PermissionDenied("Vous pouvez uniquement déclarer vos propres documents.")
+        if not is_intern(request.user) and not is_recruitment_manager(request.user):
+            raise PermissionDenied("Cette déclaration est réservée au stagiaire ou au Super Admin.")
+        document = InternDocument.objects.create(
+            intern=intern,
+            requirement=requirement,
+            document_type=requirement.document_type,
+            submission_method=InternDocument.SubmissionMethod.PHYSICAL,
+            file=None,
+            original_name="",
+            content_type="",
+            size=0,
+            status="PENDING",
+            is_validated=False,
+        )
+        return Response(self.get_serializer(document).data, status=status.HTTP_201_CREATED)
 
     @action(detail=True, methods=["get"], url_path="download")
     def download(self, request, pk=None):

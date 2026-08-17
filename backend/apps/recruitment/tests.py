@@ -11,6 +11,7 @@ from django.utils import timezone
 from django.urls import reverse
 from rest_framework import status
 from rest_framework.test import APITestCase
+import pymupdf
 
 from apps.accounts.choices import UserRole
 
@@ -39,6 +40,14 @@ from apps.notifications.models import EmailDeliveryLog
 
 User = get_user_model()
 TEST_MEDIA_ROOT = tempfile.mkdtemp()
+
+
+def valid_blank_pdf():
+    document = pymupdf.open()
+    document.new_page(width=300, height=300)
+    content = document.tobytes()
+    document.close()
+    return content
 
 
 @override_settings(
@@ -700,7 +709,7 @@ class RecruitmentAPITests(APITestCase):
             "cv": cv
             or SimpleUploadedFile(
                 "cv.pdf",
-                b"%PDF-1.4 fake pdf",
+                valid_blank_pdf(),
                 content_type="application/pdf",
             ),
             "cover_letter": cover_letter
@@ -899,6 +908,33 @@ class InternshipWorkflowTests(APITestCase):
         other_upload = SimpleUploadedFile("other.pdf", b"%PDF-1.4 other", content_type="application/pdf")
         forbidden = self.client.post("/api/intern-documents/", {"intern": self.other_profile.id, "requirement": self.requirement.id, "file": other_upload}, format="multipart")
         self.assertEqual(forbidden.status_code, status.HTTP_403_FORBIDDEN)
+
+    def test_intern_can_declare_own_document_as_physically_delivered(self):
+        self.client.force_authenticate(self.intern_user)
+        response = self.client.post("/api/intern-documents/declare-physical/", {
+            "intern": self.profile.id,
+            "requirement": self.requirement.id,
+        }, format="json")
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(response.data["submission_method"], "PHYSICAL")
+        self.assertIsNone(InternDocument.objects.get(pk=response.data["id"]).file.name or None)
+        self.assertIsNotNone(response.data["submitted_at"])
+
+        forbidden = self.client.post("/api/intern-documents/declare-physical/", {
+            "intern": self.other_profile.id,
+            "requirement": self.requirement.id,
+        }, format="json")
+        self.assertEqual(forbidden.status_code, status.HTTP_403_FORBIDDEN)
+
+    def test_uploaded_document_records_online_submission_method(self):
+        self.client.force_authenticate(self.intern_user)
+        upload = SimpleUploadedFile("identity.pdf", b"%PDF-1.4 identity", content_type="application/pdf")
+        response = self.client.post("/api/intern-documents/", {
+            "intern": self.profile.id, "requirement": self.requirement.id, "file": upload,
+        }, format="multipart")
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(response.data["submission_method"], "ONLINE")
+        self.assertIsNotNone(response.data["submitted_at"])
 
     def test_document_upload_validates_format_size_and_supports_replacement(self):
         self.client.force_authenticate(self.intern_user)

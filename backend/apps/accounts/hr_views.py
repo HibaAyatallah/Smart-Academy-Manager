@@ -17,7 +17,7 @@ from drf_spectacular.utils import extend_schema, extend_schema_field
 from apps.accounts.choices import UserRole
 from apps.accounts.permissions import IsHROnly
 from apps.business_units.models import BusinessUnit, BusinessUnitMembership
-from apps.recruitment.models import InternProfile
+from apps.recruitment.models import InternDocumentRequirement, InternProfile
 
 User = get_user_model()
 
@@ -36,6 +36,7 @@ class HRInternProfileSerializer(serializers.ModelSerializer):
     business_unit = serializers.SerializerMethodField()
     supervisor = serializers.SerializerMethodField()
     document_submission_status = serializers.SerializerMethodField()
+    required_documents = serializers.SerializerMethodField()
 
     class Meta:
         model = InternProfile
@@ -56,6 +57,7 @@ class HRInternProfileSerializer(serializers.ModelSerializer):
             "supervisor",
             "subject_title",
             "document_submission_status",
+            "required_documents",
         ]
 
     @extend_schema_field(serializers.DictField(allow_null=True))
@@ -79,6 +81,34 @@ class HRInternProfileSerializer(serializers.ModelSerializer):
             "has_documents": bool(documents),
             "all_validated": bool(documents) and all(document.is_validated for document in documents),
         }
+
+    @extend_schema_field(serializers.ListField(child=serializers.DictField()))
+    def get_required_documents(self, obj) -> list[dict[str, object]]:
+        latest_by_requirement = {}
+        for document in sorted(obj.documents.all(), key=lambda item: item.uploaded_at, reverse=True):
+            if document.requirement_id:
+                latest_by_requirement.setdefault(document.requirement_id, document)
+        return [{
+            "requirement_id": requirement.id,
+            "name": requirement.name,
+            "document_type": requirement.document_type,
+            "submission_status": (
+                "MISSING" if not latest_by_requirement.get(requirement.id)
+                else latest_by_requirement[requirement.id].submission_method
+            ),
+            "submitted_at": (
+                latest_by_requirement[requirement.id].uploaded_at
+                if latest_by_requirement.get(requirement.id) else None
+            ),
+            "document_id": (
+                latest_by_requirement[requirement.id].id
+                if latest_by_requirement.get(requirement.id) else None
+            ),
+            "original_name": (
+                latest_by_requirement[requirement.id].original_name
+                if latest_by_requirement.get(requirement.id) else ""
+            ),
+        } for requirement in InternDocumentRequirement.objects.filter(is_active=True, is_required=True)]
 
 
 class HRCollaboratorSerializer(serializers.ModelSerializer):

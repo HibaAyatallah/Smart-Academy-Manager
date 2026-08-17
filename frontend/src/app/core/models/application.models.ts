@@ -100,6 +100,16 @@ export interface Application {
   documents: ApplicationDocument[];
   interviews: ApplicationInterview[];
   status_history: ApplicationStatusHistory[];
+  cv_analysis?: CVAnalysis | null;
+}
+
+export interface CVExperience { position: string; company: string; start_date: string; end_date: string; duration: string; description: string; }
+export interface CVEducation { title: string; institution: string; start_date: string; end_date: string; }
+export interface CVAnalysis {
+  id: number; first_name: string; last_name: string; full_name: string; email: string; phone: string; location: string;
+  skills: string[]; experiences: CVExperience[]; education: CVEducation[]; diplomas: string[]; companies: string[];
+  positions: string[]; languages: string[]; certifications: string[]; extraction_method: string;
+  extraction_warnings: string[]; extractor_version: string; human_validated: boolean; validated_at: string | null;
 }
 
 export interface PaginatedResponse<T> {
@@ -119,7 +129,7 @@ export interface ApplicationFilters {
 export const APPLICATION_TYPE_LABELS: Record<ApplicationType, string> = {
   PFA_INTERNSHIP: 'Stage PFA',
   PFE_INTERNSHIP: 'Stage PFE',
-  HIRING: 'Candidature pour embauche',
+  HIRING: 'Candidature spontanée',
 };
 
 export const APPLICATION_STATUS_LABELS: Record<ApplicationStatus, string> = {

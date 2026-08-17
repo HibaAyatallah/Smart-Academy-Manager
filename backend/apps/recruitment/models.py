@@ -27,7 +27,9 @@ def application_document_upload_to(instance, filename: str) -> str:
     else:
         candidate_id = "pending"
         application_id = "pending"
-    return f"candidates/{candidate_id}/applications/{application_id}/{instance.document_type.lower()}/{filename}"
+    extension = Path(filename).suffix.lower()
+    stored_name = f"{uuid.uuid4().hex}{extension}"
+    return f"candidates/{candidate_id}/applications/{application_id}/{instance.document_type.lower()}/{stored_name}"
 
 
 class CandidateProfile(models.Model):
@@ -317,6 +319,10 @@ def intern_document_upload_to(instance, filename):
     return f"internships/documents/{instance.intern.user_id}/{uuid.uuid4().hex}{extension}"
 
 class InternDocument(models.Model):
+    class SubmissionMethod(models.TextChoices):
+        ONLINE = "ONLINE", "Déposé en ligne"
+        PHYSICAL = "PHYSICAL", "Remis physiquement"
+
     intern = models.ForeignKey(
         InternProfile,
         on_delete=models.CASCADE,
@@ -330,7 +336,12 @@ class InternDocument(models.Model):
         blank=True,
         related_name="submissions",
     )
-    file = models.FileField(upload_to=intern_document_upload_to)
+    file = models.FileField(upload_to=intern_document_upload_to, blank=True, null=True)
+    submission_method = models.CharField(
+        max_length=16,
+        choices=SubmissionMethod.choices,
+        default=SubmissionMethod.ONLINE,
+    )
     original_name = models.CharField(max_length=255, blank=True)
     content_type = models.CharField(max_length=100, blank=True)
     size = models.PositiveIntegerField(default=0)
@@ -435,6 +446,17 @@ class CVAnalysis(models.Model):
     experiences = models.JSONField(default=list)
     diplomas = models.JSONField(default=list)
     contact_details = models.JSONField(default=dict)
+    full_name = models.CharField(max_length=255, blank=True)
+    email = models.EmailField(blank=True)
+    phone = models.CharField(max_length=64, blank=True)
+    location = models.CharField(max_length=255, blank=True)
+    education = models.JSONField(default=list)
+    companies = models.JSONField(default=list)
+    positions = models.JSONField(default=list)
+    languages = models.JSONField(default=list)
+    certifications = models.JSONField(default=list)
+    extraction_warnings = models.JSONField(default=list)
+    extraction_method = models.CharField(max_length=32, blank=True)
     source_sha256 = models.CharField(max_length=64)
     extractor_version = models.CharField(max_length=32, default="rules-v1")
     human_validated = models.BooleanField(default=False)

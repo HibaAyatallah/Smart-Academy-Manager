@@ -423,6 +423,7 @@ class HREndpointTests(APITestCase):
         self.assertEqual(response.data["supervisor"]["email"], self.employee.email)
         self.assertEqual(response.data["subject_title"], "Plateforme RH")
         self.assertIn("document_submission_status", response.data)
+        self.assertIn("required_documents", response.data)
 
     def test_hr_endpoints_reject_unsafe_methods(self):
         self.client.force_authenticate(user=self.hr)

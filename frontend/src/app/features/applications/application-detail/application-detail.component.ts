@@ -31,6 +31,7 @@ import {
   ScheduleInterviewDialogComponent,
   ScheduleInterviewDialogResult,
 } from '../shared/schedule-interview-dialog/schedule-interview-dialog.component';
+import { CVReviewComponent } from '../cv-review/cv-review.component';
 
 @Component({
   selector: 'app-application-detail',
@@ -48,6 +49,7 @@ import {
     NgIf,
     PageHeaderComponent,
     RouterLink,
+    CVReviewComponent,
   ],
   templateUrl: './application-detail.component.html',
   styleUrl: './application-detail.component.scss',

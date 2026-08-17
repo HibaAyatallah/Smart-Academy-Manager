@@ -1,4 +1,6 @@
+from io import BytesIO
 from pathlib import Path
+from zipfile import BadZipFile, ZipFile
 
 from django.conf import settings
 from rest_framework import serializers
@@ -6,7 +8,7 @@ from rest_framework import serializers
 from .choices import ApplicationDocumentType
 
 DOCUMENT_EXTENSIONS = {
-    ApplicationDocumentType.CV: {".pdf", ".doc", ".docx"},
+    ApplicationDocumentType.CV: {".pdf", ".docx"},
     ApplicationDocumentType.COVER_LETTER: {".pdf", ".doc", ".docx"},
     ApplicationDocumentType.PERSONAL_PHOTO: {".jpg", ".jpeg", ".png"},
     ApplicationDocumentType.OTHER: {".pdf", ".doc", ".docx", ".jpg", ".jpeg", ".png"},
@@ -15,7 +17,6 @@ DOCUMENT_EXTENSIONS = {
 DOCUMENT_MIME_TYPES = {
     ApplicationDocumentType.CV: {
         "application/pdf",
-        "application/msword",
         "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
     },
     ApplicationDocumentType.COVER_LETTER: {
@@ -88,6 +89,9 @@ def validate_application_file(uploaded_file, document_type: str) -> None:
     if not _has_allowed_signature(uploaded_file, extension):
         raise serializers.ValidationError("Le contenu du fichier ne correspond pas au format annoncé.")
 
+    if document_type == ApplicationDocumentType.CV:
+        _validate_cv_structure(uploaded_file, extension)
+
 
 def _has_allowed_signature(uploaded_file, extension: str) -> bool:
     signatures = FILE_SIGNATURES.get(extension)
@@ -107,3 +111,32 @@ def _has_allowed_signature(uploaded_file, extension: str) -> bool:
             uploaded_file.seek(position)
 
     return any(header.startswith(signature) for signature in signatures)
+
+
+def _validate_cv_structure(uploaded_file, extension: str) -> None:
+    """Reject malformed CV containers before they are persisted or parsed."""
+    try:
+        position = uploaded_file.tell()
+    except (AttributeError, OSError):
+        position = 0
+    try:
+        uploaded_file.seek(0)
+        content = uploaded_file.read()
+        if extension == ".pdf":
+            import pymupdf
+
+            try:
+                with pymupdf.open(stream=content, filetype="pdf") as document:
+                    if document.page_count == 0:
+                        raise ValueError("empty PDF")
+            except (pymupdf.FileDataError, RuntimeError, OSError, ValueError) as exc:
+                raise serializers.ValidationError("Le CV PDF est invalide ou corrompu.") from exc
+        elif extension == ".docx":
+            try:
+                with ZipFile(BytesIO(content)) as archive:
+                    if "word/document.xml" not in archive.namelist():
+                        raise BadZipFile("missing Word document XML")
+            except (BadZipFile, OSError, ValueError) as exc:
+                raise serializers.ValidationError("Le CV DOCX est invalide ou corrompu.") from exc
+    finally:
+        uploaded_file.seek(position)

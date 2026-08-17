@@ -21,6 +21,7 @@ from .models import (
     InternEvaluation,
     Interview,
     Offer,
+    CVAnalysis,
 )
 from .validators import validate_application_file
 
@@ -210,6 +211,7 @@ class ApplicationSerializer(serializers.ModelSerializer):
     application_type_label = serializers.CharField(source="get_application_type_display", read_only=True)
     status_label = serializers.CharField(source="get_status_display", read_only=True)
     offer_title = serializers.CharField(source="offer.title", read_only=True)
+    cv_analysis = serializers.SerializerMethodField()
 
     class Meta:
         model = Application
@@ -233,8 +235,71 @@ class ApplicationSerializer(serializers.ModelSerializer):
             "documents",
             "interviews",
             "status_history",
+            "cv_analysis",
         ]
         read_only_fields = fields
+
+    @extend_schema_field(serializers.DictField(allow_null=True))
+    def get_cv_analysis(self, obj):
+        analysis = getattr(obj, "cv_analysis", None)
+        return CVAnalysisSerializer(analysis).data if analysis else None
+
+
+class ExperienceSerializer(serializers.Serializer):
+    position = serializers.CharField(required=False, allow_blank=True, max_length=255)
+    company = serializers.CharField(required=False, allow_blank=True, max_length=255)
+    start_date = serializers.CharField(required=False, allow_blank=True, max_length=32)
+    end_date = serializers.CharField(required=False, allow_blank=True, max_length=32)
+    duration = serializers.CharField(required=False, allow_blank=True, max_length=64)
+    description = serializers.CharField(required=False, allow_blank=True, max_length=3000)
+
+
+class EducationSerializer(serializers.Serializer):
+    title = serializers.CharField(required=False, allow_blank=True, max_length=500)
+    institution = serializers.CharField(required=False, allow_blank=True, max_length=255)
+    start_date = serializers.CharField(required=False, allow_blank=True, max_length=32)
+    end_date = serializers.CharField(required=False, allow_blank=True, max_length=32)
+
+
+class CVAnalysisSerializer(serializers.ModelSerializer):
+    first_name = serializers.SerializerMethodField()
+    last_name = serializers.SerializerMethodField()
+    experiences = ExperienceSerializer(many=True, required=False)
+    education = EducationSerializer(many=True, required=False)
+    validated_by_email = serializers.EmailField(source="validated_by.email", read_only=True)
+
+    class Meta:
+        model = CVAnalysis
+        fields = ["id", "first_name", "last_name", "full_name", "email", "phone", "location",
+                  "skills", "experiences", "education", "diplomas", "companies", "positions",
+                  "languages", "certifications", "contact_details", "extraction_method",
+                  "extraction_warnings", "extractor_version", "human_validated",
+                  "validated_by_email", "validated_at", "updated_at"]
+        read_only_fields = ["id", "extraction_method", "extraction_warnings", "extractor_version",
+                            "human_validated", "validated_by_email", "validated_at", "updated_at"]
+
+    def get_first_name(self, obj):
+        return obj.full_name.split(maxsplit=1)[0] if obj.full_name else ""
+
+    def get_last_name(self, obj):
+        return obj.full_name.split(maxsplit=1)[1] if obj.full_name and len(obj.full_name.split(maxsplit=1)) > 1 else ""
+
+    def validate(self, attrs):
+        for field in ("skills", "diplomas", "companies", "positions", "languages", "certifications"):
+            values = attrs.get(field)
+            if values is not None and (not isinstance(values, list) or any(not isinstance(v, str) for v in values)):
+                raise serializers.ValidationError({field: "Une liste de textes est attendue."})
+            if values is not None:
+                attrs[field] = list(dict.fromkeys(v.strip() for v in values if v.strip()))[:200]
+        return attrs
+
+
+class CVReviewSerializer(CVAnalysisSerializer):
+    first_name = serializers.CharField(max_length=150, required=False, allow_blank=True)
+    last_name = serializers.CharField(max_length=150, required=False, allow_blank=True)
+
+    class Meta(CVAnalysisSerializer.Meta):
+        read_only_fields = CVAnalysisSerializer.Meta.read_only_fields
 
 
 class PublicApplicationCreateSerializer(serializers.Serializer):
@@ -270,6 +335,7 @@ class PublicApplicationCreateSerializer(serializers.Serializer):
         required=False,
         allow_empty=True,
     )
+    cv_review = serializers.JSONField(write_only=True, required=False)
 
     def validate_email(self, value):
         email = User.objects.normalize_email(value)
@@ -316,6 +382,7 @@ class PublicApplicationCreateSerializer(serializers.Serializer):
         cover_letter = validated_data.pop("cover_letter")
         personal_photo = validated_data.pop("personal_photo")
         other_documents = validated_data.pop("other_documents", [])
+        cv_review = validated_data.pop("cv_review", None)
         password = validated_data.pop("password")
         application_type = validated_data.pop("application_type")
         motivation_message = validated_data.pop("motivation_message", "")
@@ -364,6 +431,26 @@ class PublicApplicationCreateSerializer(serializers.Serializer):
         )
         for document in other_documents:
             self._create_document(application, document, ApplicationDocumentType.OTHER, user)
+
+        try:
+            from .intelligence import extract_cv
+            analysis = extract_cv(application)
+            if cv_review:
+                review = CVReviewSerializer(analysis, data=cv_review, partial=True)
+                review.is_valid(raise_exception=True); analysis = review.save()
+                user.first_name = cv_review.get("first_name", user.first_name)
+                user.last_name = cv_review.get("last_name", user.last_name)
+                if analysis.email and not User.objects.filter(email=analysis.email).exclude(pk=user.pk).exists():
+                    user.email = analysis.email
+                user.save(update_fields=["first_name", "last_name", "email", "updated_at"])
+                if analysis.phone: profile.phone_number = analysis.phone
+                if analysis.location: profile.address = analysis.location
+                profile.save(update_fields=["phone_number", "address", "updated_at"])
+                analysis.human_validated = True; analysis.validated_by = user; analysis.validated_at = timezone.now()
+                analysis.save(update_fields=["human_validated", "validated_by", "validated_at", "updated_at"])
+        except ValueError:
+            # A candidature remains valid even when CV text extraction is unavailable.
+            pass
 
         return application
 
@@ -492,6 +579,12 @@ class AuthenticatedApplicationCreateSerializer(serializers.Serializer):
         for document in other_documents:
             self._create_document(application, document, ApplicationDocumentType.OTHER, user)
 
+        try:
+            from .intelligence import extract_cv
+            extract_cv(application)
+        except ValueError:
+            pass
+
         return application
 
     def _create_document(self, application, uploaded_file, document_type, user):
@@ -560,6 +653,7 @@ class InternDocumentSerializer(serializers.ModelSerializer):
             "document_type",
             "requirement",
             "file",
+            "submission_method",
             "original_name",
             "content_type",
             "size",
@@ -570,9 +664,12 @@ class InternDocumentSerializer(serializers.ModelSerializer):
             "validator_email",
             "comment",
             "uploaded_at",
+            "submitted_at",
         ]
-        read_only_fields = ["id", "document_type", "original_name", "content_type", "size", "status", "is_validated", "validated_at", "validator", "validator_email", "uploaded_at"]
-        extra_kwargs = {"file": {"write_only": True}}
+        read_only_fields = ["id", "document_type", "submission_method", "original_name", "content_type", "size", "status", "is_validated", "validated_at", "validator", "validator_email", "uploaded_at", "submitted_at"]
+        extra_kwargs = {"file": {"write_only": True, "required": False, "allow_null": True}}
+
+    submitted_at = serializers.DateTimeField(source="uploaded_at", read_only=True)
 
     def validate_file(self, uploaded_file):
         from pathlib import Path
