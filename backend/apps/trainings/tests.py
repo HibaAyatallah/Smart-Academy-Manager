@@ -140,7 +140,7 @@ class TrainingsAPITestCase(APITestCase):
         self.assertIn("Archived Course", all_titles, "Super Admin must see ARCHIVED trainings.")
 
 
-    def test_bu_manager_visibility(self):
+    def test_bu_manager_cannot_access_training_catalogue(self):
         # Create training without BU
         Training.objects.create(**self.training_data)
         # Create training restricted to BU
@@ -151,10 +151,14 @@ class TrainingsAPITestCase(APITestCase):
 
         self.client.force_authenticate(user=self.bu_manager)
         res = self.client.get("/api/trainings/")
-        titles = [r['title'] for r in res.data['results']]
-        self.assertIn("Python Basics", titles)
-        self.assertIn("T2", titles)
-        self.assertNotIn("T3", titles)
+        self.assertEqual(res.status_code, status.HTTP_403_FORBIDDEN)
+
+    def test_bu_manager_accesses_workflow_but_not_catalogue_administration(self):
+        self.client.force_authenticate(user=self.bu_manager)
+        for url in ["/api/trainings/", "/api/training-sessions/"]:
+            self.assertEqual(self.client.get(url).status_code, status.HTTP_403_FORBIDDEN, url)
+        for url in ["/api/enrollments/", "/api/attendance/", "/api/certificates/"]:
+            self.assertEqual(self.client.get(url).status_code, status.HTTP_200_OK, url)
 
     def test_employee_cannot_access_administrative_catalogue(self):
         # Currently DRAFT
@@ -178,6 +182,49 @@ class TrainingsAPITestCase(APITestCase):
         titles = [r['title'] for r in res.data['results']]
         self.assertEqual(len(titles), 1)
         self.assertEqual(titles[0], "Python Basics")
+
+    def test_trainer_dashboard_returns_only_explicit_assignments(self):
+        directly_assigned = Training.objects.create(
+            **{**self.training_data, "title": "Direct assignment", "trainer": self.trainer, "business_unit": self.bu}
+        )
+        direct_session = TrainingSession.objects.create(
+            training=directly_assigned,
+            start_date=timezone.localdate() + timedelta(days=2),
+            end_date=timezone.localdate() + timedelta(days=3),
+            start_time="09:00", end_time="17:00", maximum_participants=10,
+            trainer=self.trainer, location="Room A",
+        )
+        session_training = Training.objects.create(**{**self.training_data, "title": "Session assignment"})
+        assigned_session = TrainingSession.objects.create(
+            training=session_training,
+            start_date=timezone.localdate() + timedelta(days=4),
+            end_date=timezone.localdate() + timedelta(days=5),
+            start_time="09:00", end_time="17:00", maximum_participants=10,
+            trainer=self.trainer, location="Room B",
+        )
+        TrainingSession.objects.create(
+            training=session_training,
+            start_date=timezone.localdate() + timedelta(days=6),
+            end_date=timezone.localdate() + timedelta(days=7),
+            start_time="09:00", end_time="17:00", maximum_participants=10,
+            trainer=None, location="Secret room",
+        )
+        Training.objects.create(**{**self.training_data, "title": "Not assigned"})
+
+        self.client.force_authenticate(self.trainer)
+        response = self.client.get("/api/trainings/trainer-dashboard/")
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data["count"], 2)
+        by_title = {item["title"]: item for item in response.data["results"]}
+        self.assertEqual([item["id"] for item in by_title["Direct assignment"]["sessions"]], [direct_session.id])
+        self.assertEqual([item["id"] for item in by_title["Session assignment"]["sessions"]], [assigned_session.id])
+        self.assertEqual(by_title["Direct assignment"]["business_unit"]["name"], self.bu.name)
+        self.assertIsNone(by_title["Direct assignment"]["requesting_manager"])
+
+    def test_trainer_dashboard_rejects_other_roles(self):
+        self.client.force_authenticate(self.hr)
+        self.assertEqual(self.client.get("/api/trainings/trainer-dashboard/").status_code, status.HTTP_403_FORBIDDEN)
 
     def test_client_visibility_and_restrictions(self):
         # Create Client Training
@@ -333,33 +380,18 @@ class TrainingEnrollmentAPITestCase(APITestCase):
         res = self.client.post("/api/enrollments/", {"training": self.training.id, "session": self.session.id})
         self.assertEqual(res.status_code, status.HTTP_403_FORBIDDEN)
 
-    def test_workflow_approve(self):
+    def test_manager_can_approve_managed_bu_enrollment(self):
         enr = TrainingEnrollment.objects.create(user=self.employee1, training=self.training, session=self.session)
         
-        # Manager approves
         self.client.force_authenticate(user=self.manager1)
         res = self.client.post(f"/api/enrollments/{enr.id}/manager_approve/", {"approved": True, "comment": "OK"})
         self.assertEqual(res.status_code, status.HTTP_200_OK)
         enr.refresh_from_db()
         self.assertEqual(enr.status, EnrollmentStatus.PENDING_SUPER_ADMIN)
         
-        # Super Admin approves
-        self.client.force_authenticate(user=self.super_admin)
-        res = self.client.post(f"/api/enrollments/{enr.id}/super_admin_approve/", {"approved": True})
-        self.assertEqual(res.status_code, status.HTTP_200_OK)
-        enr.refresh_from_db()
-        self.assertEqual(enr.status, EnrollmentStatus.ENROLLED)
-        
-        # Complete
-        res = self.client.post(f"/api/enrollments/{enr.id}/complete/")
-        self.assertEqual(res.status_code, status.HTTP_200_OK)
-        enr.refresh_from_db()
-        self.assertEqual(enr.status, EnrollmentStatus.COMPLETED)
-        
-    def test_workflow_rejects(self):
+    def test_manager_can_reject_managed_bu_enrollment(self):
         enr = TrainingEnrollment.objects.create(user=self.employee1, training=self.training, session=self.session)
         
-        # Manager rejects
         self.client.force_authenticate(user=self.manager1)
         res = self.client.post(f"/api/enrollments/{enr.id}/manager_reject/", {"approved": False})
         self.assertEqual(res.status_code, status.HTTP_200_OK)

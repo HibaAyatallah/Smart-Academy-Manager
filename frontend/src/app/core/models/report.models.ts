@@ -53,3 +53,12 @@ export interface HRDashboardData {
     ongoing_sessions: number;
   };
 }
+
+export interface BusinessUnitDashboardData {
+  business_units: { id: number; name: string; code: string; description: string }[];
+  counts: { needs: number; open_needs: number; collaborators: number; interns: number; active_interns: number };
+  needs_by_status: ReportPoint[];
+  interns_by_status: ReportPoint[];
+  recent_needs: { id: number; title: string; status: string; priority: string; expected_date: string | null; business_unit_id: number; business_unit_name: string }[];
+  recent_collaborators: { id: number; name: string; email: string; position: string; business_unit_name: string }[];
+}

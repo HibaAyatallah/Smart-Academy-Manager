@@ -165,7 +165,7 @@ export const routes: Routes = [
       {
         path: 'trainings',
         canActivate: [roleGuard],
-        data: { roles: ['SUPER_ADMIN', 'HR', 'BU_MANAGER', 'TRAINER_TUTOR'], title: 'Formations' },
+        data: { roles: ['SUPER_ADMIN', 'HR', 'TRAINER_TUTOR'], title: 'Formations' },
         loadComponent: () => import('./features/trainings/training-workspace/training-workspace.component').then(m => m.TrainingWorkspaceComponent),
       },
       {

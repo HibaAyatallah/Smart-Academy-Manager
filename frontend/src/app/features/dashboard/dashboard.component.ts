@@ -25,12 +25,14 @@ import {
   ApplicationStatus,
   EDUCATION_LEVEL_LABELS,
 } from '../../core/models/application.models';
-import { ReportData, HRDashboardData } from '../../core/models/report.models';
+import { ReportData, HRDashboardData, BusinessUnitDashboardData } from '../../core/models/report.models';
 import { ApplicationService } from '../../core/services/application.service';
 import { AuthService } from '../../core/services/auth.service';
 import { ReportService } from '../../core/services/report.service';
 import { InternshipService } from '../../core/services/internship.service';
+import { TrainingService } from '../../core/services/training.service';
 import { InternProfile, INTERNSHIP_STATUS_LABELS } from '../../core/models/internship.models';
+import { SESSION_STATUS_LABELS, TRAINING_STATUS_LABELS, TrainerDashboardTraining } from '../../core/models/training.models';
 import { PageHeaderComponent } from '../../shared/components/page-header/page-header.component';
 import { TranslatePipe } from '../../core/i18n/translate.pipe';
 import { LocalizedDatePipe } from '../../core/i18n/localized-date.pipe';
@@ -80,6 +82,7 @@ export class DashboardComponent implements OnDestroy, OnInit, AfterViewInit {
   private readonly applicationService = inject(ApplicationService);
   private readonly reportService = inject(ReportService);
   private readonly internshipService = inject(InternshipService);
+  private readonly trainingService = inject(TrainingService);
   private readonly snackBar = inject(MatSnackBar);
 
   readonly roleLabels = ROLE_LABELS;
@@ -94,6 +97,9 @@ export class DashboardComponent implements OnDestroy, OnInit, AfterViewInit {
   reportData: ReportData | null = null;
   reportLoading = false;
   reportError = '';
+  businessUnitData: BusinessUnitDashboardData | null = null;
+  businessUnitLoading = false;
+  businessUnitError = '';
   readonly periods = [
     { value: '7d', label: '7 jours' },
     { value: '30d', label: '30 jours' },
@@ -120,6 +126,11 @@ export class DashboardComponent implements OnDestroy, OnInit, AfterViewInit {
   internLoading = false;
   internError = '';
   readonly internshipStatuses = INTERNSHIP_STATUS_LABELS;
+  readonly trainingStatuses = TRAINING_STATUS_LABELS;
+  readonly sessionStatuses = SESSION_STATUS_LABELS;
+  trainerTrainings: TrainerDashboardTraining[] = [];
+  trainerDashboardLoading = false;
+  trainerDashboardError = '';
 
   @ViewChildren('chartCanvas') chartCanvases!: QueryList<ElementRef<HTMLCanvasElement>>;
   private chartInstances: any[] = [];
@@ -214,11 +225,29 @@ export class DashboardComponent implements OnDestroy, OnInit, AfterViewInit {
       this.loadCandidateApplications();
     } else if (role === 'INTERN') {
       this.loadInternDashboard();
-    } else if (role === 'SUPER_ADMIN' || role === 'BU_MANAGER') {
+    } else if (role === 'SUPER_ADMIN') {
       this.loadSuperAdminDashboard();
+    } else if (role === 'BU_MANAGER') {
+      this.loadBusinessUnitDashboard();
     } else if (role === 'HR') {
       this.loadHrDashboard();
+    } else if (role === 'TRAINER_TUTOR') {
+      this.loadTrainerDashboard();
     }
+  }
+
+  private loadTrainerDashboard(): void {
+    this.trainerDashboardLoading = true;
+    this.trainerDashboardError = '';
+    this.trainingService.getTrainerDashboard().pipe(
+      finalize(() => this.trainerDashboardLoading = false),
+    ).subscribe({
+      next: response => this.trainerTrainings = response.results,
+      error: () => {
+        this.trainerTrainings = [];
+        this.trainerDashboardError = 'Impossible de charger les formations qui vous sont affectées.';
+      },
+    });
   }
 
   private loadInternDashboard(): void {
@@ -255,6 +284,17 @@ export class DashboardComponent implements OnDestroy, OnInit, AfterViewInit {
         setTimeout(() => this.initCharts());
       },
       error: () => this.reportError = 'Impossible de charger le tableau de bord Administrateur.'
+    });
+  }
+
+  private loadBusinessUnitDashboard(): void {
+    this.businessUnitLoading = true;
+    this.businessUnitError = '';
+    this.reportService.businessUnitDashboard().pipe(
+      finalize(() => this.businessUnitLoading = false),
+    ).subscribe({
+      next: data => this.businessUnitData = data,
+      error: () => this.businessUnitError = 'Impossible de charger les données de votre Business Unit.',
     });
   }
 

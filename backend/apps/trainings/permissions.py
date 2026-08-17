@@ -35,13 +35,20 @@ class IsNotClientProfile(permissions.BasePermission):
 
 
 class IsTrainingOperationsUser(permissions.BasePermission):
-    """Allow operational training APIs while excluding HR and clients."""
+    """Allow roles participating in attendance and enrollment operations."""
+
+    allowed_roles = {
+        UserRole.SUPER_ADMIN,
+        UserRole.BU_MANAGER,
+        UserRole.TRAINER_TUTOR,
+        UserRole.EMPLOYEE,
+    }
 
     def has_permission(self, request, view):
         return bool(
             request.user
             and request.user.is_authenticated
-            and request.user.role not in [UserRole.CLIENT, UserRole.HR, UserRole.INTERN]
+            and request.user.role in self.allowed_roles
         )
 
 
@@ -51,7 +58,6 @@ class IsTrainingCatalogueUser(permissions.BasePermission):
     allowed_roles = {
         UserRole.SUPER_ADMIN,
         UserRole.HR,
-        UserRole.BU_MANAGER,
         UserRole.TRAINER_TUTOR,
     }
 

@@ -80,7 +80,7 @@
         <mat-expansion-panel *ngFor="let m of selectedModules; let i = index" style="margin-bottom: 6px; border: 1px solid var(--app-border); border-radius: 10px !important; overflow: hidden; box-shadow: none !important;">
           <mat-expansion-panel-header style="min-height: 52px;">
             <mat-panel-title style="display: flex; align-items: center; gap: 8px;">
-              <mat-icon style="color: #1689C7; font-size: 20px; width: 20px; height: 20px;">import_contacts</mat-icon>
+              <mat-icon class="training-title-icon">school</mat-icon>
               <strong style="color: var(--app-text); font-size: 0.92rem;">{{ m.title }}</strong>
             </mat-panel-title>
             <mat-panel-description style="justify-content: flex-end; color: var(--app-text-muted); font-weight: 500;">
@@ -126,7 +126,7 @@
           <strong style="font-size: 0.95rem; color: #0b1f33;">{{ session.start_date | date:'dd/MM/yyyy' }}</strong>
           <span style="color: var(--app-text-muted); font-size: 0.85rem; margin-left: 8px;">· {{ session.start_time }}–{{ session.end_time }}</span>
           <div style="margin-top: 4px; font-size: 0.88rem; color: var(--app-text-muted);">
-            <mat-icon style="font-size: 16px; width: 16px; height: 16px; vertical-align: middle; margin-right: 4px; color: var(--app-text-muted);">{{ session.location ? 'place' : 'videocam' }}</mat-icon>
+            <mat-icon class="session-mode-icon">{{ session.location ? 'location_on' : 'videocam' }}</mat-icon>
             {{ session.location || session.online_link || 'Lieu à confirmer' }}
           </div>
           <div style="margin-top: 4px; font-size: 0.82rem; font-weight: 600; color: #1689C7;">

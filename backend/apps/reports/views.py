@@ -23,6 +23,12 @@ from apps.trainings.models import SessionAttendance, Training, TrainingCertifica
 from apps.trainings.choices import TrainingType
 from apps.notifications.models import AuditLog
 from apps.accounts.permissions import IsHROnly
+from rest_framework.permissions import BasePermission
+
+
+class IsBUManagerOnly(BasePermission):
+    def has_permission(self, request, view):
+        return bool(request.user and request.user.is_authenticated and request.user.role == UserRole.BU_MANAGER)
 
 def grouped(qs, field): 
     return [{"label":str(row[field] or "UNSPECIFIED"),"value":row["value"]} for row in qs.values(field).annotate(value=Count("id")).order_by(field)]
@@ -274,6 +280,51 @@ class ReportView(APIView):
             raise PermissionDenied("Access denied.")
     @extend_schema(responses=OpenApiTypes.OBJECT)
     def get(self,request): return Response(report_data(request.query_params, request.user))
+
+
+class BusinessUnitDashboardView(APIView):
+    """Operational dashboard strictly scoped to the manager's assigned BU(s)."""
+
+    permission_classes = [IsBUManagerOnly]
+
+    @extend_schema(responses=OpenApiTypes.OBJECT)
+    def get(self, request):
+        business_units = BusinessUnit.objects.filter(manager=request.user, is_active=True)
+        bu_ids = list(business_units.values_list("id", flat=True))
+        memberships = BusinessUnitMembership.objects.filter(
+            business_unit_id__in=bu_ids, is_active=True, user__is_active=True,
+            user__role=UserRole.EMPLOYEE,
+        ).select_related("user", "business_unit")
+        needs = BusinessUnitNeed.objects.filter(
+            business_unit_id__in=bu_ids
+        ).select_related("business_unit").order_by("-created_at")
+        interns = InternProfile.objects.filter(
+            business_unit_id__in=bu_ids, user__is_active=True, user__role=UserRole.INTERN,
+        ).select_related("user", "business_unit")
+        open_statuses = [NeedStatus.SUBMITTED, NeedStatus.UNDER_REVIEW, NeedStatus.ACCEPTED]
+        return Response({
+            "business_units": list(business_units.values("id", "name", "code", "description")),
+            "counts": {
+                "needs": needs.count(),
+                "open_needs": needs.filter(status__in=open_statuses).count(),
+                "collaborators": memberships.values("user_id").distinct().count(),
+                "interns": interns.count(),
+                "active_interns": interns.filter(current_status=InternshipStatus.ACTIVE).count(),
+            },
+            "needs_by_status": grouped(needs, "status"),
+            "recent_needs": [{
+                "id": need.id, "title": need.title, "status": need.status,
+                "priority": need.priority, "expected_date": need.expected_date,
+                "business_unit_id": need.business_unit_id,
+                "business_unit_name": need.business_unit.name,
+            } for need in needs[:5]],
+            "recent_collaborators": [{
+                "id": membership.user_id, "name": membership.user.full_name,
+                "email": membership.user.email, "position": membership.position,
+                "business_unit_name": membership.business_unit.name,
+            } for membership in memberships.order_by("-joined_at")[:5]],
+            "interns_by_status": grouped(interns, "current_status"),
+        })
 
 class ReportExportView(ReportView):
     @extend_schema(responses={(200, "text/csv"): OpenApiTypes.BINARY, (200, "application/pdf"): OpenApiTypes.BINARY})

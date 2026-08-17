@@ -91,6 +91,25 @@
   }
 }
 
+.training-title-icon {
+  width: 20px;
+  height: 20px;
+  flex: 0 0 20px;
+  color: var(--app-primary);
+  font-size: 20px;
+  line-height: 20px;
+}
+
+.session-mode-icon {
+  width: 16px;
+  height: 16px;
+  margin-right: 4px;
+  color: var(--app-text-muted);
+  font-size: 16px;
+  line-height: 16px;
+  vertical-align: middle;
+}
+
 @media (max-width: 991px) {
   .workspace {
     grid-template-columns: 1fr;
