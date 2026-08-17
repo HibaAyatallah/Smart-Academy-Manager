@@ -2,6 +2,7 @@ from django.utils import timezone
 from rest_framework import filters, mixins, status, viewsets
 from rest_framework.decorators import action
 from rest_framework.response import Response
+from rest_framework.permissions import IsAuthenticated
 from django_filters.rest_framework import DjangoFilterBackend
 from apps.accounts.choices import UserRole
 from .models import AuditLog, Notification, NotificationPreference
@@ -10,6 +11,7 @@ from .serializers import AuditLogSerializer, NotificationPreferenceSerializer, N
 class NotificationViewSet(viewsets.ReadOnlyModelViewSet):
     queryset = Notification.objects.none()
     serializer_class = NotificationSerializer
+    permission_classes = [IsAuthenticated]
     filter_backends = [DjangoFilterBackend, filters.OrderingFilter]
     filterset_fields = ["category"]
     ordering = ["-created_at"]
@@ -29,6 +31,7 @@ class NotificationViewSet(viewsets.ReadOnlyModelViewSet):
 class NotificationPreferenceViewSet(mixins.RetrieveModelMixin, mixins.UpdateModelMixin, viewsets.GenericViewSet):
     queryset = NotificationPreference.objects.none()
     serializer_class = NotificationPreferenceSerializer
+    permission_classes = [IsAuthenticated]
     def get_object(self):
         return NotificationPreference.objects.get_or_create(user=self.request.user)[0]
 

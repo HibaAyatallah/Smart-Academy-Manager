@@ -11,6 +11,17 @@ class NotificationAuditTests(APITestCase):
         self.hr=User.objects.create_user(email="audit-hr@test.com",password="pwd",role=UserRole.HR)
         self.user=User.objects.create_user(email="notify-user@test.com",password="pwd",role=UserRole.EMPLOYEE)
         self.other=User.objects.create_user(email="notify-other@test.com",password="pwd",role=UserRole.EMPLOYEE)
+        self.manager=User.objects.create_user(email="notify-manager@test.com",password="pwd",role=UserRole.BU_MANAGER)
+
+    def test_bu_manager_accesses_only_own_notifications_and_preferences(self):
+        notify(self.manager, NotificationCategory.ASSIGNMENT, "Managed BU", "Own notification")
+        notify(self.other, NotificationCategory.SESSION, "Other", "Must remain private")
+        self.client.force_authenticate(self.manager)
+        response = self.client.get("/api/notifications/")
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data["count"], 1)
+        self.assertEqual(response.data["results"][0]["title"], "Managed BU")
+        self.assertEqual(self.client.get("/api/notification-preferences/1/").status_code, status.HTTP_200_OK)
 
     def test_notifications_are_private_and_support_read_state(self):
         item=notify(self.user,NotificationCategory.ASSIGNMENT,"Assigned","New project","/projects/1")
