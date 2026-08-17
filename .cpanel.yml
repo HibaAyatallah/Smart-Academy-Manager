@@ -1,11 +1,7 @@
 ---
 deployment:
   tasks:
-    - export DEPLOYPATH=/home/capskill/smart_academy_backend
-    - /bin/cp -R backend/apps $DEPLOYPATH
-    - /bin/cp -R backend/config $DEPLOYPATH
-    - /bin/cp -R backend/requirements $DEPLOYPATH
-    - /bin/cp -R backend/templates $DEPLOYPATH
-    - /bin/cp -R backend/media $DEPLOYPATH
-    - /bin/cp backend/manage.py $DEPLOYPATH/manage.py
-    - /bin/cp backend/.env.example $DEPLOYPATH/.env.example
+    # The script is fail-fast and preserves backend/.env, media/, staticfiles/
+    # and logs/. Override its SMART_ACADEMY_* paths in the cPanel deployment
+    # environment if the account layout differs from the documented defaults.
+    - /bin/bash scripts/deploy_cpanel.sh

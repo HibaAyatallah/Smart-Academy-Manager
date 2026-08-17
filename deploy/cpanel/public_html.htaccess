@@ -1,0 +1,24 @@
+# Generated from this template by scripts/deploy_cpanel.sh.
+Options -MultiViews
+
+<IfModule mod_passenger.c>
+  PassengerEnabled On
+  PassengerAppRoot "@@APP_ROOT@@"
+  PassengerBaseURI /api
+  PassengerPython "@@PYTHON@@"
+</IfModule>
+
+<IfModule mod_rewrite.c>
+  RewriteEngine On
+
+  # Passenger and persistent Django assets must never enter Angular fallback.
+  RewriteRule ^api(?:/|$) - [L]
+  RewriteRule ^(?:static|media)(?:/|$) - [L]
+
+  RewriteCond %{REQUEST_FILENAME} -f [OR]
+  RewriteCond %{REQUEST_FILENAME} -d
+  RewriteRule ^ - [L]
+
+  # Angular Router history fallback.
+  RewriteRule ^ index.html [L]
+</IfModule>
