@@ -9,49 +9,73 @@ import { MatButtonModule } from '@angular/material/button';
 import { MatIconModule } from '@angular/material/icon';
 import { MatProgressBarModule } from '@angular/material/progress-bar';
 import { MatTooltipModule } from '@angular/material/tooltip';
+import { MatSnackBar } from '@angular/material/snack-bar';
 
 @Component({
   selector: 'app-bulk-import',
   standalone: true,
-  imports: [CommonModule, MatStepperModule, MatButtonModule, MatIconModule, MatProgressBarModule, MatTooltipModule],
+  imports: [
+    CommonModule,
+    MatStepperModule,
+    MatButtonModule,
+    MatIconModule,
+    MatProgressBarModule,
+    MatTooltipModule
+  ],
   templateUrl: './bulk-import.component.html',
   styleUrls: ['./bulk-import.component.scss']
 })
 export class BulkImportComponent {
   @ViewChild('stepper') stepper!: MatStepper;
-  
+
   file: File | null = null;
   previewData: ImportPreviewResult | null = null;
   importResult: ImportConfirmResult | null = null;
   isLoading = false;
+  isConfirming = false;
   errorMessage = '';
   activeTab: 'valid' | 'invalid' | 'skipped' = 'valid';
 
-  createMissingBus = false;
-
   get stats() {
     let collaborateurs = 0;
+    let formateurs = 0;
+    let clientsExternes = 0;
     let stagiaires = 0;
-    
+
     if (this.previewData && this.previewData.valid_rows) {
       this.previewData.valid_rows.forEach(row => {
-        const role = row.payload.role;
-        if (role === 'INTERN') {
-          stagiaires++;
-        } else if (['EMPLOYEE', 'BU_MANAGER', 'TRAINER_TUTOR'].includes(role)) {
-          collaborateurs++;
+        const role = row.payload?.role;
+        switch (role) {
+          case 'EMPLOYEE':
+          case 'BU_MANAGER':
+            collaborateurs++;
+            break;
+          case 'TRAINER_TUTOR':
+            formateurs++;
+            break;
+          case 'CLIENT':
+            clientsExternes++;
+            break;
+          case 'INTERN':
+            stagiaires++;
+            break;
         }
       });
     }
-    
+
     return {
       collaborateurs,
+      formateurs,
+      clientsExternes,
       stagiaires,
       total: this.previewData?.valid_count || 0
     };
   }
 
-  constructor(private userImportService: UserImportService) {}
+  constructor(
+    private userImportService: UserImportService,
+    private snackBar: MatSnackBar
+  ) {}
 
   onFileSelected(event: any) {
     const file = event.target.files[0];
@@ -78,50 +102,88 @@ export class BulkImportComponent {
     if (!this.file) return;
     this.isLoading = true;
     this.errorMessage = '';
-    
+
     this.userImportService.previewImport(this.file).subscribe({
       next: (res) => {
         this.previewData = res;
         this.isLoading = false;
-        // Default createMissingBus to false when new file uploaded
-        this.createMissingBus = false;
-        
+
         if (this.previewData.valid_count > 0) {
           this.activeTab = 'valid';
         } else if (this.previewData.invalid_count > 0) {
           this.activeTab = 'invalid';
         }
+        // Advance to step 2 (preview)
         setTimeout(() => this.stepper.next(), 100);
       },
       error: (err: HttpErrorResponse) => {
         this.isLoading = false;
-        this.errorMessage = err.error?.error || err.message || 'Erreur système inconnue.';
+        const msg = err.error?.error || err.message || 'Erreur système inconnue.';
+        this.errorMessage = msg;
+        this.snackBar.open(`Erreur d'analyse : ${msg}`, 'Fermer', { duration: 6000, panelClass: ['snack-error'] });
       }
     });
   }
 
-  confirmImport() {
-    if (!this.previewData || this.previewData.valid_rows.length === 0) return;
-    
-    this.isLoading = true;
+  /**
+   * Passe de l'étape Prévisualisation (étape 2) à l'étape Confirmation (étape 3).
+   * Vérifie les préconditions avant d'avancer le stepper.
+   */
+  goToConfirmation() {
+    if (!this.previewData) {
+      const msg = 'Aucune donnée de prévisualisation disponible. Veuillez analyser un fichier d\'abord.';
+      this.errorMessage = msg;
+      this.snackBar.open(msg, 'Fermer', { duration: 5000, panelClass: ['snack-error'] });
+      return;
+    }
+
+    if (this.previewData.valid_count === 0) {
+      const msg = 'Impossible de continuer : aucune ligne valide à importer.';
+      this.errorMessage = msg;
+      this.snackBar.open(msg, 'Fermer', { duration: 5000, panelClass: ['snack-error'] });
+      return;
+    }
+
     this.errorMessage = '';
-    
-    this.userImportService.confirmImport(this.previewData.valid_rows, this.createMissingBus).subscribe({
+    this.stepper.next();
+  }
+
+  confirmImport() {
+    // Protection double-clic
+    if (this.isConfirming || this.isLoading) return;
+
+    if (!this.previewData || this.previewData.valid_rows.length === 0) {
+      const msg = 'Aucune donnée valide à importer.';
+      this.errorMessage = msg;
+      this.snackBar.open(msg, 'Fermer', { duration: 5000, panelClass: ['snack-error'] });
+      return;
+    }
+
+    this.isLoading = true;
+    this.isConfirming = true;
+    this.errorMessage = '';
+
+    this.userImportService.confirmImport(this.previewData.valid_rows).subscribe({
       next: (res) => {
         this.isLoading = false;
+        this.isConfirming = false;
         this.importResult = res;
+        // Advance to step 4 (result)
         setTimeout(() => this.stepper.next(), 100);
       },
       error: (err: HttpErrorResponse) => {
         this.isLoading = false;
-        this.errorMessage = err.error?.error || "Erreur lors de l'importation.";
+        this.isConfirming = false;
+        const msg = err.error?.error || "Erreur lors de l'importation.";
+        this.errorMessage = msg;
+        this.snackBar.open(`Erreur d'importation : ${msg}`, 'Fermer', { duration: 8000, panelClass: ['snack-error'] });
       }
     });
   }
 
   downloadResult() {
     if (!this.importResult || !this.importResult.results) return;
-    
+
     const csv = Papa.unparse(this.importResult.results);
     const blob = new Blob(['\ufeff' + csv], { type: 'text/csv;charset=utf-8' });
     saveAs(blob, 'resultat_import.csv');
@@ -157,6 +219,7 @@ export class BulkImportComponent {
     this.previewData = null;
     this.importResult = null;
     this.errorMessage = '';
+    this.isConfirming = false;
     this.stepper.reset();
   }
 }

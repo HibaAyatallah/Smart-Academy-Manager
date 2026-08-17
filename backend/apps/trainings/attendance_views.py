@@ -105,6 +105,8 @@ class TrainingCertificateViewSet(viewsets.ReadOnlyModelViewSet):
         qs = TrainingCertificate.objects.select_related("enrollment__user", "enrollment__training", "enrollment__session", "issued_by")
         if user.role == UserRole.SUPER_ADMIN:
             return qs
+        if user.role == UserRole.BU_MANAGER:
+            return qs.filter(enrollment__training__business_unit__manager=user)
         if user.role == UserRole.TRAINER_TUTOR:
             return qs.filter(enrollment__session__trainer=user)
         return qs.filter(enrollment__user=user)

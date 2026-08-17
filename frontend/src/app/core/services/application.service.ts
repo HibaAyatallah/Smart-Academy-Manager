@@ -6,7 +6,9 @@ import { catchError, map } from 'rxjs/operators';
 import { environment } from '../../../environments/environment';
 import {
   Application,
+  ApplicationDocument,
   ApplicationFilters,
+  CVAnalysis,
   PaginatedResponse,
 } from '../models/application.models';
 
@@ -26,6 +28,7 @@ export class ApplicationService {
   submitPublicApplication(formData: FormData): Observable<Application> {
     return this.http.post<Application>(`${this.apiBaseUrl}applications/public-submit/`, formData);
   }
+  previewCV(file: File): Observable<CVAnalysis> { const body=new FormData();body.append('file',file);return this.http.post<CVAnalysis>(`${this.apiBaseUrl}applications/preview-cv/`,body); }
 
   getMyApplications(page = 1): Observable<PaginatedResponse<Application>> {
     const url = `${this.apiBaseUrl}applications/mine/`;
@@ -153,4 +156,13 @@ export class ApplicationService {
       reason,
     });
   }
+
+  uploadCV(id: number, file: File): Observable<{document: ApplicationDocument; analysis: CVAnalysis | null; analysis_error: string}> {
+    const body = new FormData(); body.append('file', file);
+    return this.http.post<{document: ApplicationDocument; analysis: CVAnalysis | null; analysis_error: string}>(`${this.apiBaseUrl}applications/${id}/upload-cv/`, body);
+  }
+  analyzeCV(id: number, force = false): Observable<CVAnalysis> { return this.http.post<CVAnalysis>(`${this.apiBaseUrl}applications/${id}/analyze-cv/`, {force}); }
+  getCVAnalysis(id: number): Observable<CVAnalysis> { return this.http.get<CVAnalysis>(`${this.apiBaseUrl}applications/${id}/cv-analysis/`); }
+  updateCVAnalysis(id: number, data: Partial<CVAnalysis>): Observable<CVAnalysis> { return this.http.patch<CVAnalysis>(`${this.apiBaseUrl}applications/${id}/cv-analysis/`, data); }
+  validateCV(id: number, data: Partial<CVAnalysis>): Observable<CVAnalysis> { return this.http.post<CVAnalysis>(`${this.apiBaseUrl}applications/${id}/validate-cv/`, data); }
 }

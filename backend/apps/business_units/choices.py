@@ -1,6 +1,16 @@
 from django.db import models
 
 
+class BusinessUnitCode(models.TextChoices):
+    NETSEC = "NetSEC", "NetSEC"
+    SYSTEM = "System", "System"
+    SOFTWARE = "Software", "Software"
+    ACHAT = "Achat", "Achat"
+
+
+ALLOWED_BUSINESS_UNITS = dict(BusinessUnitCode.choices)
+
+
 class NeedType(models.TextChoices):
     RECRUITMENT_INTERNSHIP = "RECRUITMENT_INTERNSHIP", "Recrutement / stagiaire"
     TRAINING = "TRAINING", "Formation"

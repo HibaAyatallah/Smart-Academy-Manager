@@ -11,6 +11,17 @@ class NotificationAuditTests(APITestCase):
         self.hr=User.objects.create_user(email="audit-hr@test.com",password="pwd",role=UserRole.HR)
         self.user=User.objects.create_user(email="notify-user@test.com",password="pwd",role=UserRole.EMPLOYEE)
         self.other=User.objects.create_user(email="notify-other@test.com",password="pwd",role=UserRole.EMPLOYEE)
+        self.manager=User.objects.create_user(email="notify-manager@test.com",password="pwd",role=UserRole.BU_MANAGER)
+
+    def test_bu_manager_accesses_only_own_notifications_and_preferences(self):
+        notify(self.manager, NotificationCategory.ASSIGNMENT, "Managed BU", "Own notification")
+        notify(self.other, NotificationCategory.SESSION, "Other", "Must remain private")
+        self.client.force_authenticate(self.manager)
+        response = self.client.get("/api/notifications/")
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data["count"], 1)
+        self.assertEqual(response.data["results"][0]["title"], "Managed BU")
+        self.assertEqual(self.client.get("/api/notification-preferences/1/").status_code, status.HTTP_200_OK)
 
     def test_notifications_are_private_and_support_read_state(self):
         item=notify(self.user,NotificationCategory.ASSIGNMENT,"Assigned","New project","/projects/1")
@@ -53,6 +64,7 @@ class NotificationAuditTests(APITestCase):
         self.assertGreaterEqual(self.client.get("/api/audit-logs/").data["count"],1)
 from django.core import mail
 from django.test import override_settings
+from unittest.mock import patch
 from apps.notifications.services import send_templated_email
 from apps.notifications.models import EmailDeliveryLog
 
@@ -63,3 +75,21 @@ class EmailNotificationTests(APITestCase):
         first=send_templated_email(recipient=user,event="account.created",event_key="account:mail-test",context={"message":"Welcome"})
         second=send_templated_email(recipient=user,event="account.created",event_key="account:mail-test",context={"message":"Welcome"})
         self.assertEqual(first.status,"SENT");self.assertIsNone(second);self.assertEqual(len(mail.outbox),1);self.assertEqual(EmailDeliveryLog.objects.filter(recipient=user.email).count(),1);self.assertIn('dir="rtl"',mail.outbox[0].alternatives[0].content)
+
+    @override_settings(EMAIL_RAISE_DELIVERY_ERRORS=False)
+    @patch("apps.notifications.services.EmailMultiAlternatives.send", return_value=0)
+    def test_unconfirmed_delivery_is_failed(self, mocked_send):
+        user=User.objects.create_user(email="not-sent@test.com",password="pwd",role=UserRole.EMPLOYEE)
+        delivery=send_templated_email(recipient=user,event="notification",event_key="not-sent",context={"message":"Test"})
+        self.assertEqual(delivery.status,"FAILED")
+        self.assertEqual(delivery.error_code,"EmailDeliveryError")
+        self.assertIsNone(delivery.sent_at)
+
+    @override_settings(EMAIL_RAISE_DELIVERY_ERRORS=False)
+    @patch("apps.notifications.services.render_to_string", side_effect=RuntimeError("secret-value"))
+    def test_template_failure_is_recorded_without_sensitive_details(self, mocked_render):
+        user=User.objects.create_user(email="template-failure@test.com",password="pwd",role=UserRole.EMPLOYEE)
+        delivery=send_templated_email(recipient=user,event="notification",event_key="template-failure")
+        self.assertEqual(delivery.status,"FAILED")
+        self.assertEqual(delivery.error_code,"RuntimeError")
+        self.assertNotIn("secret-value",delivery.error_code)

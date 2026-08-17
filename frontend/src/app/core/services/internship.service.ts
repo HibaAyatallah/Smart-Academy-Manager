@@ -17,6 +17,7 @@ export class InternshipService {
   getHRInterns(): Observable<PaginatedResponse<HRInternProfile>> { return this.http.get<PaginatedResponse<HRInternProfile>>(`${this.base}hr/interns/`); }
   getHRIntern(id: number): Observable<HRInternProfile> { return this.http.get<HRInternProfile>(`${this.base}hr/interns/${id}/`); }
   uploadDocument(intern: number, requirement: number, file: File): Observable<InternDocument> { const body = new FormData(); body.append('intern', String(intern)); body.append('requirement', String(requirement)); body.append('file', file); return this.http.post<InternDocument>(`${this.base}intern-documents/`, body); }
+  declarePhysicalDocument(intern: number, requirement: number): Observable<InternDocument> { return this.http.post<InternDocument>(`${this.base}intern-documents/declare-physical/`, { intern, requirement }); }
   downloadDocument(id: number): Observable<Blob> { return this.http.get(`${this.base}intern-documents/${id}/download/`, { responseType: 'blob' }); }
   validateDocument(id: number, comment = ''): Observable<InternDocument> { return this.http.post<InternDocument>(`${this.base}intern-documents/${id}/validate/`, { comment }); }
   rejectDocument(id:number,comment:string):Observable<InternDocument>{return this.http.post<InternDocument>(`${this.base}intern-documents/${id}/reject/`,{comment});}

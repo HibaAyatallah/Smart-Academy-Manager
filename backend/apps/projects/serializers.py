@@ -1,5 +1,9 @@
+from pathlib import Path
+
+from django.conf import settings
 from django.contrib.auth import get_user_model
 from rest_framework import serializers
+from drf_spectacular.utils import extend_schema_field
 from apps.accounts.choices import UserRole
 from apps.business_units.models import BusinessUnitMembership
 from apps.recruitment.models import InternProfile
@@ -33,12 +37,37 @@ class ProjectCommentSerializer(serializers.ModelSerializer):
 
 
 class ProjectDocumentSerializer(serializers.ModelSerializer):
+    ALLOWED_FILE_TYPES = {
+        ".pdf": {"application/pdf"},
+        ".doc": {"application/msword"},
+        ".docx": {"application/vnd.openxmlformats-officedocument.wordprocessingml.document"},
+        ".xls": {"application/vnd.ms-excel"},
+        ".xlsx": {"application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"},
+        ".png": {"image/png"},
+        ".jpg": {"image/jpeg"},
+        ".jpeg": {"image/jpeg"},
+        ".txt": {"text/plain"},
+    }
+
     uploaded_by_email = serializers.EmailField(source="uploaded_by.email", read_only=True)
 
     class Meta:
         model = ProjectDocument
         fields = ["id", "project", "file", "original_name", "uploaded_by", "uploaded_by_email", "uploaded_at"]
         read_only_fields = ["id", "original_name", "uploaded_by", "uploaded_by_email", "uploaded_at"]
+
+    def validate_file(self, uploaded_file):
+        extension = Path(uploaded_file.name).suffix.lower()
+        allowed_mime_types = self.ALLOWED_FILE_TYPES.get(extension)
+        content_type = getattr(uploaded_file, "content_type", "")
+        if not allowed_mime_types or content_type not in allowed_mime_types:
+            raise serializers.ValidationError("Type de fichier non autorisé.")
+        max_size = settings.PROJECT_MAX_UPLOAD_SIZE_MB * 1024 * 1024
+        if uploaded_file.size > max_size:
+            raise serializers.ValidationError(
+                f"Le fichier dépasse la taille maximale de {settings.PROJECT_MAX_UPLOAD_SIZE_MB} Mo."
+            )
+        return uploaded_file
 
 
 class ProjectSerializer(serializers.ModelSerializer):
@@ -56,7 +85,8 @@ class ProjectSerializer(serializers.ModelSerializer):
         fields = ["id", "title", "description", "business_unit", "business_unit_name", "supervisor", "supervisor_name", "supervisor_email", "assignee_ids", "assignees", "start_date", "end_date", "status", "progress", "deliverables", "comments", "documents", "created_by", "created_at", "updated_at"]
         read_only_fields = ["id", "assignees", "created_by", "created_at", "updated_at"]
 
-    def get_assignees(self, obj):
+    @extend_schema_field(serializers.ListField(child=serializers.DictField()))
+    def get_assignees(self, obj) -> list[dict[str, object]]:
         return [{"id": user.id, "email": user.email, "full_name": user.full_name, "role": user.role} for user in obj.assignees.all()]
 
     def validate_progress(self, value):

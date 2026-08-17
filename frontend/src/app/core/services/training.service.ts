@@ -3,7 +3,7 @@ import { Injectable, inject } from '@angular/core';
 import { Observable } from 'rxjs';
 import { environment } from '../../../environments/environment';
 import { PaginatedResponse } from '../models/application.models';
-import { ClientTraining, SessionAttendance, Training, TrainingCertificate, TrainingEnrollment, TrainingSession } from '../models/training.models';
+import { ClientTraining, SessionAttendance, TrainerDashboardTraining, Training, TrainingCertificate, TrainingEnrollment, TrainingSession } from '../models/training.models';
 
 @Injectable({ providedIn: 'root' })
 export class TrainingService {
@@ -26,6 +26,7 @@ export class TrainingService {
   updateTraining(id: number, data: Partial<Training>): Observable<Training> { return this.http.patch<Training>(`${this.baseUrl}trainings/${id}/`, data); }
   deleteTraining(id: number): Observable<void> { return this.http.delete<void>(`${this.baseUrl}trainings/${id}/`); }
   trainingAction(id: number, action: 'publish' | 'archive'): Observable<unknown> { return this.http.post(`${this.baseUrl}trainings/${id}/${action}/`, {}); }
+  getTrainerDashboard(): Observable<{ count: number; results: TrainerDashboardTraining[] }> { return this.http.get<{ count: number; results: TrainerDashboardTraining[] }>(`${this.baseUrl}trainings/trainer-dashboard/`); }
 
   getSessions(filters: Record<string, unknown> = {}): Observable<PaginatedResponse<TrainingSession>> { return this.http.get<PaginatedResponse<TrainingSession>>(`${this.baseUrl}training-sessions/`, { params: this.params(filters) }); }
   createSession(data: Partial<TrainingSession>): Observable<TrainingSession> { return this.http.post<TrainingSession>(`${this.baseUrl}training-sessions/`, data); }

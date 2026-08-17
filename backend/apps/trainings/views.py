@@ -102,6 +102,54 @@ class TrainingViewSet(viewsets.ModelViewSet):
             Q(business_unit__isnull=True) | Q(business_unit__id__in=bu_ids)
         )
 
+    @action(detail=False, methods=["get"], url_path="trainer-dashboard")
+    def trainer_dashboard(self, request):
+        """Return only trainings and sessions explicitly assigned to this trainer."""
+        if request.user.role != UserRole.TRAINER_TUTOR:
+            raise PermissionDenied("Ce tableau de bord est réservé aux formateurs.")
+
+        trainings = (
+            Training.objects.filter(Q(trainer=request.user) | Q(sessions__trainer=request.user))
+            .select_related("business_unit", "business_unit__manager")
+            .prefetch_related("sessions")
+            .distinct()
+            .order_by("title")
+        )
+        results = []
+        for training in trainings:
+            sessions = [
+                session for session in training.sessions.all()
+                if training.trainer_id == request.user.id or session.trainer_id == request.user.id
+            ]
+            business_unit = training.business_unit
+            manager = business_unit.manager if business_unit else None
+            results.append({
+                "id": training.id,
+                "title": training.title,
+                "status": training.status,
+                "business_unit": (
+                    {"id": business_unit.id, "name": business_unit.name}
+                    if business_unit else None
+                ),
+                "business_unit_manager": (
+                    {"id": manager.id, "name": manager.full_name, "email": manager.email}
+                    if manager else None
+                ),
+                # The schema has no requester field or link to a BU need.
+                "requesting_manager": None,
+                "sessions": [{
+                    "id": session.id,
+                    "start_date": session.start_date,
+                    "end_date": session.end_date,
+                    "start_time": session.start_time,
+                    "end_time": session.end_time,
+                    "status": session.status,
+                    "location": session.location,
+                    "online_link": session.online_link,
+                } for session in sessions],
+            })
+        return Response({"count": len(results), "results": results})
+
     @action(detail=True, methods=['post'])
     def publish(self, request, pk=None):
         training = self.get_object()
@@ -248,6 +296,8 @@ class ClientTrainingSessionViewSet(viewsets.ReadOnlyModelViewSet):
 class TrainingEnrollmentViewSet(viewsets.ModelViewSet):
     queryset = TrainingEnrollment.objects.none()
     permission_classes = [IsTrainingOperationsUser]
+    # Workflow state changes must go through the explicit audited actions below.
+    http_method_names = ["get", "post", "head", "options"]
     filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
     filterset_fields = ["status", "training", "session"]
     search_fields = ["user__email", "user__first_name", "user__last_name", "training__title"]

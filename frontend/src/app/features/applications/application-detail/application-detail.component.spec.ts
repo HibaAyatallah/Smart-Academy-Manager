@@ -78,6 +78,12 @@ describe('ApplicationDetailComponent', () => {
     });
     TestBed.overrideComponent(ApplicationDetailComponent, {
       remove: { imports: [MatDialogModule, MatSnackBarModule] },
+      add: {
+        providers: [
+          { provide: MatSnackBar, useValue: snackBar },
+          { provide: MatDialog, useValue: dialog },
+        ],
+      },
     });
     await TestBed.compileComponents();
 

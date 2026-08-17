@@ -1,18 +1,19 @@
 .form-card {
-  padding: 32px;
-  max-width: 900px;
+  padding: clamp(20px, 3vw, 34px);
+  max-width: 960px;
   margin: 0 auto;
+  box-shadow: var(--app-shadow-card);
 }
 
 .form-container {
   display: flex;
   flex-direction: column;
-  gap: 16px;
+  gap: 18px;
 
   .form-row {
     display: flex;
     flex-wrap: wrap;
-    gap: 24px;
+    gap: 18px 24px;
     
     mat-form-field {
       flex: 1;
@@ -39,6 +40,13 @@
     gap: 16px;
     margin-top: 24px;
     padding-top: 24px;
-    border-top: 1px solid rgba(0, 0, 0, 0.12);
+    border-top: 1px solid var(--app-border);
   }
+}
+
+@media (max-width: 640px) {
+  .form-container .form-row mat-form-field.half-width,
+  .form-container .form-row mat-form-field.third-width { min-width: 100%; }
+  .form-container .form-actions { align-items: stretch; flex-direction: column-reverse; }
+  .form-container .form-actions > * { width: 100%; }
 }

@@ -1,10 +1,11 @@
 export type InternshipStatus = 'UPCOMING' | 'ACTIVE' | 'SUSPENDED' | 'COMPLETED' | 'CANCELLED';
-export type InternDocumentType = 'CONVENTION' | 'INSURANCE' | 'SCHOOL_CERT' | 'NDA' | 'OTHER';
+export type InternDocumentType = 'NATIONAL_ID' | 'PERSONAL_PHOTO' | 'ANTHROPOMETRIC_RECORD' | 'CONVENTION' | 'INSURANCE' | 'SCHOOL_CERT' | 'NDA' | 'OTHER';
 export type EvaluationType = 'INITIAL' | 'MIDTERM' | 'FINAL';
 
 export interface InternDocument {
-  id: number; intern: number; document_type: InternDocumentType; file: string;
+  id: number; intern: number; document_type: InternDocumentType; file: string | null;
   requirement: number | null; original_name: string; content_type: string; size: number;
+  submission_method: 'ONLINE' | 'PHYSICAL'; submitted_at: string;
   status: 'PENDING' | 'VALIDATED' | 'REJECTED';
   is_validated: boolean; validated_at: string | null; validator: number | null;
   validator_email: string; comment: string; uploaded_at: string;
@@ -47,8 +48,9 @@ export interface HRInternProfile {
   business_unit: { id: number; name: string; code: string } | null;
   supervisor: { id: number; full_name: string; email: string } | null;
   document_submission_status: { submitted_count: number; validated_count: number; has_documents: boolean; all_validated: boolean };
+  required_documents: Array<{ requirement_id: number; name: string; document_type: InternDocumentType; submission_status: 'MISSING' | 'ONLINE' | 'PHYSICAL'; submitted_at: string | null; document_id: number | null; original_name: string }>;
 }
 
 export const INTERNSHIP_STATUS_LABELS: Record<string, string> = { UPCOMING: 'À venir', ACTIVE: 'En cours', SUSPENDED: 'Suspendu', COMPLETED: 'Terminé', CANCELLED: 'Annulé' };
-export const INTERN_DOCUMENT_LABELS: Record<string, string> = { CONVENTION: 'Convention de stage', INSURANCE: 'Assurance', SCHOOL_CERT: 'Attestation de scolarité', NDA: 'Accord de confidentialité', OTHER: 'Autre document' };
+export const INTERN_DOCUMENT_LABELS: Record<string, string> = { NATIONAL_ID: 'Carte nationale scannée', PERSONAL_PHOTO: 'Photo personnelle professionnelle', ANTHROPOMETRIC_RECORD: 'Fiche anthropométrique', CONVENTION: 'Convention de stage', INSURANCE: 'Assurance', SCHOOL_CERT: 'Attestation de scolarité', NDA: 'Accord de confidentialité', OTHER: 'Autre document' };
 export const EVALUATION_TYPE_LABELS: Record<string, string> = { INITIAL: 'Évaluation initiale', MIDTERM: 'Évaluation à mi-parcours', FINAL: 'Évaluation finale' };

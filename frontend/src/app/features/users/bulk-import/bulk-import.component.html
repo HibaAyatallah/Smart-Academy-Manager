@@ -61,7 +61,7 @@
       </mat-step>
 
       <!-- ÉTAPE 2 : PRÉVISUALISATION -->
-      <mat-step [completed]="!!importResult">
+      <mat-step [completed]="previewData !== null && previewData.valid_count > 0">
         <ng-template matStepLabel>Prévisualisation</ng-template>
         
         <div class="step-content" *ngIf="previewData">
@@ -182,8 +182,11 @@
           </div>
 
           <div class="step-actions mt-4">
-            <button mat-button (click)="stepper.previous()">Retour</button>
-            <button mat-flat-button color="primary" (click)="stepper.next()" [disabled]="previewData.invalid_count > 0 || previewData.valid_count === 0">
+            <button mat-button type="button" (click)="stepper.previous()">Retour</button>
+            <button mat-flat-button color="primary" type="button"
+                    id="btn-continue-to-confirm"
+                    (click)="goToConfirmation()"
+                    [disabled]="!previewData || previewData.valid_count === 0 || isLoading">
               Continuer
             </button>
           </div>
@@ -191,7 +194,7 @@
       </mat-step>
 
       <!-- ÉTAPE 3 : CONFIRMATION -->
-      <mat-step>
+      <mat-step [completed]="!!importResult">
         <ng-template matStepLabel>Confirmation</ng-template>
         <div class="step-content text-center">
           <div class="confirmation-box">
@@ -200,8 +203,10 @@
             <p>Vous êtes sur le point d'importer <strong>{{ stats.total }} comptes</strong>.</p>
             
             <ul style="list-style: none; padding: 0; margin-bottom: 20px; font-size: 16px;">
-              <li><strong>{{ stats.collaborateurs }}</strong> collaborateurs</li>
-              <li><strong>{{ stats.stagiaires }}</strong> stagiaires</li>
+              <li><mat-icon style="vertical-align: middle; font-size: 18px; color: #1976d2;">work</mat-icon> <strong>{{ stats.collaborateurs }}</strong> collaborateur(s)</li>
+              <li><mat-icon style="vertical-align: middle; font-size: 18px; color: #7b1fa2;">school</mat-icon> <strong>{{ stats.formateurs }}</strong> formateur(s) / tuteur(s)</li>
+              <li><mat-icon style="vertical-align: middle; font-size: 18px; color: #388e3c;">business</mat-icon> <strong>{{ stats.clientsExternes }}</strong> client(s) externe(s)</li>
+              <li><mat-icon style="vertical-align: middle; font-size: 18px; color: #f57c00;">person_outline</mat-icon> <strong>{{ stats.stagiaires }}</strong> stagiaire(s)</li>
             </ul>
 
             <p>Cette action générera des identifiants et des mots de passe temporaires.</p>
@@ -209,13 +214,10 @@
             <div *ngIf="previewData?.missing_bus?.length" class="alert-banner warning mt-4 text-left" style="background: #fff3cd; color: #856404; padding: 12px; border-radius: 4px; display: flex; gap: 12px; align-items: flex-start;">
               <mat-icon>warning</mat-icon>
               <div>
-                <strong>Business Units manquantes détectées</strong><br>
-                Les Business Units suivantes n'existent pas dans le système : <br>
+                <strong>Business Units invalides ou non configurées</strong><br>
+                Les valeurs suivantes ne correspondent pas à une BU disponible : <br>
                 <strong>{{ previewData?.missing_bus?.join(', ') }}</strong><br><br>
-                <label style="display: flex; align-items: center; cursor: pointer; gap: 8px; font-weight: 500;">
-                  <input type="checkbox" #cb (change)="createMissingBus = cb.checked" [checked]="createMissingBus" style="width: 18px; height: 18px;">
-                  Créer automatiquement ces Business Units manquantes
-                </label>
+                Seules NetSEC, System, Software et Achat sont autorisées. Configurez la BU avant de relancer l'import.
               </div>
             </div>
 

@@ -32,6 +32,10 @@ env = environ.Env(
     RECRUITMENT_RETENTION_DAYS=(int, 730),
     RECRUITMENT_MAX_UPLOAD_SIZE_MB=(int, 5),
     RECRUITMENT_PHOTO_MAX_UPLOAD_SIZE_MB=(int, 3),
+    PROJECT_MAX_UPLOAD_SIZE_MB=(int, 10),
+    DB_ENGINE=(str, "postgresql"),
+    DB_HOST=(str, "localhost"),
+    DB_PORT=(str, "5432"),
 )
 env.read_env(BASE_DIR / ".env")
 
@@ -50,6 +54,7 @@ INSTALLED_APPS = [
     "django_filters",
     "rest_framework",
     "rest_framework_simplejwt",
+    "rest_framework_simplejwt.token_blacklist",
     "drf_spectacular",
     "apps.core",
     "apps.accounts",
@@ -60,6 +65,7 @@ INSTALLED_APPS = [
     "apps.notifications",
     "apps.reports",
     "apps.assistant",
+    "apps.analytics",
 ]
 
 MIDDLEWARE = [
@@ -95,12 +101,41 @@ TEMPLATES = [
 WSGI_APPLICATION = "config.wsgi.application"
 ASGI_APPLICATION = "config.asgi.application"
 
-DATABASES = {
-    "default": env.db(
-        "DATABASE_URL",
-        default="postgres://smart_academy_user:change_this_password@localhost:5432/smart_academy_db",
-    )
-}
+database_url = env("DATABASE_URL", default="").strip()
+if database_url:
+    database_config = env.db_url_config(database_url)
+else:
+    database_engine = env("DB_ENGINE").lower()
+    database_backends = {
+        "postgres": "django.db.backends.postgresql",
+        "postgresql": "django.db.backends.postgresql",
+        "mysql": "django.db.backends.mysql",
+    }
+    try:
+        django_database_engine = database_backends[database_engine]
+    except KeyError as exc:
+        supported_engines = ", ".join(sorted(database_backends))
+        raise ValueError(
+            f"Unsupported DB_ENGINE={database_engine!r}. "
+            f"Expected one of: {supported_engines}."
+        ) from exc
+
+    database_config = {
+        "ENGINE": django_database_engine,
+        "NAME": env("DB_NAME", default="smart_academy_db"),
+        "USER": env("DB_USER", default="smart_academy_user"),
+        "PASSWORD": env("DB_PASSWORD", default=""),
+        "HOST": env("DB_HOST"),
+        "PORT": env("DB_PORT"),
+    }
+    if database_engine == "mysql":
+        database_config["OPTIONS"] = {
+            "charset": "utf8mb4",
+            "init_command": "SET sql_mode='STRICT_TRANS_TABLES'",
+            "isolation_level": "read committed",
+        }
+
+DATABASES = {"default": database_config}
 DATABASES["default"]["ATOMIC_REQUESTS"] = True
 
 AUTH_PASSWORD_VALIDATORS = [
@@ -117,15 +152,18 @@ AUTH_PASSWORD_VALIDATORS = [
         "NAME": "django.contrib.auth.password_validation.NumericPasswordValidator",
     },
 ]
+PASSWORD_RESET_TIMEOUT = 30 * 60
 
 LANGUAGE_CODE = "fr-fr"
-TIME_ZONE = "UTC"
+TIME_ZONE = env("DJANGO_TIME_ZONE", default="Africa/Casablanca")
 USE_I18N = True
 USE_TZ = True
 
-STATIC_URL = "static/"
+PROJECT_MAX_UPLOAD_SIZE_MB = env.int("PROJECT_MAX_UPLOAD_SIZE_MB")
+
+STATIC_URL = "/static/"
 STATIC_ROOT = BASE_DIR / "staticfiles"
-MEDIA_URL = "media/"
+MEDIA_URL = "/media/"
 MEDIA_ROOT = BASE_DIR / "media"
 DEFAULT_FROM_EMAIL = env(
     "DEFAULT_FROM_EMAIL",
@@ -137,9 +175,22 @@ EMAIL_PORT = env.int("EMAIL_PORT", default=587)
 EMAIL_HOST_USER = env("EMAIL_HOST_USER", default="")
 EMAIL_HOST_PASSWORD = env("EMAIL_HOST_PASSWORD", default="")
 EMAIL_USE_TLS = env.bool("EMAIL_USE_TLS", default=True)
+EMAIL_USE_SSL = env.bool("EMAIL_USE_SSL", default=False)
 EMAIL_TIMEOUT = env.int("EMAIL_TIMEOUT", default=10)
+EMAIL_RAISE_DELIVERY_ERRORS = env.bool("EMAIL_RAISE_DELIVERY_ERRORS", default=DEBUG)
+if EMAIL_USE_TLS and EMAIL_USE_SSL:
+    raise ValueError("EMAIL_USE_TLS and EMAIL_USE_SSL cannot both be enabled.")
 FRONTEND_URL = env("FRONTEND_URL", default="http://localhost:4200")
-AI_ASSISTANT_PROVIDER = env("AI_ASSISTANT_PROVIDER", default="apps.assistant.services.ReadOnlyAssistantProvider")
+AI_ASSISTANT_PROVIDER = env(
+    "AI_ASSISTANT_PROVIDER",
+    default="apps.assistant.services.OllamaAssistantProvider",
+)
+OLLAMA_BASE_URL = env("OLLAMA_BASE_URL", default="http://127.0.0.1:11434")
+OLLAMA_MODEL = env("OLLAMA_MODEL", default="")
+OLLAMA_TIMEOUT = env.int("OLLAMA_TIMEOUT", default=120)
+OLLAMA_KEEP_ALIVE = env("OLLAMA_KEEP_ALIVE", default="10m")
+OLLAMA_MAX_HISTORY = env.int("OLLAMA_MAX_HISTORY", default=10)
+OLLAMA_NUM_PREDICT = env.int("OLLAMA_NUM_PREDICT", default=300)
 
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 AUTH_USER_MODEL = "accounts.User"
@@ -147,6 +198,20 @@ AUTH_USER_MODEL = "accounts.User"
 CORS_ALLOWED_ORIGINS = env("DJANGO_CORS_ALLOWED_ORIGINS")
 CSRF_TRUSTED_ORIGINS = env("DJANGO_CSRF_TRUSTED_ORIGINS")
 CORS_ALLOW_CREDENTIALS = True
+CORS_EXPOSE_HEADERS = ["Server-Timing"]
+
+LOGGING = {
+    "version": 1,
+    "disable_existing_loggers": False,
+    "handlers": {"console": {"class": "logging.StreamHandler"}},
+    "loggers": {
+        "apps.notifications": {
+            "handlers": ["console"],
+            "level": env("EMAIL_LOG_LEVEL", default="INFO"),
+            "propagate": False,
+        }
+    },
+}
 
 REST_FRAMEWORK = {
     "DEFAULT_AUTHENTICATION_CLASSES": (
@@ -187,6 +252,8 @@ SIMPLE_JWT = {
     "AUTH_HEADER_TYPES": ("Bearer",),
     "UPDATE_LAST_LOGIN": True,
     "CHECK_REVOKE_TOKEN": True,
+    "ROTATE_REFRESH_TOKENS": True,
+    "BLACKLIST_AFTER_ROTATION": True,
 }
 
 SPECTACULAR_SETTINGS = {

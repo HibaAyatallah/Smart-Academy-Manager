@@ -1,0 +1,25 @@
+<mat-card class="cv-workflow">
+  <mat-card-header><mat-card-title>Extraction automatique du CV</mat-card-title></mat-card-header>
+  <mat-card-content>
+    <div class="steps"><span class="active">1 — CV</span><span [class.active]="analyzing">2 — Analyse</span><span [class.active]="analysis">3 — Vérification</span><span [class.active]="analysis?.human_validated">4 — Validation</span></div>
+    <div *ngIf="loading" class="state"><mat-spinner diameter="36"></mat-spinner></div>
+    <section *ngIf="!loading && activeApplicationId" class="upload-zone">
+      <input #cvInput type="file" hidden accept=".pdf,.docx,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document" (change)="upload($event)">
+      <button mat-stroked-button type="button" (click)="cvInput.click()"><mat-icon>upload_file</mat-icon> Uploader un CV</button>
+      <button *ngIf="analysis" mat-button type="button" (click)="reanalyze()">Relancer l’analyse</button>
+      <small>PDF texte, PDF scanné ou DOCX — 5 Mo maximum.</small>
+    </section>
+    <div *ngIf="analyzing" class="state"><mat-spinner diameter="40"></mat-spinner><strong>Analyse de votre CV en cours...</strong></div>
+    <p class="error" *ngIf="error">{{error}}</p><p class="success" *ngIf="success">{{success}}</p>
+    <form *ngIf="analysis && !analyzing" [formGroup]="form" class="review-form">
+      <p class="warning" *ngFor="let warning of analysis.extraction_warnings">{{warning}}</p>
+      <h3>Informations personnelles</h3><div class="grid"><mat-form-field appearance="outline"><mat-label>Prénom</mat-label><input matInput formControlName="first_name"></mat-form-field><mat-form-field appearance="outline"><mat-label>Nom</mat-label><input matInput formControlName="last_name"></mat-form-field><mat-form-field appearance="outline"><mat-label>Email</mat-label><input matInput formControlName="email"></mat-form-field><mat-form-field appearance="outline"><mat-label>Téléphone</mat-label><input matInput formControlName="phone"></mat-form-field><mat-form-field appearance="outline" class="wide"><mat-label>Localisation / adresse</mat-label><input matInput formControlName="location"></mat-form-field></div>
+      <h3>Compétences</h3><mat-form-field appearance="outline" class="wide"><mat-label>Une compétence par ligne</mat-label><textarea matInput rows="5" formControlName="skills"></textarea></mat-form-field>
+      <h3>Expériences</h3><mat-form-field appearance="outline" class="wide"><mat-label>Poste | Entreprise | Début | Fin | Durée | Description</mat-label><textarea matInput rows="7" formControlName="experiences"></textarea></mat-form-field>
+      <h3>Formations / Diplômes</h3><mat-form-field appearance="outline" class="wide"><mat-label>Diplôme | Établissement | Début | Fin</mat-label><textarea matInput rows="6" formControlName="education"></textarea></mat-form-field>
+      <div class="grid"><div><h3>Langues</h3><mat-form-field appearance="outline" class="wide"><mat-label>Une langue par ligne</mat-label><textarea matInput rows="4" formControlName="languages"></textarea></mat-form-field></div><div><h3>Certifications</h3><mat-form-field appearance="outline" class="wide"><mat-label>Une certification par ligne</mat-label><textarea matInput rows="4" formControlName="certifications"></textarea></mat-form-field></div></div>
+      <div class="actions"><button mat-button type="button" (click)="save(false)" [disabled]="saving||analysis.human_validated">Enregistrer le brouillon</button><button mat-flat-button color="primary" type="button" (click)="save(true)" [disabled]="saving||form.invalid">Valider mes informations</button></div>
+    </form>
+    <p *ngIf="!loading && !activeApplicationId">Aucune candidature disponible. Déposez d’abord une candidature.</p>
+  </mat-card-content>
+</mat-card>

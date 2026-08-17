@@ -43,7 +43,7 @@
               [disabled]="item.validated"
               (click)="validate(item)"
               [attr.aria-label]="'Valider la présence du '+day">
-              <mat-icon>approval</mat-icon>
+              <mat-icon>verified</mat-icon>
             </button>
           </td>
           <td class="total present-text">{{totals(enrollment.id).present}}</td>
@@ -61,9 +61,9 @@
   <p class="state" *ngIf="!certificates.length">Aucun certificat disponible.</p>
   <div class="certificate-grid">
     <mat-card *ngFor="let item of certificates">
-      <mat-icon>workspace_premium</mat-icon>
+      <mat-icon>card_membership</mat-icon>
       <div><strong>{{item.training_title}}</strong><span>{{item.user_email}} · {{item.certificate_number}} · {{item.issued_at|date:'dd/MM/yyyy'}}</span></div>
-      <button mat-stroked-button (click)="download(item)">Télécharger</button>
+      <button mat-stroked-button (click)="download(item)"><mat-icon>download</mat-icon>Télécharger</button>
     </mat-card>
   </div>
 </section>

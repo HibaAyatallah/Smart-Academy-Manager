@@ -1,10 +1,12 @@
 import logging
+import unicodedata
 import pandas as pd
 from django.contrib.auth import get_user_model
 from django.core.exceptions import ValidationError
 from django.core.validators import validate_email
 from apps.accounts.choices import UserRole
 from apps.business_units.models import BusinessUnit, BusinessUnitMembership
+from apps.business_units.choices import ALLOWED_BUSINESS_UNITS
 from apps.recruitment.models import InternProfile
 from .account_generation import generate_account_for_user
 
@@ -17,6 +19,7 @@ ALLOWED_ROLES = {
     "TRAINER_TUTOR": UserRole.TRAINER_TUTOR,
     "INTERN": UserRole.INTERN,
     "CLIENT": UserRole.CLIENT,
+    "CLIENT_EXTERNE": UserRole.CLIENT,
     
     # French aliases
     "COLLABORATEUR": UserRole.EMPLOYEE,
@@ -26,15 +29,49 @@ ALLOWED_ROLES = {
     "STAGIAIRE": UserRole.INTERN,
 }
 
+EMPTY_MARKERS = {"", "nan", "nat", "none", "null"}
+
+
+def _flatten_cell_values(value):
+    if isinstance(value, pd.Series):
+        values = value.tolist()
+    elif isinstance(value, (list, tuple, set)):
+        values = list(value)
+    else:
+        values = [value]
+    cleaned = []
+    for item in values:
+        if item is None:
+            continue
+        try:
+            if bool(pd.isna(item)):
+                continue
+        except (TypeError, ValueError):
+            pass
+        text = str(item).strip()
+        if text.lower() not in EMPTY_MARKERS:
+            cleaned.append(text)
+    return cleaned
+
+
+def _coalesce_cell_values(value):
+    distinct = list(dict.fromkeys(_flatten_cell_values(value)))
+    return (distinct[0] if len(distinct) == 1 else ""), distinct
+
+
 def clean_value(val):
-    if pd.isna(val) or val is None or str(val).strip().lower() in ["nan", "nat", "none", ""]:
+    value, conflicts = _coalesce_cell_values(val)
+    if not value and not conflicts:
         return None
-    if hasattr(val, "isoformat"):
+    if len(conflicts) > 1:
+        return conflicts
+    if hasattr(val, "isoformat") and not isinstance(val, (pd.Series, list, tuple, set)):
         return val.isoformat()
-    return str(val).strip()
+    return value
 
 def parse_date(date_str):
-    if pd.isna(date_str) or not date_str or str(date_str).strip().lower() in ["nan", "nat", "none", ""]:
+    date_str, conflicts = _coalesce_cell_values(date_str)
+    if len(conflicts) > 1 or not date_str:
         return None
     try:
         # Handles both float Excel dates and standard string dates if parsed as objects
@@ -54,55 +91,80 @@ def parse_and_validate_file(file_obj, filename: str) -> dict:
                 df = pd.read_excel(file_obj, dtype=str)
         else:
             return {"error": "Format de fichier non supporté. Seuls .csv et .xlsx sont acceptés."}
-    except Exception as e:
-        logger.error(f"Error parsing file {filename}: {e}")
-        return {"error": f"Le fichier est corrompu ou illisible. {str(e)}"}
+    except Exception as exc:
+        logger.error("Bulk import file parsing failed error_type=%s", exc.__class__.__name__)
+        return {"error": "Le fichier est corrompu ou illisible."}
 
-    # Normalize columns
+    # Normalize and consolidate aliases without producing duplicate labels.
     original_columns = list(df.columns)
-    col_map = {}
-    for c in original_columns:
-        norm = str(c).strip().lower()
-        if norm == "import_id": col_map[c] = "import_id"
-        elif norm == "prenom": col_map[c] = "first_name"
-        elif norm == "nom": col_map[c] = "last_name"
-        elif norm == "email_personnel_contact": col_map[c] = "email"
-        elif norm == "telephone": col_map[c] = "phone"
-        elif norm == "role_plateforme": col_map[c] = "role"
-        elif norm == "business_unit": col_map[c] = "bu"
-        elif norm == "poste_fonction": col_map[c] = "position"
-        elif norm == "encadrant_reference": col_map[c] = "supervisor"
-        elif norm == "ecole": col_map[c] = "school"
-        elif norm == "specialite": col_map[c] = "specialization"
-        elif norm == "date_debut_stage": col_map[c] = "internship_start"
-        elif norm == "date_fin_stage": col_map[c] = "internship_end"
-        elif norm == "type_profil": col_map[c] = "type_profil" # avoid fuzzy matching "profil" to "role"
-        
-        # Fuzzy fallback for tests
-        elif "prénom" in norm or "first" in norm: col_map[c] = "first_name"
-        elif "nom" in norm or "last" in norm: col_map[c] = "last_name"
-        elif "email" in norm or "mail" in norm: col_map[c] = "email"
-        elif "phone" in norm or "tel" in norm or "tél" in norm: col_map[c] = "phone"
-        elif "profil" in norm or "role" in norm or "rôle" in norm: col_map[c] = "role"
-        elif "bu" in norm or "business" in norm: col_map[c] = "bu"
-        elif "poste" in norm or "position" in norm: col_map[c] = "position"
-        elif "supervis" in norm: col_map[c] = "supervisor"
-        elif "école" in norm or "ecole" in norm or "school" in norm: col_map[c] = "school"
-        elif "spécial" in norm or "special" in norm: col_map[c] = "specialization"
-        elif "type" in norm and "stage" in norm: col_map[c] = "internship_type"
-        elif "début" in norm or "start" in norm: col_map[c] = "internship_start"
-        elif "fin" in norm or "end" in norm: col_map[c] = "internship_end"
-        elif "rémunér" in norm or "paid" in norm: col_map[c] = "paid"
-        elif "sujet" in norm or "subject" in norm: col_map[c] = "subject_title"
-        else: col_map[c] = norm
 
-    df.rename(columns=col_map, inplace=True)
+    def normalize_header(column):
+        raw = str(column).strip().lower().replace("-", "_").replace(" ", "_")
+        norm = "".join(
+            char for char in unicodedata.normalize("NFKD", raw)
+            if not unicodedata.combining(char)
+        )
+        exact = {
+            "import_id": "import_id", "prenom": "first_name", "nom": "last_name",
+            "email_personnel_contact": "email", "telephone": "phone",
+            "role_plateforme": "role", "business_unit": "bu", "bu": "bu",
+            "poste_fonction": "position", "encadrant_reference": "supervisor",
+            "ecole": "school", "specialite": "specialization",
+            "date_debut_stage": "internship_start", "date_fin_stage": "internship_end",
+            "type_profil": "type_profil",
+        }
+        if norm in exact:
+            return exact[norm]
+        if "prenom" in norm or "first" in norm: return "first_name"
+        if norm == "nom" or "last" in norm: return "last_name"
+        if "email" in norm or "mail" in norm: return "email"
+        if "phone" in norm or "tel" in norm: return "phone"
+        if "profil" in norm or "role" in norm: return "role"
+        if norm.startswith("bu_") or norm.endswith("_bu") or "business" in norm: return "bu"
+        if "poste" in norm or "position" in norm: return "position"
+        if "supervis" in norm: return "supervisor"
+        if "ecole" in norm or "school" in norm: return "school"
+        if "special" in norm: return "specialization"
+        if "type" in norm and "stage" in norm: return "internship_type"
+        if "debut" in norm or "start" in norm: return "internship_start"
+        if "fin" in norm or "end" in norm: return "internship_end"
+        if "remuner" in norm or "paid" in norm: return "paid"
+        if "sujet" in norm or "subject" in norm: return "subject_title"
+        return norm
+
+    groups = {}
+    for position, original in enumerate(original_columns):
+        groups.setdefault(normalize_header(original), []).append((position, str(original)))
+
+    normalized_data = {}
+    for canonical, sources in groups.items():
+        if len(sources) == 1:
+            normalized_data[canonical] = df.iloc[:, sources[0][0]]
+            continue
+        merged = []
+        for row_index in range(len(df.index)):
+            values = [df.iloc[row_index, position] for position, _ in sources]
+            value, distinct = _coalesce_cell_values(values)
+            if len(distinct) > 1:
+                source_names = ", ".join(name for _, name in sources)
+                return {
+                    "error": (
+                        f"Colonnes contradictoires pour « {canonical} » à la ligne {row_index + 2} "
+                        f"({source_names}) : {', '.join(distinct)}."
+                    )
+                }
+            merged.append(value or None)
+        normalized_data[canonical] = pd.Series(merged, index=df.index)
+    df = pd.DataFrame(normalized_data, index=df.index)
+
+    cell_conflicts = []
 
     def get_str(row_series, key):
-        val = row_series.get(key)
-        if pd.isna(val) or val is None:
+        value, conflicts = _coalesce_cell_values(row_series.get(key))
+        if len(conflicts) > 1:
+            cell_conflicts.append(f"{key}: {', '.join(conflicts)}")
             return ""
-        return str(val).strip()
+        return value
 
     valid_rows = []
     invalid_rows = []
@@ -170,17 +232,23 @@ def parse_and_validate_file(file_obj, filename: str) -> dict:
         if not role:
             errors.append(f"Rôle ou profil invalide: {role_str}")
             
-        bu_code = get_str(row, "bu")
+        bu_code = get_str(row, "bu").strip()
         bu_obj = None
         if bu_code and role != UserRole.CLIENT:
+            # Normalize: trim + case-insensitive search
             bu_obj = BusinessUnit.objects.filter(code__iexact=bu_code).first()
             if not bu_obj:
                 bu_obj = BusinessUnit.objects.filter(name__iexact=bu_code).first()
             if not bu_obj:
                 missing_bus.add(bu_code)
-                warnings.append(f"Business Unit manquante et sera créée : {bu_code}")
+                allowed = ", ".join(ALLOWED_BUSINESS_UNITS.keys())
+                errors.append(
+                    f"Ligne {row_num} ({email or 'email manquant'}) — "
+                    f"Business Unit inconnue : « {bu_code} ». "
+                    f"Valeurs autorisées : {allowed}."
+                )
         elif role in [UserRole.EMPLOYEE, UserRole.BU_MANAGER, UserRole.TRAINER_TUTOR, UserRole.INTERN] and not bu_code:
-            errors.append("Business Unit est requise pour ce profil.")
+            errors.append("Business Unit est requise pour ce profil (COLLABORATEUR, MANAGER, FORMATEUR, STAGIAIRE).")
 
         supervisor_email = get_str(row, "supervisor")
         supervisor_obj = None
@@ -228,8 +296,9 @@ def parse_and_validate_file(file_obj, filename: str) -> dict:
                     "contact_email": email,
                     "phone_number": get_str(row, "phone"),
                     "role": role,
-                    "business_unit": bu_obj.id if bu_obj else bu_code,
-                    "business_unit_name": bu_obj.name if bu_obj else bu_code,
+                    # Store None for CLIENT (no BU needed) or when BU found by ID
+                    "business_unit": bu_obj.id if bu_obj else (None if role == UserRole.CLIENT else bu_code),
+                    "business_unit_name": bu_obj.name if bu_obj else (None if role == UserRole.CLIENT else bu_code),
                     "position": get_str(row, "position"),
                     "supervisor": supervisor_obj.id if supervisor_obj else supervisor_email,
                     "school": get_str(row, "school"),
@@ -242,6 +311,9 @@ def parse_and_validate_file(file_obj, filename: str) -> dict:
                 }
             })
 
+    if cell_conflicts:
+        return {"error": "Valeurs contradictoires détectées : " + "; ".join(cell_conflicts)}
+
     return {
         "valid_count": len(valid_rows),
         "invalid_count": len(invalid_rows),
@@ -253,7 +325,7 @@ def parse_and_validate_file(file_obj, filename: str) -> dict:
     }
 
 
-def execute_import(valid_rows: list, actor, create_missing_bus=False) -> list:
+def execute_import(valid_rows: list, actor) -> list:
     """
     Executes the import for the valid rows using a multi-pass strategy.
     To ensure all-or-nothing, the view MUST wrap the call to `execute_import` in transaction.atomic().
@@ -291,39 +363,21 @@ def execute_import(valid_rows: list, actor, create_missing_bus=False) -> list:
             "Erreur": ""
         }
         
-    # Pass 2: Create Missing Business Units & Assign Managers
-    bu_mapping = {}
-    if create_missing_bus:
-        missing_bu_names = set()
-        for row_data in valid_rows:
-            bu_val = row_data["payload"].get("business_unit")
-            if isinstance(bu_val, str):
-                missing_bu_names.add(bu_val)
-                
-        fallback_manager = User.objects.filter(role=UserRole.BU_MANAGER).first()
-        
-        for bu_name in missing_bu_names:
-            manager = None
-            # Find a BU_MANAGER for this BU from the current import batch
-            for row_data in valid_rows:
-                if row_data["payload"].get("role") == UserRole.BU_MANAGER and row_data["payload"].get("business_unit") == bu_name:
-                    manager = user_mapping[row_data["payload"]["contact_email"]]
-                    break
-                    
-            if not manager:
-                manager = fallback_manager
-                
-            if manager:
-                bu_obj, _ = BusinessUnit.objects.get_or_create(
-                    name=bu_name,
-                    defaults={
-                        "code": bu_name.strip().upper().replace(" ", "_"),
-                        "manager": manager
-                    }
-                )
-                bu_mapping[bu_name] = bu_obj
-            else:
-                raise ValueError(f"Impossible de créer la Business Unit '{bu_name}': Aucun BU_MANAGER disponible.")
+    # Pass 2: verify all BU references are resolved (must be integer IDs at this point).
+    # Imports never create Business Units — they must reference the centrally managed
+    # catalogue (NetSEC, System, Software, Achat) which is seeded via migration.
+    for row_data in valid_rows:
+        payload = row_data["payload"]
+        bu_val = payload.get("business_unit")
+        if isinstance(bu_val, str):
+            email = payload.get("contact_email", "inconnu")
+            allowed = ", ".join(ALLOWED_BUSINESS_UNITS.keys())
+            raise ValueError(
+                f"Business Unit non résolue pour {email} : « {bu_val} ». "
+                f"Valeurs autorisées : {allowed}. "
+                "Vérifiez que les quatre BU officielles existent en base "
+                "(lancez : python manage.py migrate)."
+            )
                 
     # Pass 3: Profile & BU Membership Assignment
     for row_data in valid_rows:

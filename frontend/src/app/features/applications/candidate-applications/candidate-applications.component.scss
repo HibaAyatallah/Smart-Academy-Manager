@@ -103,8 +103,8 @@
 }
 
 .step.rejected {
-  border-color: #be123c;
-  background: #fff1f2;
+  border-color: var(--app-error);
+  background: var(--app-error-soft);
 }
 
 .step.pending {
@@ -126,8 +126,8 @@
 
 .error-state {
   border-color: #fecdd3;
-  background: #fff1f2;
-  color: #be123c;
+  background: var(--app-error-soft);
+  color: var(--app-error);
 }
 
 @media (max-width: 760px) {

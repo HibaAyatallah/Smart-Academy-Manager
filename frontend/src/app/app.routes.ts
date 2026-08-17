@@ -44,6 +44,8 @@ export const routes: Routes = [
     loadComponent: () => import('./layouts/auth-layout/auth-layout.component').then(m => m.AuthLayoutComponent),
     children: [
       { path: 'connexion', loadComponent: () => import('./features/auth/login/login.component').then(m => m.LoginComponent) },
+      { path: 'forgot-password', loadComponent: () => import('./features/auth/forgot-password/forgot-password.component').then(m => m.ForgotPasswordComponent) },
+      { path: 'reset-password', loadComponent: () => import('./features/auth/reset-password/reset-password.component').then(m => m.ResetPasswordComponent) },
     ]
   },
 
@@ -67,10 +69,33 @@ export const routes: Routes = [
         loadComponent: () => import('./features/applications/application-detail/application-detail.component').then(m => m.ApplicationDetailComponent),
       },
       {
+        path: 'cv-profile',
+        canActivate: [roleGuard],
+        data: { roles: ['CANDIDATE'], title: 'Mon CV' },
+        loadComponent: () => import('./features/applications/cv-review/cv-review.component').then(m => m.CVReviewComponent),
+      },
+      {
         path: 'applications',
         canActivate: [roleGuard],
         data: { roles: ['SUPER_ADMIN'], title: 'Candidatures' },
         loadComponent: () => import('./features/applications/hr-application-list/hr-application-list.component').then(m => m.HrApplicationListComponent),
+      },
+      {
+        path: 'notifications',
+        data: { title: 'Notifications' },
+        loadComponent: () => import('./features/notifications/notification-center.component').then(m => m.NotificationCenterComponent),
+      },
+      {
+        path: 'reports',
+        canActivate: [roleGuard],
+        data: { roles: ['SUPER_ADMIN'], title: 'Rapports & KPI' },
+        loadComponent: () => import('./features/reports/reports.component').then(m => m.ReportsComponent),
+      },
+      {
+        path: 'audit-logs',
+        canActivate: [roleGuard],
+        data: { roles: ['SUPER_ADMIN'], title: 'Journaux d’audit' },
+        loadComponent: () => import('./features/administration/audit-logs.component').then(m => m.AuditLogsComponent),
       },
       {
         path: 'offers',
@@ -140,7 +165,7 @@ export const routes: Routes = [
       {
         path: 'trainings',
         canActivate: [roleGuard],
-        data: { roles: ['SUPER_ADMIN', 'HR', 'BU_MANAGER', 'TRAINER_TUTOR'], title: 'Formations' },
+        data: { roles: ['SUPER_ADMIN', 'HR', 'TRAINER_TUTOR'], title: 'Formations' },
         loadComponent: () => import('./features/trainings/training-workspace/training-workspace.component').then(m => m.TrainingWorkspaceComponent),
       },
       {
@@ -148,6 +173,12 @@ export const routes: Routes = [
         canActivate: [roleGuard],
         data: { roles: ['SUPER_ADMIN', 'BU_MANAGER', 'TRAINER_TUTOR'], title: 'Inscriptions aux formations' },
         loadComponent: () => import('./features/trainings/enrollment-workflow/enrollment-workflow.component').then(m => m.EnrollmentWorkflowComponent),
+      },
+      {
+        path: 'training-participants',
+        canActivate: [roleGuard],
+        data: { roles: ['SUPER_ADMIN'], title: 'Personnes inscrites' },
+        loadComponent: () => import('./features/trainings/training-participants/training-participants.component').then(m => m.TrainingParticipantsComponent),
       },
       {
         path: 'attendance-certificates',

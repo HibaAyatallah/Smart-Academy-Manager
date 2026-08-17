@@ -1,7 +1,7 @@
 import { HttpClient, HttpParams } from '@angular/common/http';
 import { inject, Injectable } from '@angular/core';
 import { environment } from '../../../environments/environment';
-import { ReportData, HRDashboardData } from '../models/report.models';
+import { ReportData, HRDashboardData, BusinessUnitDashboardData } from '../models/report.models';
 
 @Injectable({ providedIn: 'root' })
 export class ReportService {
@@ -24,6 +24,10 @@ export class ReportService {
 
   hrDashboard() {
     return this.http.get<HRDashboardData>(`${this.base}reports/hr-dashboard/`);
+  }
+
+  businessUnitDashboard() {
+    return this.http.get<BusinessUnitDashboardData>(`${this.base}reports/business-unit-dashboard/`);
   }
 
   export(format: 'csv' | 'pdf', filters: Record<string, unknown>) {

@@ -9,6 +9,7 @@ import { MatIconModule } from '@angular/material/icon';
 import { MatInputModule } from '@angular/material/input';
 import { MatSelectModule } from '@angular/material/select';
 import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
+import { MatExpansionModule } from '@angular/material/expansion';
 import { finalize } from 'rxjs/operators';
 import { SESSION_STATUS_LABELS, TRAINING_STATUS_LABELS, Training, TrainingSession } from '../../../core/models/training.models';
 import { AuthService } from '../../../core/services/auth.service';
@@ -18,7 +19,7 @@ import { minTodayValidator, dateRangeValidator } from '../../../core/utils/date-
 
 @Component({
   selector: 'app-training-workspace', standalone: true,
-  imports: [CommonModule, ReactiveFormsModule, MatButtonModule, MatCardModule, MatChipsModule, MatFormFieldModule, MatIconModule, MatInputModule, MatSelectModule, MatSnackBarModule, PageHeaderComponent],
+  imports: [CommonModule, ReactiveFormsModule, MatButtonModule, MatCardModule, MatChipsModule, MatFormFieldModule, MatIconModule, MatInputModule, MatSelectModule, MatSnackBarModule, PageHeaderComponent, MatExpansionModule],
   templateUrl: './training-workspace.component.html', styleUrl: './training-workspace.component.scss',
 })
 export class TrainingWorkspaceComponent implements OnInit {
@@ -33,6 +34,20 @@ export class TrainingWorkspaceComponent implements OnInit {
   loading = true;
   saving = false;
   error = '';
+
+  get mainTrainings(): Training[] {
+    const mainTitles = ['CCNA', 'DCCOR', 'ENCOR', 'SCOR', 'Infoblox', 'Palo Alto', 'PMP'];
+    return this.trainings.filter(t => !mainTitles.includes(t.category));
+  }
+
+  get selectedModules(): Training[] {
+    if (!this.selected) return [];
+    return this.trainings.filter(t => t.category === this.selected?.title);
+  }
+
+  getModulesCount(title: string): number {
+    return this.trainings.filter(t => t.category === title).length;
+  }
   readonly todayStr = (() => {
     const d = new Date();
     const year = d.getFullYear();
@@ -94,6 +109,12 @@ export class TrainingWorkspaceComponent implements OnInit {
   }
   sessionAction(session: TrainingSession, action: 'open_registration' | 'close_registration' | 'cancel' | 'complete'): void { this.service.sessionAction(session.id, action).subscribe({ next: () => { this.notice('Session mise à jour.'); this.reloadSelected(); }, error: () => this.notice('Action impossible.') }); }
   enroll(session: TrainingSession): void { if (!this.selected) return; this.service.requestEnrollment(this.selected.id, session.id).subscribe({ next: () => this.notice('Demande d\'inscription envoyée.'), error: err => this.notice(err.error?.non_field_errors?.[0] ?? err.error?.detail ?? 'Inscription impossible.') }); }
-  private reloadSelected(): void { if (!this.selected) return; this.service.getTraining(this.selected.id).subscribe(training => { this.selected = training; this.load(); }); }
+  private reloadSelected(): void {
+    if (!this.selected) return;
+    this.service.getTraining(this.selected.id).subscribe({
+      next: training => { this.selected = training; this.load(); },
+      error: () => this.notice('Impossible de recharger la formation.'),
+    });
+  }
   private notice(message: string): void { this.snack.open(message, 'Fermer', { duration: 4000 }); }
 }

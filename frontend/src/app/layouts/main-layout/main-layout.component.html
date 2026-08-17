@@ -1,13 +1,12 @@
 <a class="skip-link" href="#main-content">Aller au contenu principal</a>
 <div class="authenticated-theme" [class.sidebar-collapsed]="sidebarCollapsed" *ngIf="viewModel$ | async as vm">
-  <mat-sidenav-container class="app-shell" [hasBackdrop]="isHandset$ | async">
+  <mat-sidenav-container class="app-shell" [hasBackdrop]="isHandset$ | async" autosize>
     
     <!-- Desktop & Mobile Sidebar -->
     <mat-sidenav #drawer 
                  class="premium-sidebar" 
                  [mode]="(isHandset$ | async) ? 'over' : 'side'" 
                  [opened]="!(isHandset$ | async)" 
-                 [fixedInViewport]="true" 
                  aria-label="Navigation principale">
       
       <div class="sidebar-header">
@@ -74,16 +73,12 @@
 
         <div class="header-right">
           <mat-select class="language-select" [value]="language.current" (selectionChange)="setLanguage($event.value)" [attr.aria-label]="'header.language' | translate">
-            <mat-option value="fr">FR</mat-option><mat-option value="en">EN</mat-option><mat-option value="ar">ع</mat-option>
+            <mat-option value="fr">FR</mat-option><mat-option value="en">EN</mat-option>
           </mat-select>
           <!-- Notification / Action icons -->
-          <button mat-icon-button class="header-action notification-action" aria-label="Notifications" matTooltip="Notifications">
-            <mat-icon>notifications_none</mat-icon>
-            <span class="notification-dot" aria-hidden="true"></span>
-          </button>
 
           <!-- Desktop User Menu -->
-          <button mat-button type="button" class="account-trigger desktop-only" [matMenuTriggerFor]="accountMenu" aria-label="Ouvrir le menu du compte">
+          <button mat-button type="button" class="account-trigger desktop-only" [matMenuTriggerFor]="accountMenu" [attr.aria-label]="'header.accountMenu' | translate">
             <span class="avatar" aria-hidden="true">{{ initials(vm.user) }}</span>
             <span class="account-copy">
               <strong>{{ vm.user.full_name }}</strong>

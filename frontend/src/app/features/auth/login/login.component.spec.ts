@@ -115,9 +115,9 @@ describe('LoginComponent', () => {
     fixture.detectChanges();
 
     expect(component.isSubmitting).toBeFalse();
-    expect(component.errorMessage).toContain('backend ne répond pas');
+    expect(component.errorMessage).toContain('serveur ne répond pas');
     expect(fixture.nativeElement.querySelector('.alert-error')?.textContent).toContain(
-      'backend ne répond pas',
+      'serveur ne répond pas',
     );
   }));
 

@@ -15,6 +15,7 @@ const profile: UserProfile = {
   full_name: 'Jane Candidate',
   phone_number: '+212600000000',
   role: 'CANDIDATE',
+  preferred_language: 'fr',
 };
 
 describe('AuthService', () => {
@@ -86,5 +87,16 @@ describe('AuthService', () => {
 
     httpController.expectNone('/api/auth/me/');
     expect(restoredProfiles).toEqual([profile]);
+  });
+
+  it('persists the language and updates the cached profile after confirmation', () => {
+    service.ensureProfile().subscribe();
+    httpController.expectOne('/api/auth/me/').flush(profile);
+    service.updateLanguage('en').subscribe();
+    const request = httpController.expectOne('/api/auth/language/');
+    expect(request.request.method).toBe('PATCH');
+    expect(request.request.body).toEqual({preferred_language: 'en'});
+    request.flush({preferred_language: 'en'});
+    expect(service.currentUserSnapshot?.preferred_language).toBe('en');
   });
 });

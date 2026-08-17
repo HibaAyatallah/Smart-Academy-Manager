@@ -2,9 +2,9 @@ from django.contrib import admin
 from django.urls import include, path
 from drf_spectacular.views import SpectacularAPIView, SpectacularRedocView, SpectacularSwaggerView
 from rest_framework.routers import DefaultRouter
-from rest_framework_simplejwt.views import TokenRefreshView, TokenVerifyView
+from rest_framework_simplejwt.views import TokenBlacklistView, TokenRefreshView, TokenVerifyView
 
-from apps.accounts.views import ChangePasswordAPIView, ContactDetailsAPIView, MeAPIView, PreferredLanguageAPIView, UserViewSet, SmartAcademyTokenObtainPairView, UserImportViewSet
+from apps.accounts.views import ChangePasswordAPIView, ContactDetailsAPIView, MeAPIView, PasswordResetConfirmAPIView, PasswordResetRequestAPIView, PasswordResetTokenAPIView, PreferredLanguageAPIView, UserViewSet, SmartAcademyTokenObtainPairView, UserImportViewSet
 from apps.recruitment.views import (
     ApplicationDocumentViewSet, 
     ApplicationViewSet, 
@@ -30,6 +30,7 @@ router.register("intern-evaluations", InternEvaluationViewSet, basename="intern-
 urlpatterns = [
     path("admin/", admin.site.urls),
     path("api/", include(router.urls)),
+    path("api/", include("apps.core.urls")),
     path("api/", include("apps.business_units.urls")),
     path("api/", include("apps.trainings.urls")),
     path("api/", include("apps.projects.urls")),
@@ -41,10 +42,14 @@ urlpatterns = [
     path("api/auth/token/", SmartAcademyTokenObtainPairView.as_view(), name="token_obtain_pair"),
     path("api/auth/token/refresh/", TokenRefreshView.as_view(), name="token_refresh"),
     path("api/auth/token/verify/", TokenVerifyView.as_view(), name="token_verify"),
+    path("api/auth/token/blacklist/", TokenBlacklistView.as_view(), name="token_blacklist"),
     path("api/auth/me/", MeAPIView.as_view(), name="auth_me"),
     path("api/auth/contact-details/", ContactDetailsAPIView.as_view(), name="auth_contact_details"),
     path("api/auth/language/", PreferredLanguageAPIView.as_view(), name="auth_language"),
     path("api/auth/change-password/", ChangePasswordAPIView.as_view(), name="auth_change_password"),
+    path("api/auth/password-reset/request/", PasswordResetRequestAPIView.as_view(), name="auth_password_reset_request"),
+    path("api/auth/password-reset/validate/<str:uid>/<str:token>/", PasswordResetTokenAPIView.as_view(), name="auth_password_reset_validate"),
+    path("api/auth/password-reset/confirm/", PasswordResetConfirmAPIView.as_view(), name="auth_password_reset_confirm"),
     path("api/schema/", SpectacularAPIView.as_view(), name="schema"),
     path("api/docs/", SpectacularSwaggerView.as_view(url_name="schema"), name="swagger-ui"),
     path("api/redoc/", SpectacularRedocView.as_view(url_name="schema"), name="redoc"),

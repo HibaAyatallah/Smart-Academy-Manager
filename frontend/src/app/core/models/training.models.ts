@@ -39,6 +39,16 @@ export interface Training {
   sessions: TrainingSession[];
 }
 
+export interface TrainerDashboardTraining {
+  id: number;
+  title: string;
+  status: TrainingStatus;
+  business_unit: { id: number; name: string } | null;
+  business_unit_manager: { id: number; name: string; email: string } | null;
+  requesting_manager: null;
+  sessions: Pick<TrainingSession, 'id' | 'start_date' | 'end_date' | 'start_time' | 'end_time' | 'status' | 'location' | 'online_link'>[];
+}
+
 export interface EnrollmentHistory {
   id: number;
   previous_status: string;

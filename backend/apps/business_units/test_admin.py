@@ -1,6 +1,7 @@
 from django.contrib.auth import get_user_model
 from django.test import TestCase
 from django.urls import reverse
+from django.utils import timezone
 
 from apps.accounts.choices import UserRole
 from apps.business_units.models import BusinessUnit, BusinessUnitMembership
@@ -37,8 +38,8 @@ class BusinessUnitAdminTests(TestCase):
 
     def _business_unit_data(self, **overrides):
         data = {
-            "name": "Admin BU",
-            "code": "ADMIN_BU",
+            "name": "NetSEC",
+            "code": "NetSEC",
             "description": "Created from Django Admin",
             "manager": str(self.manager.pk),
             "is_active": "on",
@@ -54,34 +55,33 @@ class BusinessUnitAdminTests(TestCase):
         )
 
         self.assertEqual(response.status_code, 302)
-        business_unit = BusinessUnit.objects.get(code="ADMIN_BU")
+        business_unit = BusinessUnit.objects.get(code="NetSEC")
         self.assertEqual(business_unit.manager, self.manager)
 
     def test_admin_can_update_business_unit(self):
         business_unit = BusinessUnit.objects.create(
-            name="Existing BU", code="EXISTING", manager=self.manager
+            name="System", code="System", manager=self.manager
         )
 
         response = self.client.post(
             reverse(
                 "admin:business_units_businessunit_change", args=[business_unit.pk]
             ),
-            self._business_unit_data(name="Updated BU", code=business_unit.code),
+            self._business_unit_data(name="System", code=business_unit.code),
         )
 
         self.assertEqual(response.status_code, 302)
         business_unit.refresh_from_db()
-        self.assertEqual(business_unit.name, "Updated BU")
+        self.assertEqual(business_unit.description, "Created from Django Admin")
 
-    def test_admin_creation_without_manager_returns_form_error(self):
+    def test_admin_can_create_business_unit_without_manager(self):
         response = self.client.post(
             reverse("admin:business_units_businessunit_add"),
             self._business_unit_data(manager=""),
         )
 
-        self.assertEqual(response.status_code, 200)
-        self.assertIn("manager", response.context["adminform"].form.errors)
-        self.assertFalse(BusinessUnit.objects.filter(code="ADMIN_BU").exists())
+        self.assertEqual(response.status_code, 302)
+        self.assertIsNone(BusinessUnit.objects.get(code="NetSEC").manager)
 
     def test_admin_inline_creates_one_active_membership(self):
         data = self._business_unit_data(
@@ -89,7 +89,7 @@ class BusinessUnitAdminTests(TestCase):
                 "memberships-0-user": str(self.employee.pk),
                 "memberships-TOTAL_FORMS": "1",
                 "memberships-0-position": "Developer",
-                "memberships-0-joined_at": "2026-07-15",
+                "memberships-0-joined_at": timezone.localdate().isoformat(),
                 "memberships-0-is_active": "on",
             }
         )
@@ -98,7 +98,7 @@ class BusinessUnitAdminTests(TestCase):
         )
 
         self.assertEqual(response.status_code, 302)
-        business_unit = BusinessUnit.objects.get(code="ADMIN_BU")
+        business_unit = BusinessUnit.objects.get(code="NetSEC")
         self.assertEqual(
             BusinessUnitMembership.objects.filter(
                 business_unit=business_unit,

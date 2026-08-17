@@ -27,7 +27,9 @@ def application_document_upload_to(instance, filename: str) -> str:
     else:
         candidate_id = "pending"
         application_id = "pending"
-    return f"candidates/{candidate_id}/applications/{application_id}/{instance.document_type.lower()}/{filename}"
+    extension = Path(filename).suffix.lower()
+    stored_name = f"{uuid.uuid4().hex}{extension}"
+    return f"candidates/{candidate_id}/applications/{application_id}/{instance.document_type.lower()}/{stored_name}"
 
 
 class CandidateProfile(models.Model):
@@ -317,6 +319,10 @@ def intern_document_upload_to(instance, filename):
     return f"internships/documents/{instance.intern.user_id}/{uuid.uuid4().hex}{extension}"
 
 class InternDocument(models.Model):
+    class SubmissionMethod(models.TextChoices):
+        ONLINE = "ONLINE", "Déposé en ligne"
+        PHYSICAL = "PHYSICAL", "Remis physiquement"
+
     intern = models.ForeignKey(
         InternProfile,
         on_delete=models.CASCADE,
@@ -330,7 +336,12 @@ class InternDocument(models.Model):
         blank=True,
         related_name="submissions",
     )
-    file = models.FileField(upload_to=intern_document_upload_to)
+    file = models.FileField(upload_to=intern_document_upload_to, blank=True, null=True)
+    submission_method = models.CharField(
+        max_length=16,
+        choices=SubmissionMethod.choices,
+        default=SubmissionMethod.ONLINE,
+    )
     original_name = models.CharField(max_length=255, blank=True)
     content_type = models.CharField(max_length=100, blank=True)
     size = models.PositiveIntegerField(default=0)
@@ -427,3 +438,62 @@ class SensitiveAuditLog(models.Model):
 
     def __str__(self) -> str:
         return self.action
+
+
+class CVAnalysis(models.Model):
+    application = models.OneToOneField(Application, on_delete=models.CASCADE, related_name="cv_analysis")
+    skills = models.JSONField(default=list)
+    experiences = models.JSONField(default=list)
+    diplomas = models.JSONField(default=list)
+    contact_details = models.JSONField(default=dict)
+    full_name = models.CharField(max_length=255, blank=True)
+    email = models.EmailField(blank=True)
+    phone = models.CharField(max_length=64, blank=True)
+    location = models.CharField(max_length=255, blank=True)
+    education = models.JSONField(default=list)
+    companies = models.JSONField(default=list)
+    positions = models.JSONField(default=list)
+    languages = models.JSONField(default=list)
+    certifications = models.JSONField(default=list)
+    extraction_warnings = models.JSONField(default=list)
+    extraction_method = models.CharField(max_length=32, blank=True)
+    source_sha256 = models.CharField(max_length=64)
+    extractor_version = models.CharField(max_length=32, default="rules-v1")
+    human_validated = models.BooleanField(default=False)
+    validated_by = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL)
+    validated_at = models.DateTimeField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+
+class ApplicationMatch(models.Model):
+    application = models.ForeignKey(Application, on_delete=models.CASCADE, related_name="matches")
+    offer = models.ForeignKey(Offer, on_delete=models.CASCADE, related_name="candidate_matches")
+    score = models.DecimalField(max_digits=5, decimal_places=2)
+    matched_skills = models.JSONField(default=list)
+    missing_skills = models.JSONField(default=list)
+    explanation = models.TextField()
+    algorithm_version = models.CharField(max_length=32, default="skills-v1")
+    human_decision = models.CharField(max_length=16, choices=[("PENDING","Pending"),("APPROVED","Approved"),("REJECTED","Rejected")], default="PENDING")
+    reviewed_by = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL)
+    reviewed_at = models.DateTimeField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        constraints = [models.UniqueConstraint(fields=["application", "offer"], name="unique_application_offer_match")]
+        ordering = ["-score", "-created_at"]
+
+
+class TrainingRecommendation(models.Model):
+    application = models.ForeignKey(Application, on_delete=models.CASCADE, related_name="training_recommendations")
+    training = models.ForeignKey("trainings.Training", on_delete=models.CASCADE, related_name="candidate_recommendations")
+    score = models.DecimalField(max_digits=5, decimal_places=2)
+    skill_gaps = models.JSONField(default=list)
+    explanation = models.TextField()
+    algorithm_version = models.CharField(max_length=32, default="skill-gap-v1")
+    human_decision = models.CharField(max_length=16, choices=[("PENDING","Pending"),("APPROVED","Approved"),("REJECTED","Rejected")], default="PENDING")
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        constraints = [models.UniqueConstraint(fields=["application", "training"], name="unique_application_training_recommendation")]
+        ordering = ["-score", "-created_at"]

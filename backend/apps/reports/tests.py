@@ -3,7 +3,9 @@ from rest_framework import status
 from rest_framework.test import APITestCase
 from apps.accounts.choices import UserRole
 from apps.accounts.models import User
-from apps.business_units.models import BusinessUnit, BusinessUnitMembership
+from apps.business_units.models import BusinessUnit, BusinessUnitMembership, BusinessUnitNeed
+from apps.business_units.choices import NeedStatus
+from apps.recruitment.models import InternProfile
 from apps.projects.models import Project
 
 class ReportTests(APITestCase):
@@ -20,11 +22,57 @@ class ReportTests(APITestCase):
         self.client.force_authenticate(self.admin); response=self.client.get("/api/reports/summary/")
         self.assertEqual(response.status_code,status.HTTP_200_OK); self.assertEqual(response.data["cards"]["projects"],1); self.assertIn("attendance",response.data["series"]); self.assertIn("monthly_internships",response.data["series"]); self.assertIn("certificate_rate",response.data["kpis"])
 
-    def test_hr_cannot_access_global_reports(self):
-        self.client.force_authenticate(self.hr); self.assertEqual(self.client.get("/api/reports/summary/").status_code,status.HTTP_403_FORBIDDEN)
+    def test_hr_can_access_read_only_global_summary(self):
+        self.client.force_authenticate(self.hr)
+        response = self.client.get("/api/reports/summary/")
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data["recent_activities"], [])
 
     def test_other_roles_are_denied(self):
         self.client.force_authenticate(self.employee); self.assertEqual(self.client.get("/api/reports/summary/").status_code,status.HTTP_403_FORBIDDEN)
+
+    def test_manager_summary_is_scoped_to_managed_business_unit(self):
+        self.bu.manager = self.manager
+        self.bu.save(update_fields=["manager"])
+        self.client.force_authenticate(self.manager)
+        response = self.client.get("/api/reports/summary/")
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data["cards"]["projects"], 1)
+        self.assertEqual(response.data["filters"]["business_unit"], "")
+
+    def test_manager_dashboard_contains_only_managed_bu_data(self):
+        other_manager = User.objects.create_user(email="other-manager@test.com", password="pwd", role=UserRole.BU_MANAGER)
+        other_employee = User.objects.create_user(email="other-employee@test.com", password="pwd", role=UserRole.EMPLOYEE)
+        other_bu = BusinessUnit.objects.create(name="Other BU", code="OTHER", manager=other_manager)
+        BusinessUnitMembership.objects.create(user=other_employee, business_unit=other_bu, is_active=True)
+        BusinessUnitNeed.objects.create(business_unit=self.bu, title="Own need", description="Own", status=NeedStatus.SUBMITTED, created_by=self.manager)
+        BusinessUnitNeed.objects.create(business_unit=other_bu, title="Secret need", description="Other", status=NeedStatus.SUBMITTED, created_by=other_manager)
+        intern = User.objects.create_user(email="intern@test.com", password="pwd", role=UserRole.INTERN)
+        InternProfile.objects.create(user=intern, business_unit=self.bu)
+
+        self.client.force_authenticate(self.manager)
+        response = self.client.get("/api/reports/business-unit-dashboard/")
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data["counts"]["open_needs"], 1)
+        self.assertEqual(response.data["counts"]["collaborators"], 1)
+        self.assertEqual(response.data["counts"]["interns"], 1)
+        self.assertEqual([item["title"] for item in response.data["recent_needs"]], ["Own need"])
+        self.assertNotIn(other_bu.id, [item["id"] for item in response.data["business_units"]])
+
+    def test_business_unit_dashboard_is_manager_only(self):
+        for user in [self.admin, self.hr, self.employee]:
+            self.client.force_authenticate(user)
+            self.assertEqual(self.client.get("/api/reports/business-unit-dashboard/").status_code, status.HTTP_403_FORBIDDEN)
+
+    def test_summary_exposes_smart_cards_filters_and_insights(self):
+        self.client.force_authenticate(self.admin)
+        response = self.client.get("/api/reports/summary/?training_type=INTERNAL")
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertIn("active_offers", response.data["cards"])
+        self.assertIn("validated_attendance", response.data["cards"])
+        self.assertIn("filter_options", response.data)
+        self.assertIn("insights", response.data)
 
     def test_business_unit_filter_scopes_cards(self):
         self.client.force_authenticate(self.admin); response=self.client.get(f"/api/reports/summary/?business_unit={self.bu.id}")

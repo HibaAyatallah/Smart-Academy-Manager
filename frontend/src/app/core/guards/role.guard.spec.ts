@@ -61,6 +61,16 @@ describe('roleGuard', () => {
     expect(result instanceof UrlTree).toBeTrue();
   });
 
+  it('redirects HR away from Super Admin-only routes', () => {
+    const result = runRoleGuard({
+      currentUserSnapshot: hrUser,
+      ensureProfile: jasmine.createSpy(),
+      getDashboardUrlForRole: jasmine.createSpy().and.returnValue('/dashboard/hr'),
+    }, ['SUPER_ADMIN']);
+
+    expect(result instanceof UrlTree).toBeTrue();
+  });
+
   /**
    * FAILING TEST (before the fix) — mirrors the race condition in authGuard:
    *

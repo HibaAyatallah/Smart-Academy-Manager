@@ -1,5 +1,5 @@
 import { CommonModule } from '@angular/common';
-import { Component, OnInit, inject } from '@angular/core';
+import { Component, OnInit, inject, isDevMode } from '@angular/core';
 import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
 import { MatButtonModule } from '@angular/material/button';
 import { MatCardModule } from '@angular/material/card';
@@ -141,7 +141,7 @@ export class OfferFormComponent implements OnInit {
         this.router.navigate(['/offers', offer.id]);
       },
       error: (err) => {
-        console.error(err);
+        if (isDevMode()) console.error(`[Offers] Save failed (status=${err?.status ?? 'unknown'}).`);
         this.snackBar.open("Erreur lors de la sauvegarde de l'offre.", 'Fermer', { duration: 3000 });
       }
     });

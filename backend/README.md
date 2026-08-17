@@ -1,81 +1,53 @@
-# Smart Academy Manager Backend
+# Backend — Smart Academy Manager
 
-Backend Django REST Framework pour Smart Academy Manager.
+Le backend fournit l’API REST, la persistance des données, les règles métier, les permissions et les traitements d’analyse de Smart Academy Manager. Il repose sur **Django**, **Django REST Framework** et **PostgreSQL**.
 
-## Contenu de cette fondation
+## Principaux modules
 
-- projet Django structure autour de `config` ;
-- applications internes dans `apps` ;
-- utilisateur personnalise base sur l'email ;
-- roles metier centralises ;
-- permissions DRF de base ;
-- authentification JWT avec Simple JWT ;
-- documentation API avec drf-spectacular ;
-- configuration PostgreSQL via `.env`.
+- `accounts` : utilisateurs, profils, rôles et authentification JWT ;
+- `business_units` : Business Units, membres et besoins ;
+- `recruitment` : offres, candidatures, documents, entretiens et analyse des CV ;
+- `trainings` : formations, inscriptions, présences et certificats ;
+- `projects` : projets, affectations et livrables ;
+- `notifications` : notifications, e-mails et audit ;
+- `reports` et `analytics` : indicateurs, exports et entrepôt analytique ;
+- `assistant` : assistant Ollama sécurisé par le contexte de l’utilisateur.
 
-## Installation locale
+L’API utilise Django REST Framework, JWT SimpleJWT et des permissions par rôle. La documentation OpenAPI est exposée par les routes configurées dans le projet.
 
-Les etapes manuelles sont detaillees dans [../docs/backend-setup.md](../docs/backend-setup.md).
+L’analyse des CV accepte les PDF textuels et DOCX jusqu’à 5 Mo. Le texte est extrait avec PyMuPDF ou python-docx, puis structuré avant le matching avec les offres et la génération de recommandations. Une validation humaine reste nécessaire.
 
-Resume des commandes principales, a executer dans ce dossier :
+## Configuration
+
+Copier `.env.example` vers `.env`, puis configurer au minimum :
+
+```env
+DJANGO_SECRET_KEY=change-me
+DJANGO_DEBUG=True
+DB_ENGINE=postgresql
+DB_NAME=smart_academy_db
+DB_USER=smart_academy_user
+DB_PASSWORD=your-password
+DB_HOST=localhost
+DB_PORT=5432
+```
+
+Les paramètres SMTP, CORS, limites d’envoi et la connexion Ollama sont également configurables dans ce fichier.
+
+## Installation et lancement
 
 ```powershell
 python -m venv .venv
 .\.venv\Scripts\Activate.ps1
-python -m pip install --upgrade pip
-pip install -r requirements\local.txt
-Copy-Item .env.example .env
+pip install -r requirements/local.txt
 python manage.py migrate
-python manage.py createsuperuser
-python manage.py runserver
+python manage.py runserver 8001
 ```
 
-## Documentation API
-
-Apres lancement du serveur :
-
-- Swagger UI : http://127.0.0.1:8001/api/docs/
-- ReDoc : http://127.0.0.1:8001/api/redoc/
-- Schema OpenAPI : http://127.0.0.1:8001/api/schema/
-
-## Tests
-
-Les tests de fondation couvrent le modele utilisateur, le JWT, le profil connecte et les permissions de gestion des utilisateurs.
-
-Dans PowerShell, depuis ce dossier :
+Commandes utiles :
 
 ```powershell
-.\.venv\Scripts\Activate.ps1
-python manage.py test
+python manage.py makemigrations --check --dry-run
+python manage.py test --noinput
+python manage.py check
 ```
-
-Avec PostgreSQL, l'utilisateur de base de donnees doit pouvoir creer une base de test en local. Si la commande echoue avec une erreur de creation de base, execute avec un compte PostgreSQL administrateur :
-
-```powershell
-psql -U postgres -c "ALTER USER smart_academy_user CREATEDB;"
-```
-
-Ce droit est utile pour le developpement et les tests locaux. Il n'est pas destine a un utilisateur applicatif de production.
-
-## Candidatures
-
-Le module de candidatures ajoute :
-
-- depot public de candidature ;
-- gestion RH des statuts ;
-- documents de candidature ;
-- entretiens ;
-- historique des statuts ;
-- transformation d'un candidat accepte en stagiaire ou collaborateur ;
-- refus avec desactivation du compte ;
-- anonymisation des candidatures expirees.
-
-Commande d'anonymisation :
-
-```powershell
-python manage.py anonymize_expired_applications
-```
-
-## Offres et formations
-
-Les rôles `SUPER_ADMIN` et `HR` administrent les offres, les formations et les sessions. Les collaborateurs et stagiaires peuvent demander une inscription à une session ouverte. Le BU Manager valide la première étape pour les membres de ses Business Units, puis le Super Admin effectue la validation finale. Les formateurs voient leurs formations/sessions affectées et les clients externes disposent d'endpoints isolés pour leurs formations réservées.

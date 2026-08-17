@@ -68,6 +68,46 @@
   }
 }
 
+.single-document,
+.complementary-documents {
+  max-width: 760px;
+  margin-inline: auto;
+}
+
+.single-document {
+  @media (min-width: 768px) {
+    grid-template-columns: 1fr;
+  }
+}
+
+.complementary-documents {
+  @media (min-width: 768px) {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+.cv-analysis-state,
+.alert-success {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+  margin-top: var(--spacing-lg);
+}
+
+.summary-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: var(--spacing-md);
+  margin-top: var(--spacing-lg);
+
+  section {
+    padding: var(--spacing-md);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-md);
+    background: var(--bg-light);
+  }
+}
+
 .document-card {
   background: var(--bg-light);
   border: 1px solid var(--border-color);

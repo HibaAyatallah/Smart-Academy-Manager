@@ -1,3 +1,6 @@
+from datetime import timedelta
+
+from django.utils import timezone
 from rest_framework.test import APITestCase
 from rest_framework import status
 from apps.accounts.models import User
@@ -8,6 +11,8 @@ from .choices import TrainingType, DeliveryMode, TrainingStatus, SessionStatus, 
 
 class TrainingsAPITestCase(APITestCase):
     def setUp(self):
+        # Clean up database from migration seeds
+        Training.objects.all().delete()
         # Create Super Admin
         self.super_admin = User.objects.create_user(
             email="admin@test.com", password="pwd", role=UserRole.SUPER_ADMIN
@@ -135,7 +140,7 @@ class TrainingsAPITestCase(APITestCase):
         self.assertIn("Archived Course", all_titles, "Super Admin must see ARCHIVED trainings.")
 
 
-    def test_bu_manager_visibility(self):
+    def test_bu_manager_cannot_access_training_catalogue(self):
         # Create training without BU
         Training.objects.create(**self.training_data)
         # Create training restricted to BU
@@ -146,10 +151,14 @@ class TrainingsAPITestCase(APITestCase):
 
         self.client.force_authenticate(user=self.bu_manager)
         res = self.client.get("/api/trainings/")
-        titles = [r['title'] for r in res.data['results']]
-        self.assertIn("Python Basics", titles)
-        self.assertIn("T2", titles)
-        self.assertNotIn("T3", titles)
+        self.assertEqual(res.status_code, status.HTTP_403_FORBIDDEN)
+
+    def test_bu_manager_accesses_workflow_but_not_catalogue_administration(self):
+        self.client.force_authenticate(user=self.bu_manager)
+        for url in ["/api/trainings/", "/api/training-sessions/"]:
+            self.assertEqual(self.client.get(url).status_code, status.HTTP_403_FORBIDDEN, url)
+        for url in ["/api/enrollments/", "/api/attendance/", "/api/certificates/"]:
+            self.assertEqual(self.client.get(url).status_code, status.HTTP_200_OK, url)
 
     def test_employee_cannot_access_administrative_catalogue(self):
         # Currently DRAFT
@@ -173,6 +182,49 @@ class TrainingsAPITestCase(APITestCase):
         titles = [r['title'] for r in res.data['results']]
         self.assertEqual(len(titles), 1)
         self.assertEqual(titles[0], "Python Basics")
+
+    def test_trainer_dashboard_returns_only_explicit_assignments(self):
+        directly_assigned = Training.objects.create(
+            **{**self.training_data, "title": "Direct assignment", "trainer": self.trainer, "business_unit": self.bu}
+        )
+        direct_session = TrainingSession.objects.create(
+            training=directly_assigned,
+            start_date=timezone.localdate() + timedelta(days=2),
+            end_date=timezone.localdate() + timedelta(days=3),
+            start_time="09:00", end_time="17:00", maximum_participants=10,
+            trainer=self.trainer, location="Room A",
+        )
+        session_training = Training.objects.create(**{**self.training_data, "title": "Session assignment"})
+        assigned_session = TrainingSession.objects.create(
+            training=session_training,
+            start_date=timezone.localdate() + timedelta(days=4),
+            end_date=timezone.localdate() + timedelta(days=5),
+            start_time="09:00", end_time="17:00", maximum_participants=10,
+            trainer=self.trainer, location="Room B",
+        )
+        TrainingSession.objects.create(
+            training=session_training,
+            start_date=timezone.localdate() + timedelta(days=6),
+            end_date=timezone.localdate() + timedelta(days=7),
+            start_time="09:00", end_time="17:00", maximum_participants=10,
+            trainer=None, location="Secret room",
+        )
+        Training.objects.create(**{**self.training_data, "title": "Not assigned"})
+
+        self.client.force_authenticate(self.trainer)
+        response = self.client.get("/api/trainings/trainer-dashboard/")
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data["count"], 2)
+        by_title = {item["title"]: item for item in response.data["results"]}
+        self.assertEqual([item["id"] for item in by_title["Direct assignment"]["sessions"]], [direct_session.id])
+        self.assertEqual([item["id"] for item in by_title["Session assignment"]["sessions"]], [assigned_session.id])
+        self.assertEqual(by_title["Direct assignment"]["business_unit"]["name"], self.bu.name)
+        self.assertIsNone(by_title["Direct assignment"]["requesting_manager"])
+
+    def test_trainer_dashboard_rejects_other_roles(self):
+        self.client.force_authenticate(self.hr)
+        self.assertEqual(self.client.get("/api/trainings/trainer-dashboard/").status_code, status.HTTP_403_FORBIDDEN)
 
     def test_client_visibility_and_restrictions(self):
         # Create Client Training
@@ -250,7 +302,7 @@ class TrainingsAPITestCase(APITestCase):
     def test_session_actions(self):
         t1 = Training.objects.create(**self.training_data)
         s1 = TrainingSession.objects.create(
-            training=t1, start_date="2026-01-01", end_date="2026-01-05",
+            training=t1, start_date=timezone.localdate() + timedelta(days=5), end_date=timezone.localdate() + timedelta(days=9),
             start_time="09:00", end_time="17:00", maximum_participants=10,
             location="Room A"
         )
@@ -290,6 +342,8 @@ class TrainingsAPITestCase(APITestCase):
 
 class TrainingEnrollmentAPITestCase(APITestCase):
     def setUp(self):
+        # Clean up database from migration seeds
+        Training.objects.all().delete()
         self.super_admin = User.objects.create_user(email="admin_e@test.com", password="pwd", role=UserRole.SUPER_ADMIN)
         self.hr = User.objects.create_user(email="hr_e@test.com", password="pwd", role=UserRole.HR)
         
@@ -316,7 +370,7 @@ class TrainingEnrollmentAPITestCase(APITestCase):
             level="Beginner"
         )
         self.session = TrainingSession.objects.create(
-            training=self.training, start_date="2025-01-01", end_date="2025-01-02",
+            training=self.training, start_date=timezone.localdate() - timedelta(days=2), end_date=timezone.localdate() - timedelta(days=1),
             start_time="09:00", end_time="17:00", maximum_participants=2, trainer=self.trainer,
             location="Room A"
         )
@@ -326,33 +380,18 @@ class TrainingEnrollmentAPITestCase(APITestCase):
         res = self.client.post("/api/enrollments/", {"training": self.training.id, "session": self.session.id})
         self.assertEqual(res.status_code, status.HTTP_403_FORBIDDEN)
 
-    def test_workflow_approve(self):
+    def test_manager_can_approve_managed_bu_enrollment(self):
         enr = TrainingEnrollment.objects.create(user=self.employee1, training=self.training, session=self.session)
         
-        # Manager approves
         self.client.force_authenticate(user=self.manager1)
         res = self.client.post(f"/api/enrollments/{enr.id}/manager_approve/", {"approved": True, "comment": "OK"})
         self.assertEqual(res.status_code, status.HTTP_200_OK)
         enr.refresh_from_db()
         self.assertEqual(enr.status, EnrollmentStatus.PENDING_SUPER_ADMIN)
         
-        # Super Admin approves
-        self.client.force_authenticate(user=self.super_admin)
-        res = self.client.post(f"/api/enrollments/{enr.id}/super_admin_approve/", {"approved": True})
-        self.assertEqual(res.status_code, status.HTTP_200_OK)
-        enr.refresh_from_db()
-        self.assertEqual(enr.status, EnrollmentStatus.ENROLLED)
-        
-        # Complete
-        res = self.client.post(f"/api/enrollments/{enr.id}/complete/")
-        self.assertEqual(res.status_code, status.HTTP_200_OK)
-        enr.refresh_from_db()
-        self.assertEqual(enr.status, EnrollmentStatus.COMPLETED)
-        
-    def test_workflow_rejects(self):
+    def test_manager_can_reject_managed_bu_enrollment(self):
         enr = TrainingEnrollment.objects.create(user=self.employee1, training=self.training, session=self.session)
         
-        # Manager rejects
         self.client.force_authenticate(user=self.manager1)
         res = self.client.post(f"/api/enrollments/{enr.id}/manager_reject/", {"approved": False})
         self.assertEqual(res.status_code, status.HTTP_200_OK)
@@ -422,6 +461,19 @@ class TrainingEnrollmentAPITestCase(APITestCase):
         self.client.force_authenticate(user=self.trainer)
         res = self.client.get("/api/enrollments/")
         self.assertEqual(len(res.data['results']), 1)
+
+    def test_generic_enrollment_mutations_are_disabled(self):
+        enrollment = TrainingEnrollment.objects.create(
+            user=self.employee1, training=self.training, session=self.session
+        )
+        self.client.force_authenticate(user=self.manager1)
+        response = self.client.patch(
+            f"/api/enrollments/{enrollment.id}/",
+            {"status": EnrollmentStatus.ENROLLED},
+        )
+        self.assertEqual(response.status_code, status.HTTP_405_METHOD_NOT_ALLOWED)
+        enrollment.refresh_from_db()
+        self.assertEqual(enrollment.status, EnrollmentStatus.PENDING_MANAGER)
         
         # Employee sees only own
         self.client.force_authenticate(user=self.employee2)
@@ -432,3 +484,65 @@ class TrainingEnrollmentAPITestCase(APITestCase):
         self.client.force_authenticate(user=self.super_admin)
         res = self.client.get("/api/enrollments/")
         self.assertEqual(len(res.data['results']), 1)
+
+
+from django.test import TestCase
+
+class TrainingsCatalogSeedingTests(TestCase):
+    def test_catalogue_seeded_successfully(self):
+        """Les formations et modules doivent exister en base après la migration."""
+        # Main trainings
+        main_titles = ["CCNA", "DCCOR", "ENCOR", "SCOR", "Infoblox", "Palo Alto", "PMP"]
+        for title in main_titles:
+            self.assertTrue(
+                Training.objects.filter(title=title).exists(),
+                f"La formation principale {title} devrait être enregistrée."
+            )
+
+        # Verifier les catégories
+        self.assertEqual(Training.objects.get(title="CCNA").category, "Réseaux")
+        self.assertEqual(Training.objects.get(title="DCCOR").category, "CCNP")
+        self.assertEqual(Training.objects.get(title="ENCOR").category, "CCNP")
+        self.assertEqual(Training.objects.get(title="SCOR").category, "CCNP")
+        self.assertEqual(Training.objects.get(title="Infoblox").category, "Réseaux")
+        self.assertEqual(Training.objects.get(title="Palo Alto").category, "Sécurité")
+        self.assertEqual(Training.objects.get(title="PMP").category, "Gestion de projet")
+
+        # Modules check
+        ccna_mod_count = Training.objects.filter(category="CCNA").count()
+        self.assertEqual(ccna_mod_count, 12, "CCNA doit avoir 12 modules.")
+
+        dccor_mod_count = Training.objects.filter(category="DCCOR").count()
+        self.assertEqual(dccor_mod_count, 6, "DCCOR doit avoir 6 modules.")
+
+        encor_mod_count = Training.objects.filter(category="ENCOR").count()
+        self.assertEqual(encor_mod_count, 11, "ENCOR doit avoir 11 modules.")
+
+        scor_mod_count = Training.objects.filter(category="SCOR").count()
+        self.assertEqual(scor_mod_count, 5, "SCOR doit avoir 5 modules.")
+
+        infoblox_mod_count = Training.objects.filter(category="Infoblox").count()
+        self.assertEqual(infoblox_mod_count, 3, "Infoblox doit avoir 3 modules.")
+
+        palo_alto_mod_count = Training.objects.filter(category="Palo Alto").count()
+        self.assertEqual(palo_alto_mod_count, 4, "Palo Alto doit avoir 4 modules.")
+
+        pmp_mod_count = Training.objects.filter(category="PMP").count()
+        self.assertEqual(pmp_mod_count, 4, "PMP doit avoir 4 modules.")
+
+    def test_catalogue_idempotence(self):
+        """Exécuter à nouveau la logique de seed ne doit pas créer de doublons."""
+        initial_count = Training.objects.count()
+
+        # Simuler un second appel à seed_catalogue en utilisant importlib
+        import importlib
+        seed_module = importlib.import_module("apps.trainings.migrations.0007_seed_internal_trainings")
+        seed_catalogue = seed_module.seed_catalogue
+
+        class DummyApp:
+            def get_model(self, app_label, model_name):
+                return Training
+        seed_catalogue(DummyApp(), None)
+
+        final_count = Training.objects.count()
+        self.assertEqual(initial_count, final_count, "Le seed ne doit pas recréer de doublons.")

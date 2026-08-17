@@ -31,7 +31,7 @@ export interface UserProfile {
   full_name: string;
   phone_number: string;
   role: UserRole;
-  preferred_language?: 'fr' | 'en' | 'ar';
+  preferred_language?: 'fr' | 'en';
   is_active?: boolean;
   is_staff?: boolean;
   created_at?: string;

@@ -43,6 +43,8 @@ const candidateApplication: Application = {
   },
   application_type: 'PFE_INTERNSHIP',
   application_type_label: 'Stage PFE',
+  offer: 7,
+  offer_title: 'Développeur Angular',
   status: 'INTERVIEW',
   status_label: 'Entretien',
   motivation_message: 'Motivation',
@@ -99,7 +101,7 @@ const candidateApplication: Application = {
       from_status: 'PRESELECTED',
       to_status: 'INTERVIEW',
       changed_by_email: 'hr@example.com',
-      comment: '',
+      comment: 'Entretien confirmé par le recruteur.',
       created_at: '2026-07-10T11:00:00Z',
     },
   ],
@@ -176,8 +178,19 @@ describe('DashboardComponent', () => {
     expect(applicationService.getMyApplications).toHaveBeenCalled();
     expect(component.candidateApplicationsLoading).toBeFalse();
     expect(component.candidateApplications.length).toBe(1);
-    expect(fixture.nativeElement.textContent).toContain('candidate@example.com');
-    expect(fixture.nativeElement.textContent).toContain('Stage PFE');
+    const content = fixture.nativeElement.textContent;
+    expect(content).toContain('candidate@example.com');
+    expect(content).toContain('Jane Candidate');
+    expect(content).toContain('Développeur Angular');
+    expect(content).toContain('Référence #12');
+    expect(content).toContain('Stage PFE');
+    expect(content).toContain('T0');
+    expect(content).toContain('T1');
+    expect(content).toContain('T2');
+    expect(content).toContain('Consulter le CV');
+    expect(content).toContain('Consulter la lettre');
+    expect(content).toContain('Motivation');
+    expect(content).toContain('Entretien confirmé par le recruteur.');
   });
 
   it('stops loading and shows an error when candidate applications fail', () => {

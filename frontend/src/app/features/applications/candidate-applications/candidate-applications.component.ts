@@ -47,6 +47,8 @@ import {
   templateUrl: './candidate-applications.component.html',
   styleUrl: './candidate-applications.component.scss',
 })
+// Historical, tested component intentionally kept in the codebase. The final
+// CANDIDATE journey is dashboard-only, so this component must remain unrouted.
 export class CandidateApplicationsComponent implements OnDestroy, OnInit {
   private readonly applicationService = inject(ApplicationService);
   private readonly snackBar = inject(MatSnackBar);
