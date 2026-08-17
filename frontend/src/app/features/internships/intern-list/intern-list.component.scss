@@ -1,1 +1,9 @@
-:host{display:block}.filters{display:flex;gap:.75rem;align-items:center;flex-wrap:wrap}.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(270px,1fr));gap:1rem}.grid mat-card{padding:1rem;display:grid;gap:.75rem}.progress{height:.5rem;background:#e6e8ec;border-radius:1rem;overflow:hidden}.progress span{display:block;height:100%;background:#3f51b5}.error{color:#b00020}
+:host { display: block; }
+.filters { display: flex; align-items: center; gap: 12px; margin-bottom: 22px; padding: 16px; border: 1px solid var(--app-border); border-radius: var(--app-radius-lg); background: var(--app-surface); box-shadow: var(--app-shadow-sm); flex-wrap: wrap; }
+.filters mat-form-field { flex: 1 1 220px; }
+.grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(270px, 1fr)); gap: 20px; }
+.grid mat-card { display: grid; gap: 12px; padding: 20px; }
+.progress { height: 8px; overflow: hidden; border-radius: 999px; background: #e7ebf2; }
+.progress span { display: block; height: 100%; border-radius: inherit; background: linear-gradient(90deg, var(--app-primary), #0ea5e9); }
+.error { color: var(--app-error); }
+@media (max-width: 640px) { .filters { align-items: stretch; } .filters button { width: 100%; } }
