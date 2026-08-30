@@ -1,16 +1,17 @@
 import { CommonModule } from '@angular/common';
+import { HttpErrorResponse } from '@angular/common/http';
 import { Component, OnInit, inject, isDevMode } from '@angular/core';
 import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
 import { MatButtonModule } from '@angular/material/button';
 import { MatCardModule } from '@angular/material/card';
 import { MatDatepickerModule } from '@angular/material/datepicker';
-import { MatNativeDateModule } from '@angular/material/core';
+import { MAT_DATE_LOCALE, MatNativeDateModule, provideNativeDateAdapter } from '@angular/material/core';
 import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatInputModule } from '@angular/material/input';
 import { MatSelectModule } from '@angular/material/select';
 import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
-import { finalize, switchMap, catchError, of, forkJoin } from 'rxjs';
+import { finalize, switchMap, of } from 'rxjs';
 
 import { APPLICATION_TYPE_LABELS, EDUCATION_LEVEL_LABELS } from '../../../core/models/application.models';
 import { OfferCreateUpdate } from '../../../core/models/offer.models';
@@ -38,6 +39,10 @@ import { minTodayValidator, dateRangeValidator } from '../../../core/utils/date-
   ],
   templateUrl: './offer-form.component.html',
   styleUrls: ['./offer-form.component.scss'],
+  providers: [
+    { provide: MAT_DATE_LOCALE, useValue: 'fr-FR' },
+    provideNativeDateAdapter(),
+  ],
 })
 export class OfferFormComponent implements OnInit {
   private readonly fb = inject(FormBuilder);
@@ -70,9 +75,9 @@ export class OfferFormComponent implements OnInit {
     required_level: [''],
     number_of_positions: [1, [Validators.min(1)]],
     location: ['', [Validators.maxLength(255)]],
-    start_date: [null as string | null, [minTodayValidator()]],
-    end_date: [null as string | null, [minTodayValidator()]],
-    application_deadline: [null as string | null, [minTodayValidator()]],
+    start_date: [null as string | Date | null, [minTodayValidator()]],
+    end_date: [null as string | Date | null, [minTodayValidator()]],
+    application_deadline: [null as string | Date | null, [minTodayValidator()]],
   }, {
     validators: [dateRangeValidator('start_date', 'end_date')]
   });
@@ -121,6 +126,7 @@ export class OfferFormComponent implements OnInit {
   }
 
   onSubmit(): void {
+    this.clearApiDateErrors();
     if (this.form.invalid) {
       this.form.markAllAsTouched();
       return;
@@ -142,8 +148,42 @@ export class OfferFormComponent implements OnInit {
       },
       error: (err) => {
         if (isDevMode()) console.error(`[Offers] Save failed (status=${err?.status ?? 'unknown'}).`);
-        this.snackBar.open("Erreur lors de la sauvegarde de l'offre.", 'Fermer', { duration: 3000 });
+        const hasDateErrors = this.applyApiDateErrors(err);
+        this.snackBar.open(
+          hasDateErrors ? 'Veuillez corriger les dates signalées.' : "Erreur lors de la sauvegarde de l'offre.",
+          'Fermer', { duration: 4000 },
+        );
       }
     });
+  }
+
+  apiDateError(field: 'start_date' | 'end_date' | 'application_deadline'): string {
+    return this.form.controls[field].getError('api') || '';
+  }
+
+  private clearApiDateErrors(): void {
+    for (const field of ['start_date', 'end_date', 'application_deadline'] as const) {
+      const control = this.form.controls[field];
+      if (!control.errors?.['api']) continue;
+      const { api, ...otherErrors } = control.errors;
+      control.setErrors(Object.keys(otherErrors).length ? otherErrors : null);
+    }
+  }
+
+  private applyApiDateErrors(error: unknown): boolean {
+    const payload = error instanceof HttpErrorResponse ? error.error : error && typeof error === 'object' ? (error as any).error : null;
+    if (!payload || typeof payload !== 'object' || Array.isArray(payload)) return false;
+    let applied = false;
+    for (const field of ['start_date', 'end_date', 'application_deadline'] as const) {
+      if (!(field in payload)) continue;
+      const value = payload[field];
+      const message = Array.isArray(value) ? value.join(' ') : String(value ?? '');
+      if (!message) continue;
+      const control = this.form.controls[field];
+      control.setErrors({ ...control.errors, api: message });
+      control.markAsTouched();
+      applied = true;
+    }
+    return applied;
   }
 }

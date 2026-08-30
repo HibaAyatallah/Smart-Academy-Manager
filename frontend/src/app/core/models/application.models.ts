@@ -112,6 +112,25 @@ export interface CVAnalysis {
   extraction_warnings: string[]; extractor_version: string; human_validated: boolean; validated_at: string | null;
 }
 
+export interface MatchScoreComponent {
+  score: number | null; weight: number; available: boolean;
+  candidate_years?: number | null; required_years?: number | null; explanation?: string;
+}
+
+export interface ApplicationMatch {
+  id: number; application: number; offer: number; offer_title: string; candidate_name: string;
+  score: number; matched_skills: string[]; missing_skills: string[]; additional_skills: string[];
+  score_breakdown: Record<string, MatchScoreComponent | number | string>;
+  candidate_summary: string; explanation: string; algorithm_version: string;
+  human_decision: 'PENDING' | 'APPROVED' | 'REJECTED'; reviewed_at: string | null;
+  created_at: string; updated_at: string;
+}
+
+export interface CandidateRankingRow {
+  rank: number; application: number; candidate_name: string; submitted_at: string;
+  analysis_error: string; match: ApplicationMatch | null;
+}
+
 export interface PaginatedResponse<T> {
   count: number;
   next: string | null;

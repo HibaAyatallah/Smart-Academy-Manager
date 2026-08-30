@@ -81,6 +81,7 @@
         <mat-datepicker-toggle matIconSuffix [for]="startPicker"></mat-datepicker-toggle>
         <mat-datepicker #startPicker></mat-datepicker>
         <mat-error *ngIf="form.get('start_date')?.hasError('minToday')">La date ne peut pas être antérieure à aujourd’hui.</mat-error>
+        <mat-error *ngIf="apiDateError('start_date')">{{ apiDateError('start_date') }}</mat-error>
       </mat-form-field>
 
       <mat-form-field appearance="outline" class="third-width">
@@ -90,6 +91,7 @@
         <mat-datepicker #endPicker></mat-datepicker>
         <mat-error *ngIf="form.get('end_date')?.hasError('minToday')">La date ne peut pas être antérieure à aujourd’hui.</mat-error>
         <mat-error *ngIf="form.get('end_date')?.hasError('dateRange')">La date de fin doit être postérieure ou égale à la date de début.</mat-error>
+        <mat-error *ngIf="apiDateError('end_date')">{{ apiDateError('end_date') }}</mat-error>
       </mat-form-field>
 
       <mat-form-field appearance="outline" class="third-width">
@@ -98,6 +100,7 @@
         <mat-datepicker-toggle matIconSuffix [for]="deadlinePicker"></mat-datepicker-toggle>
         <mat-datepicker #deadlinePicker></mat-datepicker>
         <mat-error *ngIf="form.get('application_deadline')?.hasError('minToday')">La date ne peut pas être antérieure à aujourd’hui.</mat-error>
+        <mat-error *ngIf="apiDateError('application_deadline')">{{ apiDateError('application_deadline') }}</mat-error>
       </mat-form-field>
     </div>
 

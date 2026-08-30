@@ -43,6 +43,13 @@ coverage/
 npm-debug.log*
 
 # Local reports and temporary artifacts
+backups/
+*.dump
+*.sql
+*.sql.gz
+*.bak
+*.backup
+*.sqlite3
 *_test_output.txt
 test_output.txt
 build_output.txt

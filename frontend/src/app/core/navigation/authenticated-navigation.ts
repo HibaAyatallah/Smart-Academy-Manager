@@ -90,13 +90,6 @@ export const AUTHENTICATED_NAVIGATION: readonly NavigationSection[] = [
     labelKey: 'nav.projects',
     items: [item('Projets', 'nav.projects', 'folder_open', '/projects', ['SUPER_ADMIN', 'EMPLOYEE'])],
   },
-  {
-    label: 'Outils',
-    labelKey: 'nav.tools',
-    items: [
-      item('Notifications', 'nav.notifications', 'notifications', '/notifications', ALL, true),
-    ],
-  },
 ];
 
 export function navigationForRole(role: UserRole): NavigationSection[] {

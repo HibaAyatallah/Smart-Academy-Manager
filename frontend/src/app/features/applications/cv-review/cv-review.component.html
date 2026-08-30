@@ -7,7 +7,7 @@
       <input #cvInput type="file" hidden accept=".pdf,.docx,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document" (change)="upload($event)">
       <button mat-stroked-button type="button" (click)="cvInput.click()"><mat-icon>upload_file</mat-icon> Uploader un CV</button>
       <button *ngIf="analysis" mat-button type="button" (click)="reanalyze()">Relancer l’analyse</button>
-      <small>PDF texte, PDF scanné ou DOCX — 5 Mo maximum.</small>
+      <small>PDF texte ou DOCX — 5 Mo maximum. PDF scanné uniquement si l’OCR est configuré sur le serveur.</small>
     </section>
     <div *ngIf="analyzing" class="state"><mat-spinner diameter="40"></mat-spinner><strong>Analyse de votre CV en cours...</strong></div>
     <p class="error" *ngIf="error">{{error}}</p><p class="success" *ngIf="success">{{success}}</p>

@@ -1,6 +1,6 @@
 # Backend — Smart Academy Manager
 
-Le backend fournit l’API REST, la persistance des données, les règles métier, les permissions et les traitements d’analyse de Smart Academy Manager. Il repose sur **Django**, **Django REST Framework** et **PostgreSQL**.
+Le backend fournit l’API REST, la persistance des données, les règles métier, les permissions et les traitements d’analyse de Smart Academy Manager. Il repose sur **Django**, **Django REST Framework** et **MySQL 8** avec `utf8mb4`.
 
 ## Principaux modules
 
@@ -24,12 +24,12 @@ Copier `.env.example` vers `.env`, puis configurer au minimum :
 ```env
 DJANGO_SECRET_KEY=change-me
 DJANGO_DEBUG=True
-DB_ENGINE=postgresql
+DB_ENGINE=mysql
 DB_NAME=smart_academy_db
 DB_USER=smart_academy_user
 DB_PASSWORD=your-password
 DB_HOST=localhost
-DB_PORT=5432
+DB_PORT=3306
 ```
 
 Les paramètres SMTP, CORS, limites d’envoi et la connexion Ollama sont également configurables dans ce fichier.

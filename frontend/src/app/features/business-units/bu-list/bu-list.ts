@@ -1,8 +1,9 @@
-import { DatePipe, NgFor, NgIf } from '@angular/common';
+import { DatePipe, NgIf } from '@angular/common';
 import { Component, OnInit, inject } from '@angular/core';
 import { FormBuilder, ReactiveFormsModule } from '@angular/forms';
 import { MatButtonModule } from '@angular/material/button';
 import { MatCardModule } from '@angular/material/card';
+import { MatDialog, MatDialogModule } from '@angular/material/dialog';
 import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatInputModule } from '@angular/material/input';
 import { MatPaginatorModule, PageEvent } from '@angular/material/paginator';
@@ -15,7 +16,9 @@ import { finalize } from 'rxjs/operators';
 
 import { BusinessUnit } from '../../../core/models/business-unit.models';
 import { BusinessUnitService } from '../../../core/services/business-unit.service';
+import { AuthService } from '../../../core/services/auth.service';
 import { PageHeaderComponent } from '../../../shared/components/page-header/page-header.component';
+import { BuCreateDialog } from '../bu-create-dialog/bu-create-dialog';
 
 @Component({
   selector: 'app-bu-list',
@@ -24,6 +27,7 @@ import { PageHeaderComponent } from '../../../shared/components/page-header/page
     DatePipe,
     MatButtonModule,
     MatCardModule,
+    MatDialogModule,
     MatFormFieldModule,
     MatInputModule,
     MatPaginatorModule,
@@ -43,6 +47,12 @@ export class BuList implements OnInit {
   private readonly buService = inject(BusinessUnitService);
   private readonly formBuilder = inject(FormBuilder);
   private readonly snackBar = inject(MatSnackBar);
+  private readonly dialog = inject(MatDialog);
+  private readonly authService = inject(AuthService);
+
+  get canCreateBusinessUnit(): boolean {
+    return this.authService.currentUserSnapshot?.role === 'SUPER_ADMIN';
+  }
 
   readonly displayedColumns = ['name', 'code', 'manager', 'status', 'created_at', 'actions'];
   readonly filtersForm = this.formBuilder.nonNullable.group({
@@ -112,6 +122,18 @@ export class BuList implements OnInit {
     });
     this.pageIndex = 0;
     this.loadBusinessUnits();
+  }
+
+  openCreateDialog(): void {
+    if (!this.canCreateBusinessUnit) return;
+    this.dialog.open(BuCreateDialog, { width: '560px', maxWidth: '95vw', autoFocus: 'first-tabbable' })
+      .afterClosed()
+      .subscribe((created: BusinessUnit | undefined) => {
+        if (!created) return;
+        this.pageIndex = 0;
+        this.loadBusinessUnits();
+        this.snackBar.open(`La Business Unit « ${created.name} » a été créée.`, 'Fermer', { duration: 4000 });
+      });
   }
 
   private buildErrorMessage(error: any): string {

@@ -22,6 +22,7 @@ from .models import (
     Interview,
     Offer,
     CVAnalysis,
+    ApplicationMatch,
 )
 from .validators import validate_application_file
 
@@ -300,6 +301,24 @@ class CVReviewSerializer(CVAnalysisSerializer):
 
     class Meta(CVAnalysisSerializer.Meta):
         read_only_fields = CVAnalysisSerializer.Meta.read_only_fields
+
+
+class ApplicationMatchSerializer(serializers.ModelSerializer):
+    score = serializers.FloatField(read_only=True)
+    offer_title = serializers.CharField(source="offer.title", read_only=True)
+    candidate_name = serializers.CharField(
+        source="application.candidate_profile.user.full_name", read_only=True
+    )
+
+    class Meta:
+        model = ApplicationMatch
+        fields = [
+            "id", "application", "offer", "offer_title", "candidate_name", "score",
+            "matched_skills", "missing_skills", "additional_skills", "score_breakdown",
+            "candidate_summary", "explanation", "algorithm_version", "human_decision",
+            "reviewed_at", "created_at", "updated_at",
+        ]
+        read_only_fields = fields
 
 
 class PublicApplicationCreateSerializer(serializers.Serializer):

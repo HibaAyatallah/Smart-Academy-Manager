@@ -72,11 +72,6 @@
         </div>
 
         <div class="header-right">
-          <mat-select class="language-select" [value]="language.current" (selectionChange)="setLanguage($event.value)" [attr.aria-label]="'header.language' | translate">
-            <mat-option value="fr">FR</mat-option><mat-option value="en">EN</mat-option>
-          </mat-select>
-          <!-- Notification / Action icons -->
-
           <!-- Desktop User Menu -->
           <button mat-button type="button" class="account-trigger desktop-only" [matMenuTriggerFor]="accountMenu" [attr.aria-label]="'header.accountMenu' | translate">
             <span class="avatar" aria-hidden="true">{{ initials(vm.user) }}</span>

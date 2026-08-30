@@ -9,7 +9,7 @@ Le projet centralise les parcours de recrutement, l’intégration et le suivi d
 - authentification JWT, profils, rôles et permissions ;
 - gestion des utilisateurs, Business Units, membres et besoins ;
 - offres, candidatures, entretiens et conversion en stagiaire ou collaborateur ;
-- extraction structurée des CV PDF/DOCX, matching avec les offres et recommandations de formations ;
+- extraction structurée des CV PDF/DOCX avec OCR optionnel, matching explicable, synthèse et classement par offre ;
 - gestion des stages, projets, livrables et évaluations ;
 - formations, inscriptions, présences et certificats PDF ;
 - tableaux de bord, rapports, exports, notifications et journal d’audit ;
@@ -19,7 +19,7 @@ Le projet centralise les parcours de recrutement, l’intégration et le suivi d
 
 - **Frontend** : Angular, Angular Material et interface responsive.
 - **Backend** : Django et Django REST Framework, exposant une API REST.
-- **Base de données** : PostgreSQL.
+- **Base de données** : MySQL 8 avec `utf8mb4`.
 - **Sécurité** : authentification JWT, guards Angular et permissions backend.
 - **IA** : analyse des CV, matching, recommandations et assistant local Ollama.
 
@@ -38,7 +38,7 @@ Smart_Academy_Manager/
 
 ## Lancement rapide
 
-Prérequis : Python 3.12+, Node.js/npm et PostgreSQL. Copier les exemples d’environnement, puis renseigner les secrets et la connexion à la base.
+Prérequis : Python 3.12+, Node.js/npm et MySQL 8. Copier les exemples d’environnement, puis renseigner les secrets et la connexion à la base.
 
 ```powershell
 cd backend
@@ -61,8 +61,23 @@ L’interface est disponible sur `http://localhost:4200` et l’API sur `http://
 
 ## Technologies principales
 
-Angular, TypeScript, Angular Material, Django, Django REST Framework, PostgreSQL, SimpleJWT, PyMuPDF, python-docx, Ollama, Docker et Nginx.
+Angular, TypeScript, Angular Material, Django, Django REST Framework, MySQL, SimpleJWT, PyMuPDF, python-docx, Ollama, Docker et Nginx.
 
-## État actuel
+## État final
 
-Le socle fonctionnel est complet et couvert par des tests backend et frontend. Le projet se trouve en phase finale de stabilisation et de validation du déploiement de production.
+Le projet est stabilisé pour la démonstration et la livraison académique. Les suites automatisées backend et frontend ainsi que le build Angular de production sont validés. Une mise en production reste conditionnée à la fourniture des secrets, de MySQL 8, du SMTP, du stockage persistant des médias et, pour l’assistant, d’un service Ollama configuré.
+
+Le rapport de clôture complet, la matrice d’état et les résultats de validation se trouvent dans [`FINAL_PROJECT_REPORT.md`](FINAL_PROJECT_REPORT.md).
+
+La frontière technique entre parsing, règles, OCR, scoring et Ollama est documentée dans [`AI_RECRUITMENT.md`](AI_RECRUITMENT.md).
+
+### Données de démonstration
+
+Après les migrations, créez ou rafraîchissez le jeu synthétique sans supprimer les données existantes :
+
+```bash
+cd backend
+python manage.py seed_demo --password "<mot-de-passe-temporaire-de-12-caracteres-minimum>"
+```
+
+La commande est idempotente, utilise uniquement les domaines réservés `example.test`, couvre les huit rôles et les principaux workflows (BU, recrutement, conversion stagiaire, analyse/matching CV, formation, présence, certificat, projet, notification et audit). Ne réutilisez jamais ce mot de passe en production.

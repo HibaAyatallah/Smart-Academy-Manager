@@ -99,7 +99,9 @@ export class BusinessUnitService {
     return this.http.delete<void>(`${this.baseUrl}business-unit-needs/${id}/`);
   }
 
-  getUsers(): Observable<PaginatedResponse<UserProfile>> {
-    return this.http.get<PaginatedResponse<UserProfile>>(`${this.baseUrl}users/`);
+  getUsers(params?: { role?: string }): Observable<PaginatedResponse<UserProfile>> {
+    let httpParams = new HttpParams();
+    if (params?.role) httpParams = httpParams.set('role', params.role);
+    return this.http.get<PaginatedResponse<UserProfile>>(`${this.baseUrl}users/`, { params: httpParams });
   }
 }

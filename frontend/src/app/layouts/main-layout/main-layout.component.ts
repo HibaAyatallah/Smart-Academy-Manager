@@ -1,14 +1,12 @@
 import { AsyncPipe, NgFor, NgIf } from '@angular/common';
 import { BreakpointObserver } from '@angular/cdk/layout';
-import { Component, DestroyRef, ViewChild, inject, isDevMode } from '@angular/core';
+import { Component, DestroyRef, ViewChild, inject } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { MatButtonModule } from '@angular/material/button';
 import { MatDividerModule } from '@angular/material/divider';
 import { MatIconModule } from '@angular/material/icon';
 import { MatMenuModule } from '@angular/material/menu';
 import { MatSidenav, MatSidenavModule } from '@angular/material/sidenav';
-import { MatSelectModule } from '@angular/material/select';
-import { MatSnackBar } from '@angular/material/snack-bar';
 import { MatTooltipModule } from '@angular/material/tooltip';
 import { RouterLink, RouterLinkActive, RouterOutlet } from '@angular/router';
 import { map, shareReplay } from 'rxjs/operators';
@@ -16,8 +14,6 @@ import { map, shareReplay } from 'rxjs/operators';
 import { navigationForRole } from '../../core/navigation/authenticated-navigation';
 import { ROLE_LABELS, UserProfile } from '../../core/models/auth.models';
 import { AuthService } from '../../core/services/auth.service';
-import { LanguageService } from '../../core/i18n/language.service';
-import { AppLanguage } from '../../core/i18n/translations';
 import { TranslatePipe } from '../../core/i18n/translate.pipe';
 import { ChatbotComponent } from '../../shared/components/chatbot/chatbot.component';
 
@@ -31,7 +27,6 @@ import { ChatbotComponent } from '../../shared/components/chatbot/chatbot.compon
     MatIconModule,
     MatMenuModule,
     MatSidenavModule,
-    MatSelectModule,
     MatTooltipModule,
     NgFor,
     NgIf,
@@ -48,14 +43,12 @@ export class MainLayoutComponent {
   @ViewChild('drawer') drawer?: MatSidenav;
 
   private readonly authService = inject(AuthService);
-  readonly language = inject(LanguageService);
   private readonly breakpointObserver = inject(BreakpointObserver);
   private readonly destroyRef = inject(DestroyRef);
-  private readonly snackBar = inject(MatSnackBar);
 
   readonly roleLabels = ROLE_LABELS;
   readonly viewModel$ = this.authService.ensureProfile().pipe(
-    map((user) => { this.language.initializeFromProfile(user.preferred_language); return ({user,navigation:navigationForRole(user.role)}); }),
+    map((user) => ({user,navigation:navigationForRole(user.role)})),
     shareReplay({ bufferSize: 1, refCount: true }),
   );
   readonly isHandset$ = this.breakpointObserver.observe('(max-width: 767px)').pipe(
@@ -93,26 +86,5 @@ export class MainLayoutComponent {
 
   logout(): void {
     this.authService.logout();
-  }
-  setLanguage(value: AppLanguage): void {
-    const previousLanguage = this.language.current;
-    if (value === previousLanguage) return;
-
-    this.language.setLanguage(value);
-    this.authService.updateLanguage(value).subscribe({
-      next: ({ preferred_language: confirmedLanguage }) => {
-        if (confirmedLanguage !== value) this.restoreLanguageAfterFailure(previousLanguage, 'unexpected-response');
-      },
-      error: (error: unknown) => {
-        const status = typeof error === 'object' && error !== null && 'status' in error ? String(error.status) : 'unknown';
-        this.restoreLanguageAfterFailure(previousLanguage, status);
-      },
-    });
-  }
-
-  private restoreLanguageAfterFailure(previousLanguage: AppLanguage, diagnostic: string): void {
-    this.language.setLanguage(previousLanguage);
-    this.snackBar.open(this.language.translate('language.updateFailed'), this.language.translate('common.close'), {duration: 6000});
-    if (isDevMode()) console.error(`[i18n] Language preference update failed (status=${diagnostic}).`);
   }
 }

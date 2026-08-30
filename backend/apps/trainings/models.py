@@ -170,6 +170,21 @@ class TrainingEnrollment(models.Model):
         choices=EnrollmentStatus.choices,
         default=EnrollmentStatus.PENDING_MANAGER
     )
+    active_uniqueness_key = models.GeneratedField(
+        expression=models.Case(
+            models.When(
+                status__in=[
+                    EnrollmentStatus.REJECTED_BY_MANAGER,
+                    EnrollmentStatus.REJECTED_BY_SUPER_ADMIN,
+                    EnrollmentStatus.CANCELLED,
+                ],
+                then=models.Value(None),
+            ),
+            default=models.Value(1),
+        ),
+        output_field=models.IntegerField(null=True),
+        db_persist=True,
+    )
     manager_decision = models.CharField(
         max_length=50, blank=True, choices=EnrollmentStatus.choices
     )
@@ -208,13 +223,8 @@ class TrainingEnrollment(models.Model):
         ordering = ['-created_at']
         constraints = [
             models.UniqueConstraint(
-                fields=['user', 'session'],
+                fields=['user', 'session', 'active_uniqueness_key'],
                 name='unique_active_enrollment',
-                condition=~models.Q(status__in=[
-                    EnrollmentStatus.REJECTED_BY_MANAGER, 
-                    EnrollmentStatus.REJECTED_BY_SUPER_ADMIN, 
-                    EnrollmentStatus.CANCELLED
-                ])
             )
         ]
 

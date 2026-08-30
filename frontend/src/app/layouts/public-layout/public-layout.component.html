@@ -19,7 +19,6 @@
 
       <!-- Desktop Actions -->
       <div class="header-actions">
-        <button class="language-button" type="button" (click)="setLanguage(language.current==='fr'?'en':'fr')">{{language.current==='fr'?'EN':'FR'}}</button>
         <a routerLink="/candidature" class="btn btn-outline">{{'public.apply'|translate}}</a>
         <a routerLink="/connexion" class="btn btn-primary">{{'public.personalSpace'|translate}}</a>
       </div>
@@ -37,7 +36,6 @@
       <a routerLink="/expertises" routerLinkActive="active" (click)="closeMobileMenu()">{{'public.expertise'|translate}}</a>
       <a routerLink="/contact" routerLinkActive="active" (click)="closeMobileMenu()">{{'public.contact'|translate}}</a>
       <div class="mobile-actions">
-        <button class="language-button" type="button" (click)="setLanguage(language.current==='fr'?'en':'fr')">{{language.current==='fr'?'EN':'FR'}}</button>
         <a routerLink="/candidature" class="btn btn-outline full-width" (click)="closeMobileMenu()">{{'public.apply'|translate}}</a>
         <a routerLink="/connexion" class="btn btn-primary full-width" (click)="closeMobileMenu()">{{'public.personalSpace'|translate}}</a>
       </div>

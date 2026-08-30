@@ -3,7 +3,6 @@ from django.contrib.auth import get_user_model
 
 from apps.accounts.choices import UserRole
 from apps.business_units.permissions import is_bu_manager
-from .choices import ALLOWED_BUSINESS_UNITS
 from .models import BusinessUnit, BusinessUnitMembership, BusinessUnitNeed, BusinessUnitNeedHistory
 
 
@@ -42,7 +41,17 @@ class BusinessUnitSerializer(serializers.ModelSerializer):
                 raise serializers.ValidationError("Vous ne pouvez pas reassigner la Business Unit.")
         return value
 
+    def validate_name(self, value):
+        value = value.strip()
+        queryset = BusinessUnit.objects.filter(name__iexact=value)
+        if self.instance:
+            queryset = queryset.exclude(pk=self.instance.pk)
+        if queryset.exists():
+            raise serializers.ValidationError("Une Business Unit avec ce nom existe déjà.")
+        return value
+
     def validate_code(self, value):
+        value = value.strip()
         request = self.context.get("request")
         if (
             request
@@ -53,22 +62,12 @@ class BusinessUnitSerializer(serializers.ModelSerializer):
             from rest_framework.exceptions import PermissionDenied
 
             raise PermissionDenied("Vous ne pouvez pas modifier le code de la Business Unit.")
+        queryset = BusinessUnit.objects.filter(code__iexact=value)
+        if self.instance:
+            queryset = queryset.exclude(pk=self.instance.pk)
+        if queryset.exists():
+            raise serializers.ValidationError("Une Business Unit avec ce code existe déjà.")
         return value
-
-    def validate(self, attrs):
-        attrs = super().validate(attrs)
-        code = attrs.get("code", getattr(self.instance, "code", None))
-        name = attrs.get("name", getattr(self.instance, "name", None))
-        expected_name = ALLOWED_BUSINESS_UNITS.get(code)
-        if expected_name is None:
-            raise serializers.ValidationError({
-                "code": "Valeurs autorisées : NetSEC, System, Software, Achat."
-            })
-        if name != expected_name:
-            raise serializers.ValidationError({
-                "name": f"Le nom doit être « {expected_name} » pour le code {code}."
-            })
-        return attrs
 
 
 class BusinessUnitMembershipSerializer(serializers.ModelSerializer):

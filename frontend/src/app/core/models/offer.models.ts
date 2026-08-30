@@ -1,4 +1,4 @@
-import { ApplicationType, EducationLevel, PaginatedResponse } from './application.models';
+import { ApplicationType, EducationLevel } from './application.models';
 
 export type OfferStatus = 'DRAFT' | 'PUBLISHED' | 'CLOSED' | 'ARCHIVED';
 
@@ -34,9 +34,9 @@ export interface OfferCreateUpdate {
   required_level?: EducationLevel | '';
   number_of_positions?: number;
   location?: string;
-  start_date?: string | null;
-  end_date?: string | null;
-  application_deadline?: string | null;
+  start_date?: string | Date | null;
+  end_date?: string | Date | null;
+  application_deadline?: string | Date | null;
   publication_date?: string | null;
   status?: OfferStatus;
 }

@@ -115,3 +115,12 @@ mat-chip {
   &.closed { background-color: #ffebee; color: #c62828; }
   &.archived { background-color: #fff3e0; color: #ef6c00; }
 }
+
+.ranking-card { margin-top: 24px; }
+.ranking-loading { display: flex; align-items: center; gap: 12px; }
+.ranking-list { list-style: none; margin: 16px 0; padding: 0; display: grid; gap: 12px; }
+.ranking-list li { display: flex; gap: 14px; align-items: center; padding: 14px; border: 1px solid #e4e7ec; border-radius: 8px; }
+.rank-number { display: grid; place-items: center; width: 34px; height: 34px; flex: 0 0 34px; border-radius: 50%; background: #e8f0fe; color: #1557b0; font-weight: 700; }
+.rank-content { display: grid; gap: 7px; flex: 1; min-width: 0; }
+.rank-content a { color: inherit; }
+.analysis-error { color: var(--error-color, #b42318); }

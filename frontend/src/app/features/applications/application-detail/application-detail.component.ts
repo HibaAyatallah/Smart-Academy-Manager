@@ -1,4 +1,4 @@
-import { DatePipe, NgFor, NgIf } from '@angular/common';
+import { DatePipe, DecimalPipe, NgFor, NgIf } from '@angular/common';
 import { Component, OnInit, inject } from '@angular/core';
 import { MatButtonModule } from '@angular/material/button';
 import { MatCardModule } from '@angular/material/card';
@@ -6,6 +6,7 @@ import { MatChipsModule } from '@angular/material/chips';
 import { MatDialog, MatDialogModule } from '@angular/material/dialog';
 import { MatListModule } from '@angular/material/list';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
+import { MatProgressBarModule } from '@angular/material/progress-bar';
 import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
 import { ActivatedRoute, RouterLink } from '@angular/router';
 import { HttpErrorResponse } from '@angular/common/http';
@@ -17,6 +18,8 @@ import {
   APPLICATION_TYPE_LABELS,
   Application,
   ApplicationDocument,
+  ApplicationMatch,
+  MatchScoreComponent,
   ApplicationStatus,
   EDUCATION_LEVEL_LABELS,
 } from '../../../core/models/application.models';
@@ -44,9 +47,11 @@ import { CVReviewComponent } from '../cv-review/cv-review.component';
     MatDialogModule,
     MatListModule,
     MatProgressSpinnerModule,
+    MatProgressBarModule,
     MatSnackBarModule,
     NgFor,
     NgIf,
+    DecimalPipe,
     PageHeaderComponent,
     RouterLink,
     CVReviewComponent,
@@ -66,6 +71,9 @@ export class ApplicationDetailComponent implements OnInit {
   isLoading = true;
   isActionRunning = false;
   errorMessage: string | null = null;
+  aiMatch: ApplicationMatch | null = null;
+  aiMatchLoading = false;
+  aiMatchError = '';
 
   ngOnInit(): void {
     this.loadApplication();
@@ -89,6 +97,7 @@ export class ApplicationDetailComponent implements OnInit {
     ).subscribe({
       next: (application) => {
         this.application = application;
+        if (application.offer) this.loadAIMatch(application.id);
       },
       error: (error: HttpErrorResponse) => {
         if (error.status === 404) {
@@ -103,6 +112,27 @@ export class ApplicationDetailComponent implements OnInit {
         });
       },
     });
+  }
+
+  loadAIMatch(applicationId: number): void {
+    this.aiMatchLoading = true;
+    this.aiMatchError = '';
+    this.applicationService.matchOffers(applicationId).pipe(
+      finalize(() => this.aiMatchLoading = false),
+    ).subscribe({
+      next: response => this.aiMatch = response.matches[0] ?? null,
+      error: error => this.aiMatchError = error.error?.detail || 'Analyse de correspondance indisponible.',
+    });
+  }
+
+  scoreComponent(name: string): MatchScoreComponent | null {
+    const value = this.aiMatch?.score_breakdown[name];
+    return value && typeof value === 'object' ? value as MatchScoreComponent : null;
+  }
+
+  scoreDisplay(name: string): string {
+    const score = this.scoreComponent(name)?.score;
+    return score === null || score === undefined ? 'Information uniquement' : `${Math.round(score)}%`;
   }
 
   markUnderReview(): void {
@@ -206,7 +236,7 @@ export class ApplicationDetailComponent implements OnInit {
     return statusValue === 'PRESELECTED';
   }
 
-  canCompleteInterview(statusValue: ApplicationStatus): boolean {
+  canCompleteInterview(_statusValue: ApplicationStatus): boolean {
     return false;
   }
 

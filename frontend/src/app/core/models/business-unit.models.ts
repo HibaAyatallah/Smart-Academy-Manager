@@ -35,7 +35,7 @@ export interface BusinessUnit {
   name: string;
   code: string;
   description: string;
-  manager: number;
+  manager: number | null;
   manager_email: string;
   manager_name: string;
   is_active: boolean;

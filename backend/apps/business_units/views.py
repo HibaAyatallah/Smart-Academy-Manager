@@ -5,7 +5,7 @@ from rest_framework.response import Response
 from rest_framework.filters import SearchFilter, OrderingFilter
 from django_filters.rest_framework import DjangoFilterBackend
 
-from .choices import ALLOWED_BUSINESS_UNITS, NeedStatus
+from .choices import NeedStatus
 from .models import BusinessUnit, BusinessUnitMembership, BusinessUnitNeed, BusinessUnitNeedHistory
 from .serializers import (
     BusinessUnitSerializer,
@@ -47,9 +47,7 @@ class BusinessUnitViewSet(viewsets.ModelViewSet):
 
     def get_queryset(self):
         user = self.request.user
-        queryset = BusinessUnit.objects.select_related("manager").filter(
-            code__in=ALLOWED_BUSINESS_UNITS
-        )
+        queryset = BusinessUnit.objects.select_related("manager").all()
 
         if is_super_admin(user) or is_hr(user):
             return queryset

@@ -1,0 +1,43 @@
+<h2 mat-dialog-title>Ajouter une Business Unit</h2>
+<form [formGroup]="form" (ngSubmit)="submit()">
+  <mat-dialog-content>
+    <p class="dialog-error" *ngIf="generalError">{{ generalError }}</p>
+    <div class="form-grid">
+      <mat-form-field appearance="outline">
+        <mat-label>Nom</mat-label>
+        <input matInput formControlName="name" required maxlength="255">
+        <mat-error *ngIf="form.controls.name.hasError('required')">Le nom est obligatoire.</mat-error>
+        <mat-error *ngIf="fieldErrors.name">{{ fieldErrors.name }}</mat-error>
+      </mat-form-field>
+      <mat-form-field appearance="outline">
+        <mat-label>Code</mat-label>
+        <input matInput formControlName="code" required maxlength="50">
+        <mat-error *ngIf="form.controls.code.hasError('required')">Le code est obligatoire.</mat-error>
+        <mat-error *ngIf="fieldErrors.code">{{ fieldErrors.code }}</mat-error>
+      </mat-form-field>
+      <mat-form-field appearance="outline">
+        <mat-label>Manager (optionnel)</mat-label>
+        <mat-select formControlName="manager">
+          <mat-option [value]="null">Non assigné</mat-option>
+          <mat-option *ngFor="let manager of managers" [value]="manager.id">{{ manager.full_name || manager.email }}</mat-option>
+        </mat-select>
+        <mat-error *ngIf="fieldErrors.manager">{{ fieldErrors.manager }}</mat-error>
+      </mat-form-field>
+      <mat-form-field appearance="outline">
+        <mat-label>Statut</mat-label>
+        <mat-select formControlName="is_active">
+          <mat-option [value]="true">Actif</mat-option>
+          <mat-option [value]="false">Inactif</mat-option>
+        </mat-select>
+        <mat-error *ngIf="fieldErrors.is_active">{{ fieldErrors.is_active }}</mat-error>
+      </mat-form-field>
+    </div>
+  </mat-dialog-content>
+  <mat-dialog-actions align="end">
+    <button mat-button type="button" [mat-dialog-close]="undefined" [disabled]="isSaving">Annuler</button>
+    <button mat-flat-button color="primary" type="submit" [disabled]="isSaving">
+      <mat-spinner *ngIf="isSaving" diameter="18" />
+      {{ isSaving ? 'Création…' : 'Créer la Business Unit' }}
+    </button>
+  </mat-dialog-actions>
+</form>

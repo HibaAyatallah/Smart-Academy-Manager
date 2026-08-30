@@ -4,7 +4,6 @@ import {
   ApplicationDocumentType,
   ApplicationInterview,
   ApplicationStatus,
-  ApplicationStatusHistory,
   EDUCATION_LEVEL_LABELS,
 } from '../../../core/models/application.models';
 

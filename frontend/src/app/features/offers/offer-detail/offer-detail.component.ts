@@ -6,11 +6,13 @@ import { MatChipsModule } from '@angular/material/chips';
 import { MatDividerModule } from '@angular/material/divider';
 import { MatIconModule } from '@angular/material/icon';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
+import { MatProgressBarModule } from '@angular/material/progress-bar';
 import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 
 import { finalize, switchMap } from 'rxjs/operators';
 import { APPLICATION_TYPE_LABELS, EDUCATION_LEVEL_LABELS } from '../../../core/models/application.models';
+import { CandidateRankingRow } from '../../../core/models/application.models';
 import { OFFER_STATUS_LABELS, Offer } from '../../../core/models/offer.models';
 import { AuthService } from '../../../core/services/auth.service';
 import { OfferService } from '../../../core/services/offer.service';
@@ -28,6 +30,7 @@ import { PageHeaderComponent } from '../../../shared/components/page-header/page
     MatDividerModule,
     MatChipsModule,
     MatProgressSpinnerModule,
+    MatProgressBarModule,
     MatSnackBarModule,
     PageHeaderComponent,
   ],
@@ -44,6 +47,9 @@ export class OfferDetailComponent implements OnInit {
   offer: Offer | null = null;
   isLoading = true;
   errorMessage = '';
+  ranking: CandidateRankingRow[] = [];
+  rankingLoading = false;
+  rankingError = '';
 
   get isCandidate(): boolean {
     return this.authService.currentUserSnapshot?.role === 'CANDIDATE';
@@ -67,11 +73,31 @@ export class OfferDetailComponent implements OnInit {
       .subscribe({
         next: (offer) => {
           this.offer = offer;
+          if (this.isSuperAdmin) this.loadRanking(offer.id);
         },
         error: () => {
           this.errorMessage = 'Impossible de charger l\'offre. Elle a peut-être été supprimée ou n\'est plus disponible.';
         },
       });
+  }
+
+  loadRanking(offerId: number): void {
+    this.rankingLoading = true;
+    this.rankingError = '';
+    this.offerService.getCandidateRanking(offerId).pipe(
+      finalize(() => this.rankingLoading = false),
+    ).subscribe({
+      next: response => this.ranking = response.ranking,
+      error: () => this.rankingError = 'Le classement des candidats est indisponible.',
+    });
+  }
+
+  matchLabel(score: number): string {
+    if (score >= 90) return 'Excellent match';
+    if (score >= 75) return 'Strong match';
+    if (score >= 60) return 'Moderate match';
+    if (score >= 40) return 'Weak match';
+    return 'Very weak match';
   }
 
   publish(): void {

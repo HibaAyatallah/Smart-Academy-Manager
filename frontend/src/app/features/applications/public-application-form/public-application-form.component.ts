@@ -1,7 +1,7 @@
-import { NgFor, NgIf } from '@angular/common';
+import { KeyValuePipe, NgFor, NgIf } from '@angular/common';
 import { HttpErrorResponse } from '@angular/common/http';
 import { Component, inject } from '@angular/core';
-import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
+import { AbstractControl, FormBuilder, ReactiveFormsModule, ValidationErrors, Validators } from '@angular/forms';
 import { MatButtonModule } from '@angular/material/button';
 import { MatCardModule } from '@angular/material/card';
 import { MatFormFieldModule } from '@angular/material/form-field';
@@ -10,7 +10,7 @@ import { MatInputModule } from '@angular/material/input';
 import { MatSelectModule } from '@angular/material/select';
 import { MatStepperModule, MatStepper } from '@angular/material/stepper';
 import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
-import { Router, RouterLink } from '@angular/router';
+import { Router } from '@angular/router';
 import { finalize } from 'rxjs/operators';
 
 import {
@@ -83,6 +83,18 @@ const FILE_SIGNATURES: Record<string, number[][]> = {
   '.png': [[0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]],
 };
 
+function experiencePositionValidator(control: AbstractControl<string>): ValidationErrors | null {
+  const invalidLines = (control.value || '').split('\n')
+    .map((line, index) => ({ index, position: (line.split('|')[0] || '').trim() }))
+    .filter(({ position }) => position.length > 255)
+    .map(({ index }) => index + 1);
+  return invalidLines.length ? { experiencePositions: invalidLines } : null;
+}
+
+function singleLineCVValue(value: string): string {
+  return value.replace(/\s*\r?\n\s*/g, ' ').replace(/\s*\|\s*/g, ' / ').replace(/\s+/g, ' ').trim();
+}
+
 @Component({
   selector: 'app-public-application-form',
   standalone: true,
@@ -97,6 +109,7 @@ const FILE_SIGNATURES: Record<string, number[][]> = {
     MatStepperModule,
     NgFor,
     NgIf,
+    KeyValuePipe,
     ReactiveFormsModule,
   ],
   templateUrl: './public-application-form.component.html',
@@ -159,13 +172,14 @@ export class PublicApplicationFormComponent {
     photo: '',
   };
   apiFieldErrors: Partial<Record<ApplicationFormField, string>> = {};
+  experiencePositionErrors: Record<number, string> = {};
   generalError = '';
   isSubmitting = false;
   isAnalyzingCV = false;
   cvAnalysis: CVAnalysis | null = null;
   readonly cvReviewForm = this.formBuilder.nonNullable.group({
     skills: [''],
-    experiences: [''],
+    experiences: ['', experiencePositionValidator],
     education: [''],
     languages: [''],
     certifications: [''],
@@ -218,7 +232,9 @@ export class PublicApplicationFormComponent {
       this.applicationService.previewCV(file).pipe(finalize(() => this.isAnalyzingCV = false)).subscribe({
         next: (analysis) => this.applyCVAnalysis(analysis),
         error: (error) => {
-          this.fileErrors.cv = error.error?.detail || 'L\'analyse du CV a échoué. Vérifiez le fichier puis réessayez.';
+          this.fileErrors.cv = error instanceof HttpErrorResponse && error.status === 429
+            ? 'Trop de tentatives d’analyse ont été effectuées. Veuillez réessayer dans quelques instants.'
+            : error.error?.detail || 'L\'analyse du CV a échoué. Vérifiez le fichier puis réessayez.';
         },
       });
     }
@@ -235,18 +251,14 @@ export class PublicApplicationFormComponent {
     }
   }
 
-  submit(): void {
+  submit(stepper?: MatStepper): void {
+    if (this.isSubmitting) return;
     this.clearApiErrors();
     this.validateRequiredFiles();
-    if (this.form.invalid || this.hasFileErrors() || this.isSubmitting) {
+    if (this.form.invalid || this.cvReviewForm.invalid || this.hasFileErrors()) {
       this.form.markAllAsTouched();
-      if (this.hasFileErrors()) {
-        this.snackBar.open(
-          'Veuillez télécharger tous les documents requis avant de poursuivre.',
-          'Fermer',
-          { duration: 5000 },
-        );
-      }
+      this.cvReviewForm.markAllAsTouched();
+      this.showInvalidSubmission(stepper);
       return;
     }
 
@@ -269,7 +281,7 @@ export class PublicApplicationFormComponent {
         },
         error: (error: unknown) => {
           this.applyApiErrors(error);
-          this.snackBar.open(this.generalError || 'La candidature n a pas pu etre envoyée.', 'Fermer', {
+          this.snackBar.open(this.generalError || 'La candidature n\'a pas pu être envoyée.', 'Fermer', {
             duration: 5000,
           });
         },
@@ -340,13 +352,19 @@ export class PublicApplicationFormComponent {
   continueAfterVerification(stepper: MatStepper): void {
     this.form.controls.personal.markAllAsTouched();
     this.form.controls.academic.markAllAsTouched();
-    if (this.form.controls.personal.valid && this.form.controls.academic.valid) {
+    this.cvReviewForm.markAllAsTouched();
+    if (this.form.controls.personal.valid && this.form.controls.academic.valid && this.cvReviewForm.valid) {
       stepper.next();
       return;
     }
-    this.snackBar.open('Veuillez compléter les informations obligatoires avant de continuer.', 'Fermer', {
+    const message = this.cvReviewForm.controls.experiences.hasError('experiencePositions')
+      ? this.experiencePositionValidationMessage()
+      : 'Veuillez compléter les informations obligatoires avant de continuer.';
+    this.generalError = message;
+    this.snackBar.open(message, 'Fermer', {
       duration: 5000,
     });
+    this.scrollToFirstInvalidField();
   }
 
   applicationTypeLabel(): string {
@@ -374,7 +392,7 @@ export class PublicApplicationFormComponent {
       experiences: analysis.experiences.map((experience) => [
         experience.position, experience.company, experience.start_date, experience.end_date,
         experience.duration, experience.description,
-      ].join(' | ')).join('\n'),
+      ].map(singleLineCVValue).join(' | ')).join('\n'),
       education: analysis.education.map((education) => [
         education.title, education.institution, education.start_date, education.end_date,
       ].join(' | ')).join('\n'),
@@ -445,18 +463,31 @@ export class PublicApplicationFormComponent {
 
   private clearApiErrors(): void {
     this.apiFieldErrors = {};
+    this.experiencePositionErrors = {};
     this.generalError = '';
   }
 
   private applyApiErrors(error: unknown): void {
     const payload = error instanceof HttpErrorResponse ? error.error : null;
     if (!payload || typeof payload !== 'object' || Array.isArray(payload)) {
-      this.generalError = this.errorMessage(payload) || 'La candidature n a pas pu etre envoyée.';
+      this.generalError = this.errorMessage(payload) || 'La candidature n\'a pas pu être envoyée.';
       return;
     }
 
-    const generalMessages: string[] = [];
+    const visibleMessages: string[] = [];
     for (const [field, value] of Object.entries(payload as Record<string, unknown>)) {
+      if (field === 'experiences') {
+        const nestedErrors = Array.isArray(value) ? value : [];
+        nestedErrors.forEach((experienceError, index) => {
+          if (experienceError && typeof experienceError === 'object' && 'position' in experienceError) {
+            const message = this.errorMessage((experienceError as Record<string, unknown>)['position']);
+            if (message) this.experiencePositionErrors[index] = message;
+          }
+        });
+        const message = this.errorMessage(value);
+        if (message) visibleMessages.push(message);
+        continue;
+      }
       const message = this.errorMessage(value);
       if (!message) {
         continue;
@@ -464,21 +495,22 @@ export class PublicApplicationFormComponent {
 
       if (field === 'cv') {
         this.fileErrors.cv = message;
+        visibleMessages.push(message);
       } else if (field === 'cover_letter') {
         this.fileErrors.cover = message;
+        visibleMessages.push(message);
       } else if (field === 'personal_photo') {
         this.fileErrors.photo = message;
+        visibleMessages.push(message);
       } else if (this.isApplicationFormField(field)) {
         this.apiFieldErrors[field] = message;
+        visibleMessages.push(message);
       } else {
-        generalMessages.push(message);
+        visibleMessages.push(message);
       }
     }
 
-    this.generalError = generalMessages.join(' ');
-    if (!this.generalError && !Object.keys(this.apiFieldErrors).length && !this.hasFileErrors()) {
-      this.generalError = 'La candidature n a pas pu etre envoyée.';
-    }
+    this.generalError = [...new Set(visibleMessages)].join(' ') || 'La candidature n\'a pas pu être envoyée.';
   }
 
   private isApplicationFormField(field: string): field is ApplicationFormField {
@@ -525,6 +557,47 @@ export class PublicApplicationFormComponent {
     return 'La photo personnelle est obligatoire.';
   }
 
+  private showInvalidSubmission(stepper?: MatStepper): void {
+    let stepIndex = 1;
+    let message = 'Veuillez corriger les champs invalides dans l’étape Vérification.';
+    if (!this.cvFile || this.fileErrors.cv) {
+      stepIndex = 0;
+      message = this.fileErrors.cv || this.requiredFileMessage('cv');
+    } else if (this.form.controls.personal.invalid || this.form.controls.academic.invalid) {
+      message = 'Veuillez corriger les informations personnelles ou académiques signalées.';
+    } else if (this.cvReviewForm.invalid) {
+      message = this.cvReviewForm.controls.experiences.hasError('experiencePositions')
+        ? this.experiencePositionValidationMessage()
+        : message;
+    } else if (this.form.controls.professional.invalid) {
+      stepIndex = 2;
+      message = 'Veuillez corriger le type de candidature ou le champ signalé.';
+    } else if (!this.coverLetterFile || this.fileErrors.cover || !this.personalPhotoFile || this.fileErrors.photo) {
+      stepIndex = 3;
+      message = this.fileErrors.cover || this.fileErrors.photo || 'Veuillez ajouter les documents complémentaires requis.';
+    }
+    this.generalError = message;
+    this.snackBar.open(message, 'Fermer', { duration: 6000 });
+    if (stepper) stepper.selectedIndex = stepIndex;
+    this.scrollToFirstInvalidField();
+  }
+
+  private experiencePositionValidationMessage(): string {
+    const lines = this.cvReviewForm.controls.experiences.getError('experiencePositions') as number[] | null;
+    const suffix = lines?.length
+      ? ` (ligne${lines.length > 1 ? 's' : ''} ${lines.join(', ')})`
+      : '';
+    return `Le poste de l’expérience doit contenir au maximum 255 caractères${suffix}.`;
+  }
+
+  private scrollToFirstInvalidField(): void {
+    setTimeout(() => {
+      const element = document.querySelector<HTMLElement>('[aria-invalid="true"], .file-error');
+      element?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      element?.focus();
+    });
+  }
+
   private buildFormData(): FormData {
     const formData = new FormData();
     const value = this.form.getRawValue();
@@ -547,7 +620,7 @@ export class PublicApplicationFormComponent {
     }
     if (this.cvAnalysis) {
       const value=this.cvReviewForm.getRawValue(); const lines=(v:string|null)=> (v||'').split('\n').map(x=>x.trim()).filter(Boolean);
-      const experiences=lines(value.experiences).map(line=>{const[position='',company='',start_date='',end_date='',duration='',description='']=line.split('|').map(x=>x.trim());return{position,company,start_date,end_date,duration,description};});
+      const experiences=lines(value.experiences).map(line=>{const[position='',company='',start_date='',end_date='',duration='',...descriptionParts]=line.split('|').map(x=>x.trim());return{position,company,start_date,end_date,duration,description:descriptionParts.join(' | ')};});
       const education=lines(value.education).map(line=>{const[title='',institution='',start_date='',end_date='']=line.split('|').map(x=>x.trim());return{title,institution,start_date,end_date};});
       const personal = this.form.controls.personal.getRawValue();
       formData.append('cv_review',JSON.stringify({first_name:personal.first_name,last_name:personal.last_name,full_name:`${personal.first_name} ${personal.last_name}`.trim(),email:personal.email,phone:personal.phone_number,location:personal.address,skills:lines(value.skills),experiences,education,diplomas:education.map(x=>x.title),companies:[...new Set(experiences.map(x=>x.company).filter(Boolean))],positions:[...new Set(experiences.map(x=>x.position).filter(Boolean))],languages:lines(value.languages),certifications:lines(value.certifications)}));

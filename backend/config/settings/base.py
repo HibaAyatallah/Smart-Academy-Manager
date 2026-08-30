@@ -33,9 +33,9 @@ env = environ.Env(
     RECRUITMENT_MAX_UPLOAD_SIZE_MB=(int, 5),
     RECRUITMENT_PHOTO_MAX_UPLOAD_SIZE_MB=(int, 3),
     PROJECT_MAX_UPLOAD_SIZE_MB=(int, 10),
-    DB_ENGINE=(str, "postgresql"),
+    DB_ENGINE=(str, "mysql"),
     DB_HOST=(str, "localhost"),
-    DB_PORT=(str, "5432"),
+    DB_PORT=(str, ""),
 )
 env.read_env(BASE_DIR / ".env")
 
@@ -107,8 +107,6 @@ if database_url:
 else:
     database_engine = env("DB_ENGINE").lower()
     database_backends = {
-        "postgres": "django.db.backends.postgresql",
-        "postgresql": "django.db.backends.postgresql",
         "mysql": "django.db.backends.mysql",
     }
     try:
@@ -126,7 +124,7 @@ else:
         "USER": env("DB_USER", default="smart_academy_user"),
         "PASSWORD": env("DB_PASSWORD", default=""),
         "HOST": env("DB_HOST"),
-        "PORT": env("DB_PORT"),
+        "PORT": env("DB_PORT") or "3306",
     }
     if database_engine == "mysql":
         database_config["OPTIONS"] = {
@@ -232,6 +230,7 @@ REST_FRAMEWORK = {
         "user": env("USER_THROTTLE_RATE", default="60/minute"),
         "login": env("LOGIN_THROTTLE_RATE", default="10/minute"),
         "public_submission": env("PUBLIC_SUBMISSION_THROTTLE_RATE", default="5/hour"),
+        "cv_preview": env("CV_PREVIEW_THROTTLE_RATE", default="20/hour"),
         "sensitive_account": env("SENSITIVE_ACCOUNT_THROTTLE_RATE", default="10/hour"),
         "chatbot": env("CHATBOT_THROTTLE_RATE", default="30/minute"),
     },
@@ -241,6 +240,7 @@ REST_FRAMEWORK = {
         "user": "1000/minute",
         "login": "1000/minute",
         "public_submission": "1000/hour",
+        "cv_preview": "1000/hour",
         "sensitive_account": "1000/hour",
         "chatbot": "1000/minute",
     },

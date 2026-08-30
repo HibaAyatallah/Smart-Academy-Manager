@@ -11,7 +11,7 @@ from rest_framework.parsers import FormParser, JSONParser, MultiPartParser
 from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
 
-from apps.accounts.throttles import PublicSubmissionRateThrottle
+from apps.accounts.throttles import CVPreviewRateThrottle, PublicSubmissionRateThrottle
 from apps.accounts.choices import UserRole
 
 logger = logging.getLogger(__name__)
@@ -53,12 +53,18 @@ from .serializers import (
     InternEvaluationSerializer,
     CVAnalysisSerializer,
     CVReviewSerializer,
+    ApplicationMatchSerializer,
 )
 
 
 class OfferViewSet(viewsets.ModelViewSet):
     serializer_class = OfferSerializer
     permission_classes = [CanManageOffersOrReadPublished]
+
+    def get_permissions(self):
+        if self.action == "candidate_ranking":
+            return [IsRecruitmentManager()]
+        return super().get_permissions()
 
     def get_queryset(self):
         queryset = Offer.objects.select_related("business_unit", "created_by").all()
@@ -92,6 +98,25 @@ class OfferViewSet(viewsets.ModelViewSet):
         offer.status = OfferStatus.ARCHIVED
         offer.save(update_fields=["status", "updated_at"])
         return Response(self.get_serializer(offer).data)
+
+    @action(detail=True, methods=["get"], url_path="candidate-ranking")
+    def candidate_ranking(self, request, pk=None):
+        from .intelligence import rank_offer_candidates
+
+        rows = rank_offer_candidates(self.get_object())
+        data = []
+        for rank, row in enumerate(rows, start=1):
+            application = row["application"]
+            match = row["match"]
+            data.append({
+                "rank": rank,
+                "application": application.id,
+                "candidate_name": application.candidate_profile.user.full_name,
+                "submitted_at": application.submitted_at,
+                "analysis_error": row["analysis_error"],
+                "match": ApplicationMatchSerializer(match).data if match else None,
+            })
+        return Response({"offer": self.get_serializer(self.get_object()).data, "ranking": data})
 from .services import log_sensitive_action, transition_application
 from apps.notifications.services import queue_email
 
@@ -202,7 +227,7 @@ class ApplicationViewSet(viewsets.ModelViewSet):
         return Response({"document": ApplicationDocumentSerializer(document, context=self.get_serializer_context()).data,
                          "analysis": CVAnalysisSerializer(analysis).data, "analysis_error": ""}, status=status.HTTP_201_CREATED)
 
-    @action(detail=False, methods=["post"], url_path="preview-cv", throttle_classes=[PublicSubmissionRateThrottle], parser_classes=[MultiPartParser, FormParser])
+    @action(detail=False, methods=["post"], url_path="preview-cv", throttle_classes=[CVPreviewRateThrottle], parser_classes=[MultiPartParser, FormParser])
     def preview_cv(self, request):
         serializer = ApplicationDocumentUploadSerializer(data={"document_type": "CV", "file": request.FILES.get("file")})
         serializer.is_valid(raise_exception=True)
@@ -220,10 +245,7 @@ class ApplicationViewSet(viewsets.ModelViewSet):
             matches = match_application(self.get_object())
         except ValueError as exc:
             raise DRFValidationError({"detail": str(exc)}) from exc
-        match_data = [{"id": item.id, "offer": item.offer_id, "score": item.score,
-                          "matched_skills": item.matched_skills, "missing_skills": item.missing_skills,
-                          "explanation": item.explanation, "human_decision": item.human_decision}
-                         for item in matches]
+        match_data = ApplicationMatchSerializer(matches, many=True).data
         recommendations = self.get_object().training_recommendations.select_related("training")
         return Response({"matches": match_data, "training_recommendations": [
             {"id": item.id, "training": item.training_id, "training_title": item.training.title,

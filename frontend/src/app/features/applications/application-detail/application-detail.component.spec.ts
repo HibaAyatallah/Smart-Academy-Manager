@@ -58,10 +58,12 @@ describe('ApplicationDetailComponent', () => {
     applicationService = jasmine.createSpyObj<ApplicationService>('ApplicationService', [
       'getApplication',
       'markUnderReview',
+      'matchOffers',
     ]);
     snackBar = jasmine.createSpyObj<MatSnackBar>('MatSnackBar', ['open']);
     dialog = jasmine.createSpyObj<MatDialog>('MatDialog', ['open']);
     applicationService.getApplication.and.returnValue(of(submittedApplication));
+    applicationService.matchOffers.and.returnValue(of({ matches: [] }));
 
     TestBed.configureTestingModule({
       imports: [ApplicationDetailComponent],

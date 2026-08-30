@@ -472,12 +472,16 @@ class ApplicationMatch(models.Model):
     score = models.DecimalField(max_digits=5, decimal_places=2)
     matched_skills = models.JSONField(default=list)
     missing_skills = models.JSONField(default=list)
+    additional_skills = models.JSONField(default=list)
+    score_breakdown = models.JSONField(default=dict)
+    candidate_summary = models.TextField(blank=True)
     explanation = models.TextField()
     algorithm_version = models.CharField(max_length=32, default="skills-v1")
     human_decision = models.CharField(max_length=16, choices=[("PENDING","Pending"),("APPROVED","Approved"),("REJECTED","Rejected")], default="PENDING")
     reviewed_by = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL)
     reviewed_at = models.DateTimeField(null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
         constraints = [models.UniqueConstraint(fields=["application", "offer"], name="unique_application_offer_match")]

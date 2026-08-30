@@ -2,8 +2,6 @@ import { Component, HostListener, inject } from '@angular/core';
 import { RouterOutlet, RouterLink, RouterLinkActive } from '@angular/router';
 import { CommonModule } from '@angular/common';
 import { TranslatePipe } from '../../core/i18n/translate.pipe';
-import { LanguageService } from '../../core/i18n/language.service';
-import { AppLanguage } from '../../core/i18n/translations';
 
 @Component({
   selector: 'app-public-layout',
@@ -13,7 +11,6 @@ import { AppLanguage } from '../../core/i18n/translations';
   styleUrl: './public-layout.component.scss'
 })
 export class PublicLayoutComponent {
-  readonly language = inject(LanguageService);
   isMobileMenuOpen = false;
   isScrolled = false;
 
@@ -29,5 +26,4 @@ export class PublicLayoutComponent {
   closeMobileMenu() {
     this.isMobileMenuOpen = false;
   }
-  setLanguage(language: AppLanguage) { this.language.setLanguage(language); }
 }

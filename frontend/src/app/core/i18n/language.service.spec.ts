@@ -5,20 +5,28 @@ import {TRANSLATIONS} from './translations';
 describe('LanguageService',()=>{
   beforeEach(()=>{localStorage.clear();document.documentElement.lang='fr';TestBed.configureTestingModule({});});
   afterEach(()=>localStorage.clear());
-  it('defaults to French and persists English with the canonical key',()=>{
+  it('locks the application to French even when English is requested',()=>{
     const service=TestBed.inject(LanguageService);
     expect(service.current).toBe('fr');
     service.setLanguage('en');
-    expect(localStorage.getItem('preferred_language')).toBe('en');
-    expect(document.documentElement.lang).toBe('en');
-    expect(service.translate('common.save')).toBe('Save');
+    expect(service.current).toBe('fr');
+    expect(localStorage.getItem('preferred_language')).toBe('fr');
+    expect(document.documentElement.lang).toBe('fr');
+    expect(service.translate('common.save')).toBe('Enregistrer');
   });
-  it('uses the backend profile as the authority over stale browser storage',()=>{
+  it('ignores an English profile preference and removes stale language storage',()=>{
+    localStorage.setItem('smart-academy-language','en');
     const service=TestBed.inject(LanguageService);
-    service.setLanguage('fr');
     service.initializeFromProfile('en');
-    expect(service.current).toBe('en');
-    expect(localStorage.getItem('preferred_language')).toBe('en');
+    expect(service.current).toBe('fr');
+    expect(localStorage.getItem('preferred_language')).toBe('fr');
+    expect(localStorage.getItem('smart-academy-language')).toBeNull();
+  });
+  it('replaces a stored English preference with French at startup',()=>{
+    localStorage.setItem('preferred_language','en');
+    const service=TestBed.inject(LanguageService);
+    expect(service.current).toBe('fr');
+    expect(localStorage.getItem('preferred_language')).toBe('fr');
   });
   it('interpolates dynamic values and falls back to French',()=>{
     const service=TestBed.inject(LanguageService);

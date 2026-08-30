@@ -68,6 +68,28 @@ class BusinessUnitTests(APITestCase):
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertEqual(len(response.data["results"]), 2)
 
+    def test_superadmin_can_create_business_unit(self):
+        self.client.force_authenticate(user=self.superadmin)
+        response = self.client.post(
+            reverse("business-unit-list"),
+            {"name": "Data & AI", "code": "DATA_AI", "manager": self.manager1.id, "is_active": True},
+        )
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED, response.data)
+        self.assertTrue(BusinessUnit.objects.filter(name="Data & AI", code="DATA_AI").exists())
+
+    def test_duplicate_business_unit_name_and_code_are_rejected(self):
+        self.client.force_authenticate(user=self.superadmin)
+        duplicate_name = self.client.post(
+            reverse("business-unit-list"), {"name": "netsec", "code": "NEW_CODE"}
+        )
+        duplicate_code = self.client.post(
+            reverse("business-unit-list"), {"name": "New Unit", "code": "netsec"}
+        )
+        self.assertEqual(duplicate_name.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("name", duplicate_name.data)
+        self.assertEqual(duplicate_code.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("code", duplicate_code.data)
+
     def test_hr_can_see_bu_list_and_is_read_only(self):
         """HR has read-only access to standard BU endpoints"""
         self.client.force_authenticate(user=self.hr)
@@ -231,14 +253,14 @@ class BusinessUnitTests(APITestCase):
         self.bu1.refresh_from_db()
         self.assertEqual(self.bu1.code, "NetSEC")
 
-    def test_super_admin_cannot_create_non_canonical_business_unit(self):
+    def test_super_admin_can_create_business_unit_with_a_new_code(self):
         self.client.force_authenticate(user=self.superadmin)
         response = self.client.post(
             reverse("business-unit-list"),
             {"name": "BI", "code": "BI", "manager": self.manager1.id},
         )
-        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
-        self.assertFalse(BusinessUnit.objects.filter(code="BI").exists())
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        self.assertTrue(BusinessUnit.objects.filter(code="BI", name="BI").exists())
 
     def test_manager_cannot_deactivate_own_bu(self):
         """BU Manager cannot deactivate their own BU"""

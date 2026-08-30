@@ -38,7 +38,7 @@
       </div>
     </mat-step>
 
-    <mat-step [completed]="form.controls.personal.valid && form.controls.academic.valid">
+    <mat-step [completed]="form.controls.personal.valid && form.controls.academic.valid && cvReviewForm.valid">
       <ng-template matStepLabel>Vérification</ng-template>
       <div class="step-content">
         <p class="mb-lg">Corrigez ou complétez les données extraites. Les champs obligatoires doivent être renseignés.</p>
@@ -63,7 +63,7 @@
         <h3>Autres informations extraites</h3>
         <form [formGroup]="cvReviewForm" class="form-grid">
           <mat-form-field appearance="outline" class="full-width"><mat-label>Compétences — une par ligne</mat-label><textarea matInput rows="4" formControlName="skills"></textarea></mat-form-field>
-          <mat-form-field appearance="outline" class="full-width"><mat-label>Expériences — Poste | Entreprise | Début | Fin | Durée | Description</mat-label><textarea matInput rows="5" formControlName="experiences"></textarea></mat-form-field>
+          <mat-form-field appearance="outline" class="full-width"><mat-label>Expériences — Poste | Entreprise | Début | Fin | Durée | Description</mat-label><textarea matInput rows="5" formControlName="experiences"></textarea><mat-hint>Le poste (première valeur de chaque ligne) est limité à 255 caractères.</mat-hint><mat-error *ngIf="cvReviewForm.controls.experiences.hasError('experiencePositions')">Le poste doit contenir au maximum 255 caractères sur la/les ligne(s) {{ cvReviewForm.controls.experiences.getError('experiencePositions').join(', ') }}.</mat-error><mat-error *ngFor="let error of experiencePositionErrors | keyvalue">Expérience {{ +error.key + 1 }} — poste : {{ error.value }}</mat-error></mat-form-field>
           <mat-form-field appearance="outline" class="full-width"><mat-label>Formations — Diplôme | Établissement | Début | Fin</mat-label><textarea matInput rows="4" formControlName="education"></textarea></mat-form-field>
           <mat-form-field appearance="outline"><mat-label>Langues — une par ligne</mat-label><textarea matInput rows="3" formControlName="languages"></textarea></mat-form-field>
           <mat-form-field appearance="outline"><mat-label>Certifications — une par ligne</mat-label><textarea matInput rows="3" formControlName="certifications"></textarea></mat-form-field>
@@ -108,7 +108,7 @@
           <section><h3>Candidature</h3><p>{{ applicationTypeLabel() }}</p></section>
           <section><h3>Documents</h3><p>CV : {{ cvFile?.name }}</p><p>Lettre : {{ coverLetterFile?.name }}</p><p>Photo : {{ personalPhotoFile?.name }}</p></section>
         </div>
-        <div class="stepper-actions justify-center"><button mat-button type="button" matStepperPrevious class="btn btn-outline">Modifier</button><button mat-flat-button color="primary" type="button" (click)="submit()" [disabled]="isSubmitting" class="btn btn-primary submit-btn"><mat-icon *ngIf="isSubmitting">hourglass_empty</mat-icon>{{ isSubmitting ? 'Envoi en cours…' : 'Confirmer la candidature' }}</button></div>
+        <div class="stepper-actions justify-center"><button mat-button type="button" matStepperPrevious class="btn btn-outline">Modifier</button><button mat-flat-button color="primary" type="button" (click)="submit(stepper)" [disabled]="isSubmitting" class="btn btn-primary submit-btn"><mat-icon *ngIf="isSubmitting">hourglass_empty</mat-icon>{{ isSubmitting ? 'Envoi en cours…' : 'Confirmer la candidature' }}</button></div>
       </div>
     </mat-step>
   </mat-stepper>

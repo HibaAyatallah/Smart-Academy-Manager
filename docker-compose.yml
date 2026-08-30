@@ -1,14 +1,17 @@
 services:
   db:
-    image: postgres:17-alpine
+    image: mysql:8.0
     environment:
-      POSTGRES_DB: ${POSTGRES_DB:-smart_academy_db}
-      POSTGRES_USER: ${POSTGRES_USER:-smart_academy_user}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-smart_academy_dev_password}
+      MYSQL_DATABASE: ${DB_NAME:-smart_academy_db}
+      MYSQL_USER: ${DB_USER:-smart_academy_user}
+      MYSQL_PASSWORD: ${DB_PASSWORD:-smart_academy_dev_password}
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-smart_academy_root_password}
+      TZ: UTC
+    command: ["--character-set-server=utf8mb4", "--collation-server=utf8mb4_0900_ai_ci", "--default-time-zone=+00:00"]
     volumes:
-      - postgres_data:/var/lib/postgresql/data
+      - mysql_data:/var/lib/mysql
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
+      test: ["CMD-SHELL", "mysqladmin ping -h 127.0.0.1 -u root -p$$MYSQL_ROOT_PASSWORD --silent"]
       interval: 5s
       timeout: 5s
       retries: 10
@@ -19,7 +22,12 @@ services:
         required: false
     environment:
       DJANGO_SETTINGS_MODULE: config.settings.production
-      DATABASE_URL: postgres://${POSTGRES_USER:-smart_academy_user}:${POSTGRES_PASSWORD:-smart_academy_dev_password}@db:5432/${POSTGRES_DB:-smart_academy_db}
+      DB_ENGINE: mysql
+      DB_NAME: ${DB_NAME:-smart_academy_db}
+      DB_USER: ${DB_USER:-smart_academy_user}
+      DB_PASSWORD: ${DB_PASSWORD:-smart_academy_dev_password}
+      DB_HOST: db
+      DB_PORT: 3306
       DJANGO_ALLOWED_HOSTS: ${DJANGO_ALLOWED_HOSTS:-localhost,127.0.0.1}
     command: sh -c "python manage.py migrate --settings=config.settings.production && gunicorn config.wsgi:application --bind 0.0.0.0:8001 --workers 3 --timeout 180"
     volumes:
@@ -33,5 +41,5 @@ services:
     ports: ["4200:80"]
     depends_on: [backend]
 volumes:
-  postgres_data:
+  mysql_data:
   media_data:

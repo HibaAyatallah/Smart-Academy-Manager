@@ -34,7 +34,7 @@ rsync -a --checksum \
 [[ -f "$APP_ROOT/.env" ]] || fail "Create the production $APP_ROOT/.env securely before deploying."
 
 step "Installing Python dependencies"
-"$PYTHON_BIN" -m pip install --disable-pip-version-check -r "$APP_ROOT/requirements/base.txt"
+"$PYTHON_BIN" -m pip install --disable-pip-version-check -r "$APP_ROOT/requirements/production.txt"
 
 export DJANGO_SETTINGS_MODULE=config.settings.production
 step "Checking Django production configuration"

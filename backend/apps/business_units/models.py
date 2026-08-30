@@ -5,8 +5,6 @@ from django.utils import timezone
 
 from apps.accounts.choices import UserRole
 from .choices import (
-    ALLOWED_BUSINESS_UNITS,
-    BusinessUnitCode,
     NeedPriority,
     NeedRequiredLevel,
     NeedStatus,
@@ -17,9 +15,7 @@ from .choices import (
 
 class BusinessUnit(models.Model):
     name = models.CharField("Nom", max_length=255, unique=True)
-    code = models.CharField(
-        "Code", max_length=50, unique=True, choices=BusinessUnitCode.choices
-    )
+    code = models.CharField("Code", max_length=50, unique=True)
     description = models.TextField("Description", blank=True)
     manager = models.ForeignKey(
         settings.AUTH_USER_MODEL,
@@ -43,15 +39,6 @@ class BusinessUnit(models.Model):
         return f"{self.name} ({self.code})"
 
     def clean(self):
-        expected_name = ALLOWED_BUSINESS_UNITS.get(self.code)
-        if expected_name is None:
-            raise ValidationError(
-                {"code": "Business Unit invalide. Valeurs autorisées : NetSEC, System, Software, Achat."}
-            )
-        if self.name != expected_name:
-            raise ValidationError(
-                {"name": f"Le nom doit être « {expected_name} » pour le code {self.code}."}
-            )
         # manager is optional (BU can exist without an assigned manager initially)
         if self.manager_id and self.manager.role != UserRole.BU_MANAGER:
             raise ValidationError(
@@ -75,14 +62,21 @@ class BusinessUnitMembership(models.Model):
     position = models.CharField("Poste", max_length=255, blank=True)
     joined_at = models.DateField("Date de rejoindre", default=timezone.localdate)
     is_active = models.BooleanField("Actif", default=True)
+    active_uniqueness_key = models.GeneratedField(
+        expression=models.Case(
+            models.When(is_active=True, then=models.Value(1)),
+            default=models.Value(None),
+        ),
+        output_field=models.IntegerField(null=True),
+        db_persist=True,
+    )
 
     class Meta:
         verbose_name = "Membre de Business Unit"
         verbose_name_plural = "Membres de Business Unit"
         constraints = [
             models.UniqueConstraint(
-                fields=["business_unit", "user"],
-                condition=models.Q(is_active=True),
+                fields=["business_unit", "user", "active_uniqueness_key"],
                 name="unique_active_bu_membership",
             ),
         ]

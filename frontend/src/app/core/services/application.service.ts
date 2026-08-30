@@ -8,6 +8,7 @@ import {
   Application,
   ApplicationDocument,
   ApplicationFilters,
+  ApplicationMatch,
   CVAnalysis,
   PaginatedResponse,
 } from '../models/application.models';
@@ -165,4 +166,5 @@ export class ApplicationService {
   getCVAnalysis(id: number): Observable<CVAnalysis> { return this.http.get<CVAnalysis>(`${this.apiBaseUrl}applications/${id}/cv-analysis/`); }
   updateCVAnalysis(id: number, data: Partial<CVAnalysis>): Observable<CVAnalysis> { return this.http.patch<CVAnalysis>(`${this.apiBaseUrl}applications/${id}/cv-analysis/`, data); }
   validateCV(id: number, data: Partial<CVAnalysis>): Observable<CVAnalysis> { return this.http.post<CVAnalysis>(`${this.apiBaseUrl}applications/${id}/validate-cv/`, data); }
+  matchOffers(id: number): Observable<{matches: ApplicationMatch[]}> { return this.http.post<{matches: ApplicationMatch[]}>(`${this.apiBaseUrl}applications/${id}/match-offers/`, {}); }
 }

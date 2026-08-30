@@ -44,6 +44,13 @@ mat-list-item span {
   font-size: 13px;
 }
 
+.loading-inline, .overall-score, .score-grid > div { display: flex; align-items: center; gap: 12px; }
+.overall-score { margin: 16px 0 10px; justify-content: space-between; }
+.overall-score strong { color: var(--primary-color, #1565c0); font-size: 2rem; }
+.score-grid, .skill-groups { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; margin: 20px 0; }
+.score-grid > div { align-items: flex-start; flex-direction: column; padding: 12px; background: #f7f8fa; border-radius: 8px; }
+.skill-groups section { min-width: 0; }
+
 @media (max-width: 860px) {
   .status-card mat-card-content {
     align-items: stretch;
@@ -57,5 +64,5 @@ mat-list-item span {
   .detail-grid {
     grid-template-columns: 1fr;
   }
+  .score-grid, .skill-groups { grid-template-columns: 1fr; }
 }
-

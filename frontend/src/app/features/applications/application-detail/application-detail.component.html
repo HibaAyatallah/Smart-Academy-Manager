@@ -128,7 +128,33 @@
     </mat-card-content>
   </mat-card>
 
-  <app-cv-review [applicationId]="application.id"></app-cv-review>
+  <app-cv-review [applicationId]="application.id" (analysisSaved)="loadAIMatch(application.id)"></app-cv-review>
+
+  <mat-card class="ai-match-card" *ngIf="application.offer">
+    <mat-card-header><mat-card-title>AI Matching — aide à la décision</mat-card-title></mat-card-header>
+    <mat-card-content>
+      <div class="loading-inline" *ngIf="aiMatchLoading"><mat-spinner diameter="32"></mat-spinner> Calcul de la correspondance…</div>
+      <p class="error-state" *ngIf="aiMatchError">{{ aiMatchError }}</p>
+      <ng-container *ngIf="aiMatch && !aiMatchLoading">
+        <div class="overall-score"><strong>{{ aiMatch.score | number:'1.0-0' }}%</strong><span>{{ aiMatch.score_breakdown['label'] }}</span></div>
+        <mat-progress-bar mode="determinate" [value]="aiMatch.score"></mat-progress-bar>
+        <div class="score-grid">
+          <div *ngFor="let item of ['skills', 'experience', 'education']">
+            <span>{{ item === 'skills' ? 'Compétences' : item === 'experience' ? 'Expérience' : 'Formation' }}</span>
+            <strong>{{ scoreDisplay(item) }}</strong>
+          </div>
+        </div>
+        <p *ngIf="scoreComponent('experience')?.candidate_years !== null"><strong>Expérience datée détectée :</strong> environ {{ scoreComponent('experience')?.candidate_years }} an(s). L’offre ne contient pas de minimum chiffré.</p>
+        <div class="skill-groups">
+          <section><h3>Compétences correspondantes</h3><mat-chip-set><mat-chip *ngFor="let skill of aiMatch.matched_skills">{{ skill }}</mat-chip></mat-chip-set><p *ngIf="!aiMatch.matched_skills.length">Aucune identifiée.</p></section>
+          <section><h3>Compétences manquantes</h3><mat-chip-set><mat-chip *ngFor="let skill of aiMatch.missing_skills">{{ skill }}</mat-chip></mat-chip-set><p *ngIf="!aiMatch.missing_skills.length">Aucune.</p></section>
+          <section><h3>Compétences supplémentaires</h3><mat-chip-set><mat-chip *ngFor="let skill of aiMatch.additional_skills">{{ skill }}</mat-chip></mat-chip-set><p *ngIf="!aiMatch.additional_skills.length">Aucune.</p></section>
+        </div>
+        <h3>Synthèse candidat</h3><p>{{ aiMatch.candidate_summary }}</p>
+        <small>Score déterministe {{ aiMatch.algorithm_version }}. Aucun rejet automatique n’est effectué.</small>
+      </ng-container>
+    </mat-card-content>
+  </mat-card>
 
   <mat-card>
     <mat-card-header>

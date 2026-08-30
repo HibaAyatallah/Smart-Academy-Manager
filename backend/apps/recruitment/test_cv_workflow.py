@@ -1,9 +1,11 @@
+import json
 import shutil
 import tempfile
 from io import BytesIO
 from unittest.mock import patch
 
 from django.contrib.auth import get_user_model
+from django.core.cache import cache
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test import TestCase, override_settings
 from docx import Document
@@ -11,7 +13,8 @@ import pymupdf
 from rest_framework.test import APITestCase
 
 from apps.accounts.choices import UserRole
-from .choices import ApplicationDocumentType, ApplicationType
+from apps.accounts.throttles import CVPreviewRateThrottle, PublicSubmissionRateThrottle
+from .choices import ApplicationDocumentType, ApplicationType, StudyLevel
 from .intelligence import CVExtractionError, extract_cv_data, parse_cv_text
 from .models import Application, ApplicationDocument, CandidateProfile
 
@@ -201,6 +204,21 @@ contact@example.com""")
         ):
             extract_cv_data(upload)
 
+    @patch("apps.recruitment.intelligence._ocr_pdf")
+    def test_scanned_pdf_uses_optional_ocr_fallback(self, ocr):
+        ocr.return_value = "Jane Doe\njane@example.com\nSkills: Python, Django\n" * 3
+        upload = SimpleUploadedFile("scan.pdf", blank_pdf(), content_type="application/pdf")
+        data = extract_cv_data(upload)
+        self.assertEqual(data["extraction_method"], "PDF_OCR")
+        self.assertIn("Python", data["skills"])
+        self.assertTrue(data["extraction_warnings"])
+
+    @patch("apps.recruitment.intelligence._ocr_pdf", side_effect=CVExtractionError("OCR indisponible."))
+    def test_scanned_pdf_reports_ocr_unavailable_without_crashing(self, _ocr):
+        upload = SimpleUploadedFile("scan.pdf", blank_pdf(), content_type="application/pdf")
+        with self.assertRaisesRegex(CVExtractionError, "OCR indisponible"):
+            extract_cv_data(upload)
+
     def test_sections_stop_at_interests_availability_and_new_headings(self):
         data = parse_cv_text("""HIBA AYATALLAH
 hiba.ayatallah@example.com
@@ -245,6 +263,40 @@ ENSA""")
         self.assertNotIn("|", "\n".join(item["description"] for item in data["experiences"]))
         self.assertEqual(data["experiences"][0]["company"], "Acme")
         self.assertEqual(data["experiences"][1]["company"], "Beta SARL")
+
+    def test_long_extracted_experience_text_keeps_a_short_position_and_full_description(self):
+        responsibilities = "Conception et maintenance des API internes " * 12
+        data = parse_cv_text(f"""Jane Doe
+jane@example.com
+EXPÉRIENCES
+Développeuse Backend • {responsibilities}
+Acme
+2022 - 2024
+FORMATION
+Master Informatique
+ENSA""")
+
+        experience = data["experiences"][0]
+        self.assertEqual(experience["position"], "Développeuse Backend")
+        self.assertLessEqual(len(experience["position"]), 255)
+        self.assertIn("Conception et maintenance", experience["description"])
+
+    def test_overlong_extracted_position_is_truncated_at_a_word_boundary(self):
+        long_title = "Senior Backend Developer " * 20
+        data = parse_cv_text(f"""Jane Doe
+jane@example.com
+EXPERIENCE
+{long_title}
+Acme
+2022 - 2024
+EDUCATION
+Master Informatique
+ENSA""")
+
+        experience = data["experiences"][0]
+        self.assertLessEqual(len(experience["position"]), 255)
+        self.assertFalse(experience["position"].endswith(" "))
+        self.assertIn(long_title.strip(), experience["description"])
 
     def test_two_column_pdf_uses_blocks_and_keeps_sections_isolated(self):
         upload = SimpleUploadedFile("columns.pdf", two_column_pdf(), content_type="application/pdf")
@@ -335,6 +387,89 @@ class CVWorkflowAPITests(APITestCase):
         self.client.force_authenticate(user)
         file = SimpleUploadedFile("candidate.docx", docx_cv(), content_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document")
         return self.client.post(f"/api/applications/{(application or self.application).id}/upload-cv/", {"file": file}, format="multipart")
+
+    def test_public_cv_preview_uses_a_dedicated_throttle_scope(self):
+        self.assertEqual(CVPreviewRateThrottle.scope, "cv_preview")
+        self.assertEqual(PublicSubmissionRateThrottle.scope, "public_submission")
+
+    def test_preview_review_can_be_submitted_without_position_validation_error(self):
+        preview = self.client.post(
+            "/api/applications/preview-cv/",
+            {"file": SimpleUploadedFile(
+                "candidate.docx", docx_cv(),
+                content_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+            )},
+            format="multipart",
+        )
+        self.assertEqual(preview.status_code, 200)
+        self.assertTrue(preview.data["experiences"])
+        self.assertTrue(all(len(item["position"]) <= 255 for item in preview.data["experiences"]))
+
+        review = dict(preview.data)
+        review.pop("id", None)
+        response = self.client.post(
+            "/api/applications/public-submit/",
+            {
+                "email": "preview-submit@example.com",
+                "password": "StrongPass123!",
+                "first_name": "Jane",
+                "last_name": "Doe",
+                "phone_number": "+212600000000",
+                "current_school": "ENSA",
+                "study_level": StudyLevel.MASTER,
+                "study_field": "Informatique",
+                "application_type": ApplicationType.HIRING,
+                "cv_review": json.dumps(review),
+                "cv": SimpleUploadedFile(
+                    "candidate.docx", docx_cv(),
+                    content_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+                ),
+                "cover_letter": SimpleUploadedFile(
+                    "letter.pdf", b"%PDF-1.4 cover", content_type="application/pdf",
+                ),
+                "personal_photo": SimpleUploadedFile(
+                    "photo.jpg", b"\xff\xd8\xff photo", content_type="image/jpeg",
+                ),
+            },
+            format="multipart",
+        )
+
+        self.assertEqual(response.status_code, 201, response.data)
+        analysis = Application.objects.get(pk=response.data["id"]).cv_analysis
+        self.assertEqual(analysis.experiences, review["experiences"])
+
+    def test_public_cv_preview_remains_throttled_after_its_dedicated_limit(self):
+        original_rate = getattr(CVPreviewRateThrottle, "rate", None)
+        CVPreviewRateThrottle.rate = "1/hour"
+        cache.clear()
+        try:
+            first = self.client.post(
+                "/api/applications/preview-cv/",
+                {"file": SimpleUploadedFile(
+                    "candidate.docx",
+                    docx_cv(),
+                    content_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+                )},
+                format="multipart",
+            )
+            second = self.client.post(
+                "/api/applications/preview-cv/",
+                {"file": SimpleUploadedFile(
+                    "candidate.docx",
+                    docx_cv(),
+                    content_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+                )},
+                format="multipart",
+            )
+        finally:
+            cache.clear()
+            if original_rate is None:
+                delattr(CVPreviewRateThrottle, "rate")
+            else:
+                CVPreviewRateThrottle.rate = original_rate
+
+        self.assertEqual(first.status_code, 200)
+        self.assertEqual(second.status_code, 429)
 
     def test_candidate_uploads_edits_validates_and_persists_profile(self):
         response = self.upload(self.candidate)

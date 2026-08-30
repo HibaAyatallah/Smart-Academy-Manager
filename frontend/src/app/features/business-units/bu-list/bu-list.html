@@ -1,7 +1,11 @@
 <app-page-header
   title="Business Units"
   subtitle="Gestion des départements et centres de profit"
-/>
+>
+  <button *ngIf="canCreateBusinessUnit" mat-flat-button color="primary" type="button" (click)="openCreateDialog()">
+    + Ajouter une Business Unit
+  </button>
+</app-page-header>
 
 <mat-card class="filters-card">
   <form [formGroup]="filtersForm" class="filters" (ngSubmit)="applyFilters()">

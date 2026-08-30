@@ -1,6 +1,7 @@
 import hashlib
 import re
 import unicodedata
+from datetime import date
 from dataclasses import dataclass
 from io import BytesIO
 from pathlib import Path
@@ -10,7 +11,9 @@ from django.db import transaction
 from .choices import ApplicationDocumentType
 from .models import Application, ApplicationMatch, CVAnalysis, Offer, TrainingRecommendation
 
-EXTRACTOR_VERSION = "structured-v6"
+EXTRACTOR_VERSION = "structured-v7"
+MATCHING_VERSION = "explainable-v2"
+MIN_USABLE_PDF_CHARACTERS = 60
 SECTION_NAMES = {
     "skills": ("compétences", "competences", "skills", "technologies", "technical skills", "compétences techniques", "compétences professionnelles", "competences professionnelles", "compétences personnelles", "competences personnelles", "professional skills", "soft skills"),
     "experience": ("expériences", "experiences", "expérience", "experience", "expérience professionnelle", "expérience professionel", "experience professionel", "expériences professionnelles", "work experience", "professional experience", "employment", "parcours professionnel"),
@@ -83,9 +86,21 @@ WORK_CONDITION_PATTERN = re.compile(
 TECH_SKILL_PATTERN = re.compile(
     r"\b(?:python|django|flask|fastapi|java|spring|javascript|typescript|angular|react(?:\.js)?|"
     r"vue(?:\.js)?|node(?:\.js)?|php|laravel|symfony|c\+\+|c#|\.net|sql|postgresql|mysql|"
-    r"mongodb|docker|kubernetes|git|linux|aws|azure|gcp|power\s*bi|excel)\b",
+    r"mongodb|docker|kubernetes|git|linux|aws|azure|gcp|power\s*bi|excel|tensorflow|"
+    r"machine\s+learning|rest\s*api|drf|postgres|python3|js)\b",
     re.I,
 )
+
+SKILL_ALIASES = {
+    "python3": "Python", "python": "Python", "django": "Django",
+    "drf": "Django REST Framework", "django rest framework": "Django REST Framework",
+    "js": "JavaScript", "javascript": "JavaScript", "typescript": "TypeScript",
+    "postgres": "PostgreSQL", "postgresql": "PostgreSQL", "mysql": "MySQL",
+    "rest api": "REST API", "restful api": "REST API", "api rest": "REST API",
+    "ml": "Machine Learning", "machine learning": "Machine Learning",
+    "power bi": "Power BI", "tensorflow": "TensorFlow", "git": "Git",
+    "docker": "Docker", "angular": "Angular", "java": "Java", "sql": "SQL",
+}
 
 
 class CVExtractionError(ValueError):
@@ -108,12 +123,52 @@ def _extract_pdf(file_bytes: bytes) -> ExtractedDocument:
     except (pymupdf.FileDataError, RuntimeError, ValueError) as exc:
         raise CVExtractionError("Le CV PDF est invalide ou corrompu.") from exc
 
-    if not re.sub(r"\s+", "", text):
+    if _usable_character_count(text) >= MIN_USABLE_PDF_CHARACTERS:
+        return ExtractedDocument(text, "PDF_TEXT", [])
+    try:
+        ocr_text = _ocr_pdf(file_bytes)
+    except CVExtractionError as exc:
         raise CVExtractionError(
-            "Ce PDF ne contient pas de texte exploitable. "
-            "Veuillez utiliser un PDF textuel ou un fichier DOCX."
+            "Ce PDF ne contient pas de texte exploitable en extraction normale et semble scanné. "
+            f"{exc}"
+        ) from exc
+    if _usable_character_count(ocr_text) < MIN_USABLE_PDF_CHARACTERS:
+        raise CVExtractionError(
+            "L’OCR a été exécuté, mais le CV scanné ne contient pas assez de texte exploitable."
         )
-    return ExtractedDocument(text, "PDF_TEXT", [])
+    return ExtractedDocument(
+        ocr_text,
+        "PDF_OCR",
+        ["Le PDF ne contenait presque aucun texte : une extraction OCR de secours a été utilisée."],
+    )
+
+
+def _usable_character_count(text: str) -> int:
+    return sum(character.isalnum() for character in text)
+
+
+def _ocr_pdf(file_bytes: bytes) -> str:
+    """Best-effort OCR fallback. Imports remain optional by design."""
+    try:
+        import pymupdf
+        import pytesseract
+        from PIL import Image
+    except ImportError as exc:
+        raise CVExtractionError(
+            "Le composant OCR optionnel n’est pas installé ; fournissez un PDF textuel ou un DOCX."
+        ) from exc
+    try:
+        texts = []
+        with pymupdf.open(stream=file_bytes, filetype="pdf") as document:
+            for page in document:
+                pixmap = page.get_pixmap(matrix=pymupdf.Matrix(2, 2), alpha=False)
+                image = Image.open(BytesIO(pixmap.tobytes("png")))
+                texts.append(pytesseract.image_to_string(image, lang="fra+eng"))
+        return "\n".join(texts)
+    except Exception as exc:
+        raise CVExtractionError(
+            "L’OCR optionnel est indisponible ou n’a pas pu lire ce document."
+        ) from exc
 
 
 def _ordered_pdf_page_text(page) -> str:
@@ -316,7 +371,11 @@ def _normalize_skills(skills: list[str]) -> list[str]:
     if "react" in folded and "native" in folded:
         skills = [skill for skill in skills if _fold(skill) not in {"react", "native"}]
         skills.append("React Native")
-    return _unique(skills)
+    normalized = []
+    for skill in skills:
+        cleaned = re.sub(r"\s+", " ", skill).strip()
+        normalized.append(SKILL_ALIASES.get(_fold(cleaned), cleaned))
+    return _unique(normalized)
 
 
 def _fold(value: str) -> str:
@@ -507,6 +566,22 @@ def _without_date(value: str) -> str:
     return re.sub(r"(?:\s*\|\s*){2,}", " ", value).strip(" -–—|,")
 
 
+def _normalize_experience_position(value: str, max_length: int = 255) -> str:
+    """Keep an extracted position as a title, never as a responsibility paragraph."""
+    value = re.sub(r"\s+", " ", value).strip(" \t\r\n-–—|,;:•")
+    if not value:
+        return ""
+    # OCR/layout extraction can join the title to bullets or responsibility
+    # sentences. The complete source remains available in ``description``.
+    value = re.split(r"\s*(?:[•●▪◦]|\s[-–—]\s|[.;]\s+)\s*", value, maxsplit=1)[0].strip()
+    if len(value) <= max_length:
+        return value
+    shortened = value[:max_length].rstrip()
+    if " " in shortened:
+        shortened = shortened.rsplit(" ", 1)[0]
+    return shortened.rstrip(" -–—|,;:")
+
+
 def _experience_records(lines: list[str]) -> list[dict]:
     records = []
     pending: list[str] = []
@@ -548,6 +623,7 @@ def _experience_records(lines: list[str]) -> list[dict]:
                     ),
                     "",
                 )
+        position = _normalize_experience_position(position)
         description = "\n".join(_unique(content))
         record = {
             "position": position, "company": company,
@@ -702,20 +778,183 @@ def extract_cv(application: Application, *, force=False) -> CVAnalysis:
     return analysis
 
 
+def _skill_set(values) -> dict[str, str]:
+    result = {}
+    for value in values:
+        canonical = _normalize_skills([value])
+        if canonical:
+            result[_fold(canonical[0])] = canonical[0]
+    return result
+
+
+def _offer_skills(offer: Offer) -> list[str]:
+    return _normalize_skills(
+        [item for item in re.split(r"[,;\n|]", offer.required_skills) if item.strip()]
+    )
+
+
+def _parse_month(value: str, *, end=False) -> int | None:
+    folded = _fold(value.strip())
+    if not folded:
+        return None
+    if folded in {"present", "actuel", "current", "aujourd'hui"}:
+        today = date.today()
+        return today.year * 12 + today.month
+    numeric = re.fullmatch(r"(?:(0?[1-9]|1[0-2])[/.-])?(\d{4})", folded)
+    if numeric:
+        month = int(numeric.group(1) or (12 if end else 1))
+        return int(numeric.group(2)) * 12 + month
+    months = {
+        "janvier": 1, "january": 1, "fevrier": 2, "february": 2,
+        "mars": 3, "march": 3, "avril": 4, "april": 4, "mai": 5, "may": 5,
+        "juin": 6, "june": 6, "juillet": 7, "july": 7, "aout": 8, "august": 8,
+        "septembre": 9, "september": 9, "octobre": 10, "october": 10,
+        "novembre": 11, "november": 11, "decembre": 12, "december": 12,
+    }
+    named = re.fullmatch(r"([a-z]+)\s+(\d{4})", folded)
+    if named and named.group(1) in months:
+        return int(named.group(2)) * 12 + months[named.group(1)]
+    return None
+
+
+def approximate_experience_years(experiences: list[dict]) -> float | None:
+    """Conservatively merge dated employment intervals and return years."""
+    intervals = []
+    for experience in experiences:
+        start = _parse_month(str(experience.get("start_date", "")))
+        end = _parse_month(str(experience.get("end_date", "")), end=True)
+        if start is not None and end is not None and end >= start:
+            intervals.append((start, end))
+    if not intervals:
+        return None
+    intervals.sort()
+    merged = []
+    for start, end in intervals:
+        if merged and start <= merged[-1][1] + 1:
+            merged[-1] = (merged[-1][0], max(merged[-1][1], end))
+        else:
+            merged.append((start, end))
+    months = sum(end - start + 1 for start, end in merged)
+    return round(months / 12, 1)
+
+
+EDUCATION_RANK = {
+    "FIRST_YEAR": 1, "SECOND_YEAR": 2, "THIRD_YEAR": 3, "DUT": 3, "BTS": 3,
+    "BACHELOR": 3, "FOURTH_YEAR": 4, "MASTER": 5, "FIFTH_YEAR": 5,
+    "ENGINEERING": 5, "DOCTORATE": 6,
+}
+
+
+def _candidate_education_rank(application: Application, analysis: CVAnalysis) -> int | None:
+    detected = " ".join(
+        [*analysis.diplomas, *(item.get("title", "") for item in analysis.education)]
+    )
+    folded = _fold(detected)
+    text_rank = None
+    for pattern, rank in (
+        (r"doctorat|ph\.?d", 6), (r"ingenieur|master", 5),
+        (r"licence|bachelor", 3), (r"\bdut\b|\bbts\b", 3),
+    ):
+        if re.search(pattern, folded):
+            text_rank = rank
+            break
+    profile_rank = EDUCATION_RANK.get(application.candidate_profile.study_level)
+    return max((rank for rank in (text_rank, profile_rank) if rank is not None), default=None)
+
+
+def _score_label(score: float) -> str:
+    if score >= 90: return "Excellent match"
+    if score >= 75: return "Strong match"
+    if score >= 60: return "Moderate match"
+    if score >= 40: return "Weak match"
+    return "Very weak match"
+
+
+def _candidate_summary(*, matched, missing, experience_years, education_score, score) -> str:
+    sentences = []
+    if matched:
+        sentences.append(f"Le profil correspond notamment sur : {', '.join(matched[:6])}.")
+    else:
+        sentences.append("Aucune compétence requise n’a été identifiée avec suffisamment de certitude.")
+    if experience_years is not None:
+        sentences.append(f"Environ {experience_years:g} année(s) d’expérience datée ont été identifiées.")
+    if education_score is not None:
+        sentences.append("Le niveau d’études détecté répond au critère de l’offre." if education_score == 100 else "Le niveau d’études détecté ne permet pas de confirmer entièrement le critère de l’offre.")
+    if missing:
+        sentences.append(f"Principales compétences manquantes : {', '.join(missing[:6])}.")
+    sentences.append(f"Correspondance globale : {_score_label(score)} ({score:.0f} %). Cette note est une aide à la décision et ne provoque aucun rejet automatique.")
+    return " ".join(sentences)
+
+
+def calculate_match(application: Application, offer: Offer, analysis: CVAnalysis) -> dict:
+    candidate = _skill_set(analysis.skills)
+    required = _skill_set(_offer_skills(offer))
+    matched_keys = sorted(required.keys() & candidate.keys())
+    missing_keys = sorted(required.keys() - candidate.keys())
+    additional_keys = sorted(candidate.keys() - required.keys())
+    matched = [required[key] for key in matched_keys]
+    missing = [required[key] for key in missing_keys]
+    additional = [candidate[key] for key in additional_keys]
+
+    components = {}
+    weighted = []
+    if required:
+        skill_score = round(100 * len(matched) / len(required), 2)
+        components["skills"] = {"score": skill_score, "weight": 50, "available": True}
+        weighted.append((skill_score, 50))
+    else:
+        components["skills"] = {"score": None, "weight": 50, "available": False}
+
+    years = approximate_experience_years(analysis.experiences)
+    components["experience"] = {
+        "score": None, "weight": 25, "available": False,
+        "candidate_years": years, "required_years": None,
+        "explanation": "L’offre ne contient pas de critère d’expérience chiffré.",
+    }
+
+    required_rank = EDUCATION_RANK.get(offer.required_level)
+    candidate_rank = _candidate_education_rank(application, analysis)
+    if required_rank:
+        education_score = None if candidate_rank is None else (100 if candidate_rank >= required_rank else round(100 * candidate_rank / required_rank, 2))
+        components["education"] = {"score": education_score, "weight": 15, "available": education_score is not None}
+        if education_score is not None:
+            weighted.append((education_score, 15))
+    else:
+        education_score = None
+        components["education"] = {"score": None, "weight": 15, "available": False}
+    components["additional"] = {"score": None, "weight": 10, "available": False}
+
+    total_weight = sum(weight for _, weight in weighted)
+    score = round(sum(value * weight for value, weight in weighted) / total_weight, 2) if total_weight else 0.0
+    components["normalized_weight"] = total_weight
+    components["label"] = _score_label(score)
+    return {
+        "score": score, "matched_skills": matched, "missing_skills": missing,
+        "additional_skills": additional, "score_breakdown": components,
+        "candidate_summary": _candidate_summary(
+            matched=matched, missing=missing, experience_years=years,
+            education_score=education_score, score=score,
+        ),
+        "explanation": f"Score déterministe calculé sur {total_weight} point(s) de critères disponibles, puis normalisé sur 100.",
+        "algorithm_version": MATCHING_VERSION,
+    }
+
+
 @transaction.atomic
-def match_application(application: Application) -> list[ApplicationMatch]:
+def match_application(application: Application, *, include_recommendations=True) -> list[ApplicationMatch]:
     analysis = getattr(application, "cv_analysis", None) or extract_cv(application)
-    candidate_skills = {skill.casefold() for skill in analysis.skills}
     results = []
-    offers = Offer.objects.exclude(required_skills="")
+    offers = Offer.objects.all()
     if application.offer_id:
         offers = offers.filter(pk=application.offer_id)
     for offer in offers:
-        required = {item.strip().casefold() for item in re.split(r"[,;\n]", offer.required_skills) if item.strip()}
-        matched, missing = sorted(required & candidate_skills), sorted(required - candidate_skills)
-        score = round(100 * len(matched) / len(required), 2) if required else 0
-        item, _ = ApplicationMatch.objects.update_or_create(application=application, offer=offer, defaults={"score": score, "matched_skills": matched, "missing_skills": missing, "explanation": f"{len(matched)} compétence(s) correspondante(s) sur {len(required)} requise(s).", "human_decision": "PENDING", "reviewed_by": None, "reviewed_at": None})
+        defaults = calculate_match(application, offer, analysis)
+        item, _ = ApplicationMatch.objects.update_or_create(
+            application=application, offer=offer, defaults=defaults,
+        )
         results.append(item)
+    if not include_recommendations:
+        return results
     missing_all = {skill for item in results for skill in item.missing_skills}
     from apps.trainings.models import Training
     for training in Training.objects.all():
@@ -724,3 +963,24 @@ def match_application(application: Application) -> list[ApplicationMatch]:
         if covered:
             TrainingRecommendation.objects.update_or_create(application=application, training=training, defaults={"score": round(100 * len(covered) / len(missing_all), 2), "skill_gaps": covered, "explanation": f"Cette formation couvre {len(covered)} écart(s) de compétences détecté(s).", "human_decision": "PENDING"})
     return results
+
+
+def rank_offer_candidates(offer: Offer) -> list[dict]:
+    applications = offer.applications.select_related(
+        "candidate_profile__user", "cv_analysis"
+    ).prefetch_related("documents").order_by("submitted_at", "id")
+    rows = []
+    for application in applications:
+        try:
+            match = match_application(application, include_recommendations=False)[0]
+            rows.append({"application": application, "match": match, "analysis_error": ""})
+        except (CVExtractionError, IndexError) as exc:
+            rows.append({"application": application, "match": None, "analysis_error": str(exc)})
+    return sorted(
+        rows,
+        key=lambda row: (
+            -(float(row["match"].score) if row["match"] else -1),
+            row["application"].submitted_at,
+            row["application"].id,
+        ),
+    )

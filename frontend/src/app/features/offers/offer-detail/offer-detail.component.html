@@ -29,6 +29,29 @@
         </div>
       </mat-card-content>
     </mat-card>
+
+    <mat-card *ngIf="isSuperAdmin" class="ranking-card">
+      <mat-card-header><mat-card-title>Classement des candidats</mat-card-title></mat-card-header>
+      <mat-card-content>
+        <div class="ranking-loading" *ngIf="rankingLoading"><mat-spinner diameter="32"></mat-spinner> Analyse des candidatures…</div>
+        <p class="error-state" *ngIf="rankingError">{{ rankingError }}</p>
+        <p *ngIf="!rankingLoading && !ranking.length && !rankingError">Aucune candidature associée à cette offre.</p>
+        <ol class="ranking-list" *ngIf="!rankingLoading && ranking.length">
+          <li *ngFor="let row of ranking">
+            <div class="rank-number">{{ row.rank }}</div>
+            <div class="rank-content">
+              <a [routerLink]="['/applications', row.application]"><strong>{{ row.candidate_name || 'Candidat #' + row.application }}</strong></a>
+              <ng-container *ngIf="row.match; else analysisFailed">
+                <span>{{ row.match.score | number:'1.0-0' }}% — {{ matchLabel(row.match.score) }}</span>
+                <mat-progress-bar mode="determinate" [value]="row.match.score"></mat-progress-bar>
+              </ng-container>
+              <ng-template #analysisFailed><span class="analysis-error">Analyse indisponible — {{ row.analysis_error }}</span></ng-template>
+            </div>
+          </li>
+        </ol>
+        <small>Classement déterministe par score, puis date de candidature et identifiant. Aucun rejet automatique.</small>
+      </mat-card-content>
+    </mat-card>
   </div>
 
   <div class="side-column">
