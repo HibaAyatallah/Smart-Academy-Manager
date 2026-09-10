@@ -189,6 +189,26 @@ OLLAMA_TIMEOUT = env.int("OLLAMA_TIMEOUT", default=120)
 OLLAMA_KEEP_ALIVE = env("OLLAMA_KEEP_ALIVE", default="10m")
 OLLAMA_MAX_HISTORY = env.int("OLLAMA_MAX_HISTORY", default=10)
 OLLAMA_NUM_PREDICT = env.int("OLLAMA_NUM_PREDICT", default=300)
+RECRUITMENT_EMBEDDING_PROVIDER = env(
+    "RECRUITMENT_EMBEDDING_PROVIDER",
+    default="apps.recruitment.embeddings.OllamaEmbeddingProvider",
+)
+RECRUITMENT_OLLAMA_BASE_URL = env("RECRUITMENT_OLLAMA_BASE_URL", default=OLLAMA_BASE_URL)
+RECRUITMENT_EMBEDDING_MODEL = env("RECRUITMENT_EMBEDDING_MODEL", default="bge-m3")
+RECRUITMENT_EMBEDDING_TIMEOUT = env.int("RECRUITMENT_EMBEDDING_TIMEOUT", default=30)
+RECRUITMENT_EMBEDDING_VERSION = env("RECRUITMENT_EMBEDDING_VERSION", default="bge-m3-v1")
+RAG_VECTOR_STORE = env(
+    "RAG_VECTOR_STORE",
+    default="apps.recruitment.rag.vector_store.ChromaVectorStore",
+)
+RAG_CHROMA_PATH = env("RAG_CHROMA_PATH", default=str(BASE_DIR / "chroma"))
+RAG_CHROMA_COLLECTION = env("RAG_CHROMA_COLLECTION", default="smart_academy_cv_chunks")
+RAG_INDEX_VERSION = env("RAG_INDEX_VERSION", default="cv-rag-v1")
+RAG_CHUNK_SIZE = env.int("RAG_CHUNK_SIZE", default=900)
+RAG_CHUNK_OVERLAP = env.int("RAG_CHUNK_OVERLAP", default=150)
+RAG_MAX_TOP_K = env.int("RAG_MAX_TOP_K", default=20)
+ASSISTANT_RAG_MIN_SIMILARITY = env.float("ASSISTANT_RAG_MIN_SIMILARITY", default=0.35)
+ASSISTANT_RAG_TOP_K = env.int("ASSISTANT_RAG_TOP_K", default=5)
 
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 AUTH_USER_MODEL = "accounts.User"
@@ -226,7 +246,7 @@ REST_FRAMEWORK = {
         "rest_framework.throttling.UserRateThrottle",
     ),
     "DEFAULT_THROTTLE_RATES": {
-        "anon": env("ANON_THROTTLE_RATE", default="20/hour"),
+        "anon": env("ANON_THROTTLE_RATE", default="200/hour"),
         "user": env("USER_THROTTLE_RATE", default="60/minute"),
         "login": env("LOGIN_THROTTLE_RATE", default="10/minute"),
         "public_submission": env("PUBLIC_SUBMISSION_THROTTLE_RATE", default="5/hour"),

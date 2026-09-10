@@ -536,7 +536,7 @@ class ApplicationDocumentAdmin(admin.ModelAdmin):
         ordering="application__candidate_profile__user__email",
     )
     def candidate_email(self, obj):
-        return obj.application.candidate_profile.user.email
+        return obj.application.candidate_profile.display_email
 
     @admin.display(description="Type de document", ordering="document_type_order")
     def document_type_display(self, obj):

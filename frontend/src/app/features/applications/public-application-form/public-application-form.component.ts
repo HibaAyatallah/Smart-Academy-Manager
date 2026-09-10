@@ -186,6 +186,7 @@ export class PublicApplicationFormComponent {
   });
 
   publishedOffers: Offer[] = [];
+  readonly requestedOfferId = this.parseOfferId(this.route.snapshot.queryParamMap.get('offer'));
 
   constructor() {
     this.form.controls.academic.controls.study_level.valueChanges.subscribe((value) => {
@@ -201,14 +202,26 @@ export class PublicApplicationFormComponent {
   }
 
   ngOnInit(): void {
+    if (this.requestedOfferId !== null) {
+      this.form.controls.professional.controls.offer.setValue(this.requestedOfferId);
+    }
+
     this.offerService.getOffers({ status: 'PUBLISHED' }).subscribe(res => {
       this.publishedOffers = res.results;
-      
-      const offerId = this.route.snapshot.queryParamMap.get('offer');
-      if (offerId) {
-        this.form.controls.professional.patchValue({ offer: Number(offerId) });
+      const requestedOffer = this.publishedOffers.find(({ id }) => id === this.requestedOfferId);
+      if (requestedOffer) {
+        this.form.controls.professional.patchValue({
+          offer: requestedOffer.id,
+          application_type: requestedOffer.application_type,
+        });
       }
     });
+  }
+
+  private parseOfferId(value: string | null): number | null {
+    if (!value || !/^\d+$/.test(value)) return null;
+    const id = Number(value);
+    return Number.isSafeInteger(id) && id > 0 ? id : null;
   }
 
   async onFileSelected(event: Event, target: RequiredFileTarget): Promise<void> {

@@ -103,6 +103,7 @@
         </mat-card-header>
         <mat-card-content>
           <p><strong>Référence :</strong> #{{ application.id }}</p>
+          <p><strong>Offre :</strong> {{ application.offer_title || 'Candidature spontanée' }}</p>
           <p><strong>Type de stage :</strong> {{ typeLabel(application.application_type) }}</p>
           <p><strong>Statut :</strong> {{ statusLabel(application.status) }}</p>
           <p><strong>Depot :</strong> {{ application.submitted_at | date:'dd/MM/yyyy HH:mm' }}</p>

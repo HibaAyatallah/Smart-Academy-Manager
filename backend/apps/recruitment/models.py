@@ -35,9 +35,14 @@ def application_document_upload_to(instance, filename: str) -> str:
 class CandidateProfile(models.Model):
     user = models.OneToOneField(
         settings.AUTH_USER_MODEL,
-        on_delete=models.CASCADE,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
         related_name="candidate_profile",
     )
+    account_email = models.EmailField(blank=True)
+    account_first_name = models.CharField(max_length=150, blank=True)
+    account_last_name = models.CharField(max_length=150, blank=True)
     phone_number = models.CharField(max_length=32)
     current_school = models.CharField(max_length=255)
     study_level = models.CharField(max_length=32, choices=StudyLevel.choices)
@@ -54,7 +59,25 @@ class CandidateProfile(models.Model):
         ordering = ["user__email"]
 
     def __str__(self) -> str:
-        return self.user.email
+        return self.user.email if self.user_id else self.account_email or f"Candidat #{self.pk}"
+
+    @property
+    def display_email(self) -> str:
+        return self.user.email if self.user_id else self.account_email
+
+    @property
+    def display_first_name(self) -> str:
+        return self.user.first_name if self.user_id else self.account_first_name
+
+    @property
+    def display_last_name(self) -> str:
+        return self.user.last_name if self.user_id else self.account_last_name
+
+    @property
+    def display_full_name(self) -> str:
+        if self.user_id:
+            return self.user.full_name
+        return f"{self.account_first_name} {self.account_last_name}".strip() or self.account_email
 
 
 class Offer(models.Model):
@@ -69,6 +92,12 @@ class Offer(models.Model):
     )
     required_skills = models.TextField(blank=True)
     required_level = models.CharField(max_length=32, choices=StudyLevel.choices, blank=True)
+    required_experience_years = models.DecimalField(
+        max_digits=4,
+        decimal_places=1,
+        null=True,
+        blank=True,
+    )
     number_of_positions = models.PositiveIntegerField(default=1)
     location = models.CharField(max_length=255, blank=True)
     start_date = models.DateField(null=True, blank=True)
@@ -141,7 +170,7 @@ class Application(models.Model):
         ]
 
     def __str__(self) -> str:
-        return f"{self.candidate_profile.user.email} - {self.application_type}"
+        return f"{self.candidate_profile.display_email} - {self.application_type}"
 
     @property
     def candidate(self):
@@ -457,6 +486,7 @@ class CVAnalysis(models.Model):
     certifications = models.JSONField(default=list)
     extraction_warnings = models.JSONField(default=list)
     extraction_method = models.CharField(max_length=32, blank=True)
+    raw_text = models.TextField(blank=True)
     source_sha256 = models.CharField(max_length=64)
     extractor_version = models.CharField(max_length=32, default="rules-v1")
     human_validated = models.BooleanField(default=False)
@@ -477,6 +507,12 @@ class ApplicationMatch(models.Model):
     candidate_summary = models.TextField(blank=True)
     explanation = models.TextField()
     algorithm_version = models.CharField(max_length=32, default="skills-v1")
+    candidate_fingerprint = models.CharField(max_length=64, blank=True)
+    offer_fingerprint = models.CharField(max_length=64, blank=True)
+    candidate_representation_hash = models.CharField(max_length=64, blank=True)
+    offer_representation_hash = models.CharField(max_length=64, blank=True)
+    semantic_score = models.DecimalField(max_digits=5, decimal_places=2, null=True, blank=True)
+    semantic_model = models.CharField(max_length=120, blank=True)
     human_decision = models.CharField(max_length=16, choices=[("PENDING","Pending"),("APPROVED","Approved"),("REJECTED","Rejected")], default="PENDING")
     reviewed_by = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL)
     reviewed_at = models.DateTimeField(null=True, blank=True)
@@ -486,6 +522,49 @@ class ApplicationMatch(models.Model):
     class Meta:
         constraints = [models.UniqueConstraint(fields=["application", "offer"], name="unique_application_offer_match")]
         ordering = ["-score", "-created_at"]
+
+
+class EmbeddingCache(models.Model):
+    """Exact-key cache for embeddings; it provides no vector search capability."""
+
+    representation_hash = models.CharField(max_length=64)
+    model_identifier = models.CharField(max_length=180)
+    vector = models.JSONField()
+    dimensions = models.PositiveIntegerField()
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(
+                fields=["representation_hash", "model_identifier"],
+                name="unique_recruitment_embedding_cache",
+            )
+        ]
+
+
+class CVRAGIndexState(models.Model):
+    """MySQL manifest for a CV's external Chroma index state."""
+
+    application = models.OneToOneField(
+        Application,
+        on_delete=models.CASCADE,
+        related_name="rag_index_state",
+    )
+    application_document = models.ForeignKey(
+        ApplicationDocument,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="rag_index_states",
+    )
+    cv_sha256 = models.CharField(max_length=64)
+    extractor_version = models.CharField(max_length=32)
+    rag_index_version = models.CharField(max_length=32)
+    embedding_model = models.CharField(max_length=180)
+    content_fingerprint = models.CharField(max_length=64)
+    chunk_count = models.PositiveIntegerField(default=0)
+    indexed_at = models.DateTimeField(auto_now=True)
 
 
 class TrainingRecommendation(models.Model):

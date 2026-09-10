@@ -6,6 +6,10 @@ import { PaginatedResponse } from '../models/application.models';
 import { BusinessUnit, BusinessUnitMembership, BusinessUnitNeed } from '../models/business-unit.models';
 import { UserProfile } from '../models/auth.models';
 
+export type EligibleSupervisor = Pick<UserProfile, 'id' | 'email' | 'full_name' | 'role'> & {
+  role_label: string;
+};
+
 @Injectable({
   providedIn: 'root'
 })
@@ -103,5 +107,9 @@ export class BusinessUnitService {
     let httpParams = new HttpParams();
     if (params?.role) httpParams = httpParams.set('role', params.role);
     return this.http.get<PaginatedResponse<UserProfile>>(`${this.baseUrl}users/`, { params: httpParams });
+  }
+
+  getEligibleSupervisors(id: number): Observable<EligibleSupervisor[]> {
+    return this.http.get<EligibleSupervisor[]>(`${this.baseUrl}business-units/${id}/supervisors/`);
   }
 }

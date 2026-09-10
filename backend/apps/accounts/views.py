@@ -11,6 +11,7 @@ from rest_framework.response import Response
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework_simplejwt.views import TokenObtainPairView
 from django_filters.rest_framework import DjangoFilterBackend
+from django.db import transaction
 from rest_framework.filters import OrderingFilter, SearchFilter
 
 from .permissions import CanManageUsers
@@ -195,7 +196,12 @@ class UserViewSet(viewsets.ModelViewSet):
 
     def get_queryset(self):
         if is_super_admin(self.request.user):
-            return User.objects.all()
+            queryset = User.objects.all()
+            # Operational user lists contain active accounts by default. The
+            # administration can still explicitly request archived accounts.
+            if self.action == "list" and "is_active" not in self.request.query_params:
+                queryset = queryset.filter(is_active=True)
+            return queryset
         return User.objects.none()
 
     def get_serializer_class(self):
@@ -204,16 +210,15 @@ class UserViewSet(viewsets.ModelViewSet):
         return UserSerializer
 
     def perform_destroy(self, instance):
-        instance.is_active = False
-        instance.save(update_fields=["is_active", "updated_at"])
+        from .services.user_deletion import delete_user_account
+
+        delete_user_account(user=instance, actor=self.request.user, reason="MANUAL_SUPER_ADMIN")
 
 
 from rest_framework.parsers import MultiPartParser, FormParser
 from rest_framework.decorators import action
 from .permissions import IsSuperAdminOnly
 from .services.bulk_import import parse_and_validate_file, execute_import
-from django.db import transaction
-
 class UserImportSchemaSerializer(serializers.Serializer):
     """Schema marker for import preview and confirmation actions."""
 

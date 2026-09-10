@@ -41,6 +41,11 @@ class TrainingSessionSerializer(serializers.ModelSerializer):
         end = attrs.get("end_date", getattr(self.instance, "end_date", None))
         old_start = getattr(self.instance, "start_date", None) if self.instance else None
         old_end = getattr(self.instance, "end_date", None) if self.instance else None
+        trainer = attrs.get("trainer", getattr(self.instance, "trainer", None))
+        if trainer and (
+            not trainer.is_active or trainer.role != UserRole.TRAINER_TUTOR
+        ):
+            errors["trainer"] = "Le formateur doit être un compte formateur actif."
         if "start_date" in attrs and start and start != old_start and start < today:
             errors["start_date"] = "La date ne peut pas être antérieure à aujourd’hui."
         if "end_date" in attrs and end and end != old_end and end < today:
@@ -78,6 +83,13 @@ class TrainingSerializer(serializers.ModelSerializer):
             "sessions", "created_by", "created_at", "updated_at"
         ]
         read_only_fields = ["id", "status", "created_by", "created_at", "updated_at"]
+
+    def validate_trainer(self, value):
+        if value and (not value.is_active or value.role != UserRole.TRAINER_TUTOR):
+            raise serializers.ValidationError(
+                "Le formateur doit être un compte formateur actif."
+            )
+        return value
 
 
 class ClientTrainingSessionSerializer(serializers.ModelSerializer):
@@ -195,6 +207,10 @@ class DirectEnrollmentSerializer(serializers.ModelSerializer):
         fields = ["user", "training", "session"]
 
     def validate(self, attrs):
+        if not attrs["user"].is_active:
+            raise serializers.ValidationError({
+                "user": "Cet utilisateur n’est plus actif."
+            })
         session = attrs['session']
         if session.training != attrs['training']:
             raise serializers.ValidationError("La session ne correspond pas à la formation.")

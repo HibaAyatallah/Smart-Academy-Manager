@@ -32,4 +32,19 @@ describe('UserManagementService', () => {
     expect(request.request.body).toEqual({ is_active: false });
     request.flush({ id: 7, is_active: false });
   });
+
+  it('sends the selected business unit when updating a user', () => {
+    service.updateUser(7, { business_unit_id: 4 }).subscribe();
+    const request = http.expectOne('/api/users/7/');
+    expect(request.request.method).toBe('PATCH');
+    expect(request.request.body).toEqual({ business_unit_id: 4 });
+    request.flush({ id: 7, business_units: [{ id: 4, name: 'Achat', code: 'Achat' }] });
+  });
+
+  it('deletes a user through the user detail endpoint', () => {
+    service.deleteUser(7).subscribe();
+    const request = http.expectOne('/api/users/7/');
+    expect(request.request.method).toBe('DELETE');
+    request.flush(null);
+  });
 });

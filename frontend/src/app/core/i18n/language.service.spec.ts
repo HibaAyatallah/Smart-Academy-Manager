@@ -13,6 +13,7 @@ describe('LanguageService',()=>{
     expect(localStorage.getItem('preferred_language')).toBe('fr');
     expect(document.documentElement.lang).toBe('fr');
     expect(service.translate('common.save')).toBe('Enregistrer');
+    expect(service.translate('public.offers')).toBe('Offres');
   });
   it('ignores an English profile preference and removes stale language storage',()=>{
     localStorage.setItem('smart-academy-language','en');
@@ -37,5 +38,6 @@ describe('LanguageService',()=>{
     expect(Object.keys(TRANSLATIONS.fr).sort()).toEqual(Object.keys(TRANSLATIONS.en).sort());
     expect(Object.values(TRANSLATIONS.fr).every(Boolean)).toBeTrue();
     expect(Object.values(TRANSLATIONS.en).every(Boolean)).toBeTrue();
+    expect(TRANSLATIONS.en['public.offers']).toBe('Offers');
   });
 });

@@ -123,4 +123,13 @@ mat-chip {
 .rank-number { display: grid; place-items: center; width: 34px; height: 34px; flex: 0 0 34px; border-radius: 50%; background: #e8f0fe; color: #1557b0; font-weight: 700; }
 .rank-content { display: grid; gap: 7px; flex: 1; min-width: 0; }
 .rank-content a { color: inherit; }
+.rank-heading { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+.relationship-badge { padding: 3px 9px; border-radius: 999px; background: #f2f4f7; color: #475467; font-size: 0.78rem; }
+.relationship-badge.direct { background: #e8f5e9; color: #2e7d32; }
+.match-details { margin-top: 4px; border-top: 1px solid #eaecf0; padding-top: 8px; }
+.match-details summary { cursor: pointer; color: #1557b0; font-weight: 600; }
+.score-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(145px, 1fr)); gap: 8px; margin-top: 12px; }
+.score-grid span, .skill-details div { display: grid; gap: 3px; }
+.skill-details { display: grid; gap: 10px; margin-top: 12px; }
+.skill-details span { color: #475467; overflow-wrap: anywhere; }
 .analysis-error { color: var(--error-color, #b42318); }

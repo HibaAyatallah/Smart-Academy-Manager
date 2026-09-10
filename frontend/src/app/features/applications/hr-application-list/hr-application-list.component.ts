@@ -61,7 +61,7 @@ export class HrApplicationListComponent implements OnInit {
     value: value as ApplicationStatus,
     label,
   }));
-  readonly displayedColumns = ['candidate', 'type', 'status', 'submitted_at', 'actions'];
+  readonly displayedColumns = ['candidate', 'offer', 'type', 'status', 'submitted_at', 'actions'];
   readonly filtersForm = this.formBuilder.nonNullable.group({
     search: [''],
     application_type: ['' as ApplicationType | ''],

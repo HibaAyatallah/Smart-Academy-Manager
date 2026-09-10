@@ -18,7 +18,7 @@ logger = logging.getLogger(__name__)
 
 from .choices import ApplicationStatus, OfferStatus
 from .models import (
-    Application, ApplicationDocument, Interview, Offer,
+    Application, ApplicationDocument, CVAnalysis, Interview, Offer,
     InternProfile, InternDocument, InternDocumentRequirement, InternEvaluation
 )
 from .permissions import (
@@ -62,7 +62,7 @@ class OfferViewSet(viewsets.ModelViewSet):
     permission_classes = [CanManageOffersOrReadPublished]
 
     def get_permissions(self):
-        if self.action == "candidate_ranking":
+        if self.action in {"candidate_ranking", "analyze_applications", "recalculate_matches"}:
             return [IsRecruitmentManager()]
         return super().get_permissions()
 
@@ -105,18 +105,41 @@ class OfferViewSet(viewsets.ModelViewSet):
 
         rows = rank_offer_candidates(self.get_object())
         data = []
-        for rank, row in enumerate(rows, start=1):
+        scored_rank = 0
+        for row in rows:
             application = row["application"]
             match = row["match"]
+            if match is not None:
+                scored_rank += 1
             data.append({
-                "rank": rank,
+                "rank": scored_rank if match is not None else None,
                 "application": application.id,
-                "candidate_name": application.candidate_profile.user.full_name,
+                "candidate_name": application.candidate_profile.display_full_name,
                 "submitted_at": application.submitted_at,
+                "relationship": row["relationship"],
+                "relationship_label": row["relationship_label"],
+                "applied_to_current_offer": row["applied_to_current_offer"],
+                "source_offer": application.offer_id,
+                "source_offer_title": application.offer.title if application.offer_id else "",
                 "analysis_error": row["analysis_error"],
                 "match": ApplicationMatchSerializer(match).data if match else None,
+                "score_details": match.score_breakdown if match else None,
+                "match_label": match.score_breakdown.get("label", "") if match else "",
             })
         return Response({"offer": self.get_serializer(self.get_object()).data, "ranking": data})
+
+    @action(detail=True, methods=["post"], url_path="analyze-applications")
+    def analyze_applications(self, request, pk=None):
+        from .analysis_pipeline import analyze_application_batch
+
+        offer = self.get_object()
+        return Response(analyze_application_batch(offer.applications.all()))
+
+    @action(detail=True, methods=["post"], url_path="recalculate-matches")
+    def recalculate_matches(self, request, pk=None):
+        from .analysis_pipeline import recalculate_offer_matches
+
+        return Response(recalculate_offer_matches(self.get_object()))
 from .services import log_sensitive_action, transition_application
 from apps.notifications.services import queue_email
 
@@ -140,6 +163,7 @@ class ApplicationViewSet(viewsets.ModelViewSet):
             "convert",
             "match_offers",
             "review_match",
+            "analyze_existing",
         }:
             return [IsRecruitmentManager()]
         return super().get_permissions()
@@ -177,16 +201,28 @@ class ApplicationViewSet(viewsets.ModelViewSet):
                 Q(candidate_profile__user__email__icontains=search)
                 | Q(candidate_profile__user__first_name__icontains=search)
                 | Q(candidate_profile__user__last_name__icontains=search)
+                | Q(candidate_profile__account_email__icontains=search)
+                | Q(candidate_profile__account_first_name__icontains=search)
+                | Q(candidate_profile__account_last_name__icontains=search)
             )
         return queryset
 
     @action(detail=True, methods=["post"], url_path="analyze-cv")
     def analyze_cv(self, request, pk=None):
-        from .intelligence import extract_cv
-        try:
-            analysis = extract_cv(self.get_object(), force=request.data.get("force") is True)
-        except ValueError as exc:
-            raise DRFValidationError({"detail": str(exc)}) from exc
+        from .analysis_pipeline import process_application_analysis
+
+        application = self.get_object()
+        force = request.data.get("force") is True
+        result = process_application_analysis(
+            application,
+            force_analysis=force,
+            force_matching=force,
+        )
+        if result.error:
+            raise DRFValidationError({"detail": result.error})
+        analysis = CVAnalysis.objects.filter(application=application).first()
+        if analysis is None:
+            raise DRFValidationError({"detail": "Analyse CV inexistante."})
         return Response(CVAnalysisSerializer(analysis).data)
 
     @action(detail=True, methods=["get", "patch"], url_path="cv-analysis")
@@ -202,11 +238,18 @@ class ApplicationViewSet(viewsets.ModelViewSet):
             first_name = serializer.validated_data.pop("first_name", None)
             last_name = serializer.validated_data.pop("last_name", None)
             analysis = serializer.save()
-            user = analysis.application.candidate_profile.user
+            profile = analysis.application.candidate_profile
+            user = profile.user
             changed = []
-            if first_name is not None: user.first_name = first_name; changed.append("first_name")
-            if last_name is not None: user.last_name = last_name; changed.append("last_name")
-            if changed: user.save(update_fields=[*changed, "updated_at"])
+            identity = user or profile
+            for field, value in (("first_name", first_name), ("last_name", last_name)):
+                if value is not None:
+                    field = field if user else f"account_{field}"
+                    setattr(identity, field, value)
+                    changed.append(field)
+            if changed: identity.save(update_fields=[*changed, "updated_at"])
+            from .analysis_pipeline import process_application_analysis
+            process_application_analysis(analysis.application)
         return Response(CVAnalysisSerializer(analysis).data)
 
     @action(detail=True, methods=["post"], url_path="upload-cv", parser_classes=[MultiPartParser, FormParser])
@@ -218,12 +261,11 @@ class ApplicationViewSet(viewsets.ModelViewSet):
         document = ApplicationDocument.objects.create(application=application, document_type="CV", file=uploaded,
             original_name=uploaded.name.rsplit("/", 1)[-1].rsplit("\\", 1)[-1], content_type=getattr(uploaded, "content_type", ""),
             size=uploaded.size, uploaded_by=request.user)
-        try:
-            from .intelligence import extract_cv
-            analysis = extract_cv(application, force=True)
-        except ValueError as exc:
+        result = getattr(document, "_analysis_result", None)
+        analysis = CVAnalysis.objects.filter(application=application).first()
+        if result is None or result.error:
             return Response({"document": ApplicationDocumentSerializer(document, context=self.get_serializer_context()).data,
-                             "analysis": None, "analysis_error": str(exc)}, status=status.HTTP_201_CREATED)
+                             "analysis": None, "analysis_error": result.error if result else "Le CV n’a pas pu être analysé."}, status=status.HTTP_201_CREATED)
         return Response({"document": ApplicationDocumentSerializer(document, context=self.get_serializer_context()).data,
                          "analysis": CVAnalysisSerializer(analysis).data, "analysis_error": ""}, status=status.HTTP_201_CREATED)
 
@@ -240,11 +282,16 @@ class ApplicationViewSet(viewsets.ModelViewSet):
 
     @action(detail=True, methods=["post"], url_path="match-offers")
     def match_offers(self, request, pk=None):
-        from .intelligence import match_application
-        try:
-            matches = match_application(self.get_object())
-        except ValueError as exc:
-            raise DRFValidationError({"detail": str(exc)}) from exc
+        from .analysis_pipeline import process_application_analysis
+
+        application = self.get_object()
+        result = process_application_analysis(
+            application,
+            include_recommendations=True,
+        )
+        if result.error:
+            raise DRFValidationError({"detail": result.error})
+        matches = application.matches.all()
         match_data = ApplicationMatchSerializer(matches, many=True).data
         recommendations = self.get_object().training_recommendations.select_related("training")
         return Response({"matches": match_data, "training_recommendations": [
@@ -252,6 +299,12 @@ class ApplicationViewSet(viewsets.ModelViewSet):
              "score": item.score, "skill_gaps": item.skill_gaps, "explanation": item.explanation,
              "human_decision": item.human_decision} for item in recommendations
         ]})
+
+    @action(detail=False, methods=["post"], url_path="analyze-existing")
+    def analyze_existing(self, request):
+        from .analysis_pipeline import analyze_application_batch
+
+        return Response(analyze_application_batch())
 
     @action(detail=True, methods=["post"], url_path="validate-cv")
     def validate_cv(self, request, pk=None):
@@ -265,17 +318,23 @@ class ApplicationViewSet(viewsets.ModelViewSet):
         analysis = serializer.save()
         profile = analysis.application.candidate_profile
         user = profile.user
-        if first_name is not None: user.first_name = first_name
-        if last_name is not None: user.last_name = last_name
-        if analysis.email and analysis.email != user.email and not type(user).objects.filter(email=analysis.email).exclude(pk=user.pk).exists(): user.email = analysis.email
+        if user:
+            if first_name is not None: user.first_name = first_name
+            if last_name is not None: user.last_name = last_name
+        else:
+            if first_name is not None: profile.account_first_name = first_name
+            if last_name is not None: profile.account_last_name = last_name
+            if analysis.email: profile.account_email = analysis.email
         if analysis.phone: profile.phone_number = analysis.phone
         if analysis.location: profile.address = analysis.location
-        user.save(update_fields=["first_name", "last_name", "email", "updated_at"])
-        profile.save(update_fields=["phone_number", "address", "updated_at"])
+        if user: user.save(update_fields=["first_name", "last_name", "updated_at"])
+        profile.save(update_fields=["phone_number", "address", "account_first_name", "account_last_name", "account_email", "updated_at"])
         analysis.human_validated = True
         analysis.validated_by = request.user
         analysis.validated_at = timezone.now()
         analysis.save(update_fields=["human_validated", "validated_by", "validated_at", "updated_at"])
+        from .analysis_pipeline import process_application_analysis
+        process_application_analysis(analysis.application)
         return Response(CVAnalysisSerializer(analysis).data)
 
     @action(detail=True, methods=["post"], url_path="review-match")

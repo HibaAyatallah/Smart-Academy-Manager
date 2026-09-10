@@ -1,5 +1,5 @@
 from django.contrib.auth import get_user_model
-from django.db import models
+from django.db import models, transaction
 from django.contrib.auth.password_validation import validate_password
 from django.contrib.auth.tokens import default_token_generator
 from django.utils.encoding import force_str
@@ -32,34 +32,98 @@ class UserBusinessUnitMixin:
     def validate_business_unit_id(self, value):
         if value is None:
             return value
+        from apps.business_units.choices import ALLOWED_BUSINESS_UNITS
         from apps.business_units.models import BusinessUnit
 
-        if not BusinessUnit.objects.filter(pk=value, is_active=True).exists():
+        if not BusinessUnit.objects.filter(
+            pk=value, is_active=True, code__in=ALLOWED_BUSINESS_UNITS
+        ).exists():
             raise serializers.ValidationError("Cette Business Unit n'existe pas ou n'est pas active.")
         return value
 
     def assign_business_unit(self, user, business_unit_id):
         from apps.business_units.models import BusinessUnit, BusinessUnitMembership
 
-        if user.role == UserRole.EMPLOYEE:
-            BusinessUnitMembership.objects.filter(user=user, is_active=True).exclude(
-                business_unit_id=business_unit_id
-            ).update(is_active=False)
-            if business_unit_id:
-                membership = BusinessUnitMembership.objects.filter(
-                    user=user, business_unit_id=business_unit_id, is_active=False
-                ).order_by("-joined_at").first()
-                if membership:
-                    membership.is_active = True
-                    membership.save(update_fields=["is_active"])
-                else:
-                    BusinessUnitMembership.objects.create(
-                        user=user, business_unit_id=business_unit_id, is_active=True
-                    )
-        elif user.role == UserRole.BU_MANAGER and business_unit_id:
-            BusinessUnit.objects.filter(pk=business_unit_id).update(manager=user)
-        elif user.role != UserRole.BU_MANAGER:
+        previous = self._current_business_unit(user)
+
+        # A manager has one current BU through BusinessUnit.manager; all other
+        # users use the existing membership relation. Historical project and
+        # training rows are intentionally not rewritten.
+        BusinessUnit.objects.filter(manager=user).exclude(
+            pk=business_unit_id if user.role == UserRole.BU_MANAGER else None
+        ).update(manager=None)
+        BusinessUnitMembership.objects.filter(user=user, is_active=True).exclude(
+            business_unit_id=business_unit_id if user.role != UserRole.BU_MANAGER else None
+        ).update(is_active=False)
+
+        if user.role == UserRole.BU_MANAGER:
             BusinessUnitMembership.objects.filter(user=user, is_active=True).update(is_active=False)
+            if business_unit_id:
+                BusinessUnit.objects.filter(pk=business_unit_id).update(manager=user)
+        elif business_unit_id:
+            membership = BusinessUnitMembership.objects.filter(
+                user=user, business_unit_id=business_unit_id, is_active=False
+            ).order_by("-joined_at").first()
+            if membership:
+                membership.is_active = True
+                membership.save(update_fields=["is_active"])
+            elif not BusinessUnitMembership.objects.filter(
+                user=user, business_unit_id=business_unit_id, is_active=True
+            ).exists():
+                BusinessUnitMembership.objects.create(
+                    user=user, business_unit_id=business_unit_id, is_active=True
+                )
+
+        # InternProfile also stores the operational BU. Keep it aligned when
+        # the user is already an intern, without touching internship history.
+        if user.role == UserRole.INTERN:
+            from apps.recruitment.models import InternProfile
+            InternProfile.objects.filter(user=user).update(business_unit_id=business_unit_id)
+
+        current = self._current_business_unit(user)
+        self._audit_business_unit_change(user, previous, current)
+
+    @staticmethod
+    def _current_business_unit(user):
+        from apps.business_units.models import BusinessUnit
+
+        return BusinessUnit.objects.filter(
+            models.Q(manager=user)
+            | models.Q(memberships__user=user, memberships__is_active=True)
+        ).distinct().order_by("id").first()
+
+    def _audit_business_unit_change(self, user, previous, current):
+        if getattr(previous, "pk", None) == getattr(current, "pk", None):
+            return
+        request = self.context.get("request")
+        actor = getattr(request, "user", None)
+        if not is_super_admin(actor):
+            return
+
+        from apps.notifications.models import AuditLog
+
+        AuditLog.objects.create(
+            actor=actor,
+            actor_email=actor.email,
+            method=request.method,
+            path=request.path[:500],
+            action="USER_BUSINESS_UNIT_CHANGED",
+            target_type="users",
+            target_id=str(user.pk),
+            status_code=201 if request.method == "POST" else 200,
+            metadata={
+                "user_id": user.pk,
+                "user_email": user.email,
+                "old_business_unit": self._business_unit_metadata(previous),
+                "new_business_unit": self._business_unit_metadata(current),
+            },
+        )
+
+    @staticmethod
+    def _business_unit_metadata(business_unit):
+        if not business_unit:
+            return None
+        return {"id": business_unit.pk, "code": business_unit.code, "name": business_unit.name}
 
 
 class SmartAcademyTokenObtainPairSerializer(TokenObtainPairSerializer):
@@ -108,9 +172,10 @@ class UserSerializer(UserBusinessUnitMixin, serializers.ModelSerializer):
 
     def update(self, instance, validated_data):
         business_unit_id = validated_data.pop("business_unit_id", None)
-        instance = super().update(instance, validated_data)
-        if "business_unit_id" in self.initial_data or "role" in self.initial_data:
-            self.assign_business_unit(instance, business_unit_id)
+        with transaction.atomic():
+            instance = super().update(instance, validated_data)
+            if "business_unit_id" in self.initial_data or "role" in self.initial_data:
+                self.assign_business_unit(instance, business_unit_id)
         return instance
 
 
@@ -138,8 +203,9 @@ class UserCreateSerializer(UserBusinessUnitMixin, serializers.ModelSerializer):
     def create(self, validated_data):
         business_unit_id = validated_data.pop("business_unit_id", None)
         password = validated_data.pop("password")
-        user = User.objects.create_user(password=password, **validated_data)
-        self.assign_business_unit(user, business_unit_id)
+        with transaction.atomic():
+            user = User.objects.create_user(password=password, **validated_data)
+            self.assign_business_unit(user, business_unit_id)
         return user
 
     def validate_role(self, value):

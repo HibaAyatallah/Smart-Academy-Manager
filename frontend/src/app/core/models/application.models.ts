@@ -122,13 +122,19 @@ export interface ApplicationMatch {
   score: number; matched_skills: string[]; missing_skills: string[]; additional_skills: string[];
   score_breakdown: Record<string, MatchScoreComponent | number | string>;
   candidate_summary: string; explanation: string; algorithm_version: string;
+  semantic_score: number | null; semantic_model: string;
   human_decision: 'PENDING' | 'APPROVED' | 'REJECTED'; reviewed_at: string | null;
   created_at: string; updated_at: string;
 }
 
 export interface CandidateRankingRow {
-  rank: number; application: number; candidate_name: string; submitted_at: string;
+  rank: number | null; application: number; candidate_name: string; submitted_at: string;
+  relationship: 'APPLIED_TO_OFFER' | 'OTHER_APPLICATION' | 'TALENT_POOL';
+  relationship_label: string; applied_to_current_offer: boolean;
+  source_offer: number | null; source_offer_title: string;
   analysis_error: string; match: ApplicationMatch | null;
+  score_details: Record<string, MatchScoreComponent | number | string> | null;
+  match_label: string;
 }
 
 export interface PaginatedResponse<T> {

@@ -7,5 +7,6 @@ PASSWORD_HASHERS = [
 ]
 
 EMAIL_BACKEND = "django.core.mail.backends.locmem.EmailBackend"
+RECRUITMENT_EMBEDDING_PROVIDER = "apps.recruitment.embeddings.DisabledEmbeddingProvider"
 
 TEST_RUNNER = "config.test_runner.IsolatedSeedDataTestRunner"

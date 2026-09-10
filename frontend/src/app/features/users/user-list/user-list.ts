@@ -6,6 +6,7 @@ import { MatCardModule } from '@angular/material/card';
 import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatInputModule } from '@angular/material/input';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
+import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
 import { MatPaginatorModule, PageEvent } from '@angular/material/paginator';
 import { MatSelectModule } from '@angular/material/select';
 import { MatTableModule } from '@angular/material/table';
@@ -14,16 +15,19 @@ import { finalize } from 'rxjs/operators';
 
 import { ROLE_LABELS, UserProfile, UserRole } from '../../../core/models/auth.models';
 import { UserManagementService } from '../../../core/services/user-management.service';
+import { AuthService } from '../../../core/services/auth.service';
 import { PageHeaderComponent } from '../../../shared/components/page-header/page-header.component';
 
 @Component({
   selector: 'app-user-list', standalone: true,
-  imports: [MatButtonModule, MatCardModule, MatFormFieldModule, MatInputModule, MatPaginatorModule, MatProgressSpinnerModule, MatSelectModule, MatTableModule, NgFor, NgIf, PageHeaderComponent, ReactiveFormsModule, RouterLink],
+  imports: [MatButtonModule, MatCardModule, MatFormFieldModule, MatInputModule, MatPaginatorModule, MatProgressSpinnerModule, MatSelectModule, MatSnackBarModule, MatTableModule, NgFor, NgIf, PageHeaderComponent, ReactiveFormsModule, RouterLink],
   templateUrl: './user-list.html', styleUrl: './user-list.scss',
 })
 export class UserList implements OnInit {
   private readonly service = inject(UserManagementService);
   private readonly formBuilder = inject(FormBuilder);
+  private readonly auth = inject(AuthService);
+  private readonly snackBar = inject(MatSnackBar);
   readonly roles = Object.keys(ROLE_LABELS) as UserRole[];
   readonly roleLabels = ROLE_LABELS;
   readonly columns = ['name', 'email', 'role', 'business_unit', 'active', 'actions'];
@@ -55,9 +59,36 @@ export class UserList implements OnInit {
 
   getRoleLabel(role: UserRole): string { return ROLE_LABELS[role]; }
 
+  canDelete(user: UserProfile): boolean {
+    const currentUser = this.auth.currentUserSnapshot;
+    return currentUser?.role === 'SUPER_ADMIN'
+      && currentUser.id !== user.id;
+  }
+
+  deleteUser(user: UserProfile): void {
+    if (!this.canDelete(user) || !window.confirm(
+      'Voulez-vous vraiment supprimer cet utilisateur ?'
+    )) return;
+
+    this.errorMessage = '';
+    this.service.deleteUser(user.id).subscribe({
+      next: () => {
+        this.snackBar.open('Utilisateur supprimé avec succès.', 'Fermer', { duration: 3000 });
+        const targetPage = this.users.length === 1 && this.pageIndex > 0
+          ? this.pageIndex
+          : this.pageIndex + 1;
+        this.loadUsers(targetPage);
+      },
+      error: error => {
+        this.errorMessage = error?.error?.detail
+          || 'Impossible de supprimer cet utilisateur. Veuillez réessayer.';
+      },
+    });
+  }
+
   toggleActive(user: UserProfile): void {
     this.service.updateUser(user.id, { is_active: !user.is_active }).subscribe({
-      next: updated => this.users = this.users.map(item => item.id === updated.id ? updated : item),
+      next: () => this.loadUsers(this.users.length === 1 && this.pageIndex > 0 ? this.pageIndex : this.pageIndex + 1),
       error: () => this.errorMessage = "Impossible de modifier l'état du compte.",
     });
   }

@@ -4,7 +4,7 @@ from rest_framework.test import APITestCase
 from apps.accounts.choices import UserRole
 from apps.accounts.models import User
 from apps.business_units.models import BusinessUnit, BusinessUnitMembership, BusinessUnitNeed
-from apps.business_units.choices import NeedStatus
+from apps.business_units.choices import BusinessUnitCode, NeedStatus
 from apps.recruitment.models import InternProfile
 from apps.projects.models import Project
 
@@ -73,6 +73,53 @@ class ReportTests(APITestCase):
         self.assertIn("validated_attendance", response.data["cards"])
         self.assertIn("filter_options", response.data)
         self.assertIn("insights", response.data)
+
+    def test_workforce_chart_contains_only_official_business_units(self):
+        official_bus = {
+            code: BusinessUnit.objects.create(name=code, code=code)
+            for code in BusinessUnitCode.values
+        }
+        software_employee = User.objects.create_user(
+            email="software-employee@test.com", password="pwd",
+            role=UserRole.EMPLOYEE,
+        )
+        BusinessUnitMembership.objects.create(
+            user=software_employee,
+            business_unit=official_bus[BusinessUnitCode.SOFTWARE],
+            is_active=True,
+        )
+        netsec_intern = User.objects.create_user(
+            email="netsec-intern@test.com", password="pwd",
+            role=UserRole.INTERN,
+        )
+        InternProfile.objects.create(
+            user=netsec_intern,
+            business_unit=official_bus[BusinessUnitCode.NETSEC],
+        )
+        unassigned_intern = User.objects.create_user(
+            email="unassigned-intern@test.com", password="pwd",
+            role=UserRole.INTERN,
+        )
+        InternProfile.objects.create(user=unassigned_intern, business_unit=None)
+
+        self.client.force_authenticate(self.admin)
+        response = self.client.get("/api/reports/summary/")
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        workforce = response.data["series"]["workforce_by_bu"]
+        self.assertEqual(
+            [row["business_unit"] for row in workforce],
+            ["NetSEC", "System", "Software", "Achat"],
+        )
+        self.assertNotIn("UNSPECIFIED", str(workforce))
+        self.assertEqual(workforce[0]["interns"], 1)
+        self.assertEqual(workforce[2]["collaborators"], 1)
+        self.assertEqual(workforce[1]["interns"], 0)
+        self.assertEqual(workforce[3]["collaborators"], 0)
+
+        # Missing BU relations must be omitted from every BU chart rather than
+        # exposed as a synthetic fifth Business Unit.
+        self.assertNotIn("UNSPECIFIED", str(response.data["series"]))
 
     def test_business_unit_filter_scopes_cards(self):
         self.client.force_authenticate(self.admin); response=self.client.get(f"/api/reports/summary/?business_unit={self.bu.id}")

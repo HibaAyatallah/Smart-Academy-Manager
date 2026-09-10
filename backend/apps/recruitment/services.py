@@ -86,7 +86,7 @@ def transition_application(application: Application, new_status: str, actor, com
             locked_application.rejection_reason = comment
             locked_application.set_retention_deadline()
             send_application_status_email(locked_application, new_status)
-            reject_candidate_account(locked_application)
+            reject_candidate_account(locked_application, actor=actor)
         elif new_status == ApplicationStatus.ARCHIVED:
             locked_application.cancelled_at = now
             locked_application.set_retention_deadline()
@@ -116,15 +116,26 @@ def transition_application(application: Application, new_status: str, actor, com
         send_application_status_email(locked_application, new_status)
     return locked_application
 
+@transaction.atomic
 def convert_accepted_application(application: Application, payload: dict, actor) -> None:
+    application = Application.objects.select_for_update().get(pk=application.pk)
     if application.status != ApplicationStatus.ACCEPTED:
         raise ValidationError("L'application doit être acceptée pour procéder à la conversion.")
+    if (InternProfile.objects.filter(source_application=application).exists()
+            or EmployeeProfile.objects.filter(source_application=application).exists()):
+        raise ValidationError("Cette candidature a déjà été convertie.")
 
     conversion_type = payload["conversion_type"]
     bu = payload["business_unit"]
     supervisor = payload.get("supervisor")
 
     candidate = application.candidate
+    if candidate is None:
+        raise ValidationError("Le compte candidat a été supprimé ; restaurez un compte lié avant conversion.")
+    candidate = type(candidate).objects.select_for_update().get(pk=candidate.pk)
+    if (InternProfile.objects.filter(user=candidate).exists()
+            or EmployeeProfile.objects.filter(user=candidate).exists()):
+        raise ValidationError("Ce candidat possède déjà un profil interne.")
 
     from apps.accounts.services.account_generation import generate_account_for_user
     from apps.accounts.choices import UserRole
@@ -147,7 +158,7 @@ def convert_accepted_application(application: Application, payload: dict, actor)
     }
 
     with transaction.atomic():
-        result = generate_account_for_user(payload_for_generation, actor=actor)
+        result = generate_account_for_user(payload_for_generation, actor=actor, existing_user=candidate)
         user = result["user"]
 
         # Link the source application
@@ -174,27 +185,28 @@ def convert_accepted_application(application: Application, payload: dict, actor)
         )
 
 
-def reject_candidate_account(application: Application) -> None:
-    """Deactivate the candidate account, but only if they are still a CANDIDATE.
-
-    Guard against the edge case where a user has a second application rejected
-    after having already been accepted and promoted to INTERN or EMPLOYEE via
-    a previous application, or if they have other pending applications.
-    """
+def reject_candidate_account(application: Application, actor=None) -> None:
+    """Hard-delete a still-candidate account after a real REJECTED transition."""
     from apps.accounts.choices import UserRole
+    from apps.accounts.services.user_deletion import hard_delete_user
 
-    candidate = application.candidate
-    if candidate.role != UserRole.CANDIDATE:
-        # Already promoted — do not deactivate an active employee/intern.
+    candidate = application.candidate_profile.user
+    if candidate is None:
         return
-        
-    has_active_applications = Application.objects.filter(
-        candidate_profile=application.candidate_profile
-    ).exclude(pk=application.pk).exclude(
-        status__in=[ApplicationStatus.ACCEPTED, ApplicationStatus.REJECTED, ApplicationStatus.ARCHIVED]
-    ).exists()
-    
-    if not has_active_applications:
-        candidate.is_active = False
-        candidate.save(update_fields=["is_active", "updated_at"])
+    if candidate.role != UserRole.CANDIDATE:
+        # Never delete a person already promoted through another application.
+        return
 
+    has_other_active_application = Application.objects.filter(
+        candidate_profile=application.candidate_profile,
+    ).exclude(pk=application.pk).exclude(
+        status__in=[
+            ApplicationStatus.ACCEPTED,
+            ApplicationStatus.REJECTED,
+            ApplicationStatus.ARCHIVED,
+        ],
+    ).exists()
+    if has_other_active_application:
+        return
+
+    hard_delete_user(user=candidate, actor=actor, reason="APPLICATION_REJECTED")

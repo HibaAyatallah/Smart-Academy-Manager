@@ -156,6 +156,16 @@ class OllamaInvalidResponseError(OllamaServiceError):
     }
 
 
+class AssistantEmbeddingError(OllamaServiceError):
+    code = "embedding_unavailable"
+    status_code = 503
+    messages = {
+        "fr": "Les embeddings locaux bge-m3 sont indisponibles. Réessayez après rétablissement d’Ollama.",
+        "en": "Local bge-m3 embeddings are unavailable. Retry when Ollama is available.",
+        "ar": "تضمينات bge-m3 المحلية غير متاحة. أعد المحاولة بعد استعادة Ollama.",
+    }
+
+
 @dataclass(frozen=True)
 class OllamaHealth:
     accessible: bool
@@ -430,9 +440,9 @@ def build_safe_context(user) -> SafeContext:
         suggestions = ["Quelles sont mes formations ?", "Quelles sont les dates de mes sessions ?", "Quel est mon taux de présence ?"]
     elif user.role == UserRole.BU_MANAGER:
         units = BusinessUnit.objects.filter(manager=user)
-        for item in Training.objects.filter(business_unit__in=units).select_related("business_unit")[:50]:
+        for item in Training.objects.filter(business_unit__in=units, external_client__isnull=True).select_related("business_unit")[:50]:
             fact=f"BU training #{item.pk}: title={item.title}; status={item.get_status_display()}; BU={item.business_unit.name}";facts.append(fact);sources.append(AnswerSource(fact,"training",item.title,f"TRN-{item.pk}",item.pk,"/trainings"))
-        for item in TrainingSession.objects.filter(training__business_unit__in=units).select_related("training")[:50]:
+        for item in TrainingSession.objects.filter(training__business_unit__in=units, external_client__isnull=True, training__external_client__isnull=True).select_related("training")[:50]:
             fact=f"BU session #{item.pk}: training={item.training.title}; dates={item.start_date} to {item.end_date}; status={item.get_status_display()}";facts.append(fact);sources.append(AnswerSource(fact,"session",item.training.title,f"SES-{item.pk}",item.pk,"/trainings"))
         for item in BusinessUnitNeed.objects.filter(business_unit__in=units).select_related("business_unit")[:50]:
             fact=f"BU need #{item.pk}: title={item.title}; status={item.get_status_display()}; BU={item.business_unit.name}";facts.append(fact);sources.append(AnswerSource(fact,"bu_need",item.title,f"NEED-{item.pk}",item.pk,f"/business-units/{item.business_unit_id}/needs/{item.pk}"))
@@ -452,7 +462,14 @@ def build_safe_context(user) -> SafeContext:
         if user.role == UserRole.SUPER_ADMIN:
             facts.append(f"Users total: {User.objects.count()}")
         else:
-            facts.append(f"Employees total: {User.objects.filter(role=UserRole.EMPLOYEE).count()}")
+            # HR cannot consult recruitment, BU management or reserved/draft training.
+            from apps.trainings.choices import TrainingStatus, SessionStatus
+            facts = [
+                f"Interns total: {InternProfile.objects.filter(user__is_active=True, user__role=UserRole.INTERN).count()}",
+                f"Trainings total: {Training.objects.filter(status=TrainingStatus.PUBLISHED, external_client__isnull=True).count()}",
+                f"Training sessions total: {TrainingSession.objects.filter(status__in=[SessionStatus.OPEN, SessionStatus.PLANNED, SessionStatus.FULL], external_client__isnull=True, training__external_client__isnull=True, training__status=TrainingStatus.PUBLISHED).count()}",
+            ]
+            facts.append(f"Employees total: {User.objects.filter(role=UserRole.EMPLOYEE, is_active=True).count()}")
         urls = {
             "Applications total": "/applications", "Interns total": "/hr/interns" if user.role == UserRole.HR else "/internships",
             "Business units total": "/business-units", "Trainings total": "/trainings",
@@ -470,7 +487,16 @@ def build_safe_context(user) -> SafeContext:
         for fact in facts:
             label = fact.split(":", 1)[0]
             sources.append(AnswerSource(fact, "aggregate", readable_labels[label], label.upper().replace(" ", "_"), None, urls[label]))
-        suggestions = ["Combien de candidatures ?", "Combien de stagiaires ?", "Combien de formations ?"]
+        suggestions = suggestions_for_role(user.role)
+    elif user.role == UserRole.CLIENT:
+        from apps.trainings.models import ClientProfile
+        from apps.trainings.serializers import ClientTrainingSerializer
+        profile = ClientProfile.objects.filter(user=user).first()
+        if profile:
+            for training in profile.reserved_trainings.prefetch_related("sessions"):
+                fact = json.dumps(ClientTrainingSerializer(training).data, ensure_ascii=False, default=str)
+                facts.append(fact)
+                sources.append(AnswerSource(fact, "training", training.title, f"TRN-{training.pk}", training.pk, "/client/trainings"))
     else:
         suggestions = ["Quelles informations sont disponibles ?"]
     return SafeContext(facts=list(facts), suggestions=suggestions, sources=sources)
@@ -563,13 +589,13 @@ class OllamaAssistantProvider:
         self.client = client or OllamaClient()
 
     def answer(self, question, context, language, history=None):
-        selected = select_relevant_facts(question, context)
+        selected = context.facts
         if not selected:
             return UNKNOWN_ANSWERS[language]
         return self.client.chat(self._messages(question, selected, language, history))
 
     def stream(self, question, context, language, history=None):
-        selected = select_relevant_facts(question, context)
+        selected = context.facts
         if not selected:
             return iter([UNKNOWN_ANSWERS[language]])
         return self.client.stream_chat(self._messages(question, selected, language, history))
@@ -585,11 +611,36 @@ class OllamaAssistantProvider:
             "AUTHORIZED FACTS:\n" + "\n".join(f"- {fact}" for fact in selected)
         )
         messages = [{"role": "system", "content": system}]
-        for item in (history or [])[-settings.OLLAMA_MAX_HISTORY:]:
-            role = "assistant" if item.role == "ASSISTANT" else "user"
-            messages.append({"role": role, "content": item.content[:2000]})
+        # Historical answers may contain data from a former BU/role. Rebuild
+        # authorization on every question instead of replaying those answers.
         messages.append({"role": "user", "content": question})
         return messages
+
+
+def retrieve_authorized_context(question: str, context: SafeContext) -> SafeContext:
+    """Embed only facts already authorized by build_safe_context, using the SQL cache."""
+    from apps.recruitment.embeddings import EmbeddingError, cosine_similarity, get_or_create_embedding
+    from apps.recruitment.rag.chunking import chunk_text
+
+    if not context.facts:
+        return SafeContext([], context.suggestions, [])
+    try:
+        question_vector = get_or_create_embedding(question)
+        ranked = []
+        for fact in context.facts:
+            for passage in chunk_text(fact, size=settings.RAG_CHUNK_SIZE, overlap=settings.RAG_CHUNK_OVERLAP):
+                similarity = cosine_similarity(question_vector, get_or_create_embedding(passage))
+                if similarity >= settings.ASSISTANT_RAG_MIN_SIMILARITY:
+                    ranked.append((similarity, passage, fact))
+    except (EmbeddingError, ValueError) as exc:
+        raise AssistantEmbeddingError from exc
+    ranked.sort(key=lambda row: row[0], reverse=True)
+    selected = ranked[:settings.ASSISTANT_RAG_TOP_K]
+    sources = [
+        AnswerSource(passage, source.type, source.name, source.reference, source.id, source.url)
+        for _, passage, fact in selected for source in context.sources if source.fact == fact
+    ]
+    return SafeContext([row[1] for row in selected], context.suggestions, sources)
 
 
 @lru_cache(maxsize=1)
@@ -630,7 +681,12 @@ def answer_user_message(user, question: str, language: str, history=None, metric
     if aggregate_answer is not None:
         return aggregate_answer
     ollama_started = perf_counter()
-    answer = get_provider().answer(question, context, language, history=history)
+    provider = get_provider()
+    if isinstance(provider, OllamaAssistantProvider):
+        context = retrieve_authorized_context(question, context)
+        if metrics is not None:
+            metrics["sources"] = sources_for_facts(context, context.facts)
+    answer = provider.answer(question, context, language, history=history)
     ollama_seconds = perf_counter() - ollama_started
     if metrics is not None:
         metrics.update({
@@ -656,6 +712,12 @@ def prepare_stream_answer(user, question: str, language: str, history=None):
     if category == MessageCategory.OUT_OF_SCOPE:
         return iter([OUT_OF_SCOPE_ANSWERS[language]]), []
     context = build_safe_context(user)
+    provider = get_provider()
+    if isinstance(provider, OllamaAssistantProvider):
+        context = retrieve_authorized_context(question, context)
+        if not context.facts:
+            return iter([UNKNOWN_ANSWERS[language]]), []
+        return provider.stream(question, context, language, history=history), sources_for_facts(context, context.facts)
     selected = select_relevant_facts(question, context)
     sources = sources_for_facts(context, selected)
     if not selected:

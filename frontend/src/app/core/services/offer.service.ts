@@ -88,4 +88,12 @@ export class OfferService {
   getCandidateRanking(id: number): Observable<{offer: Offer; ranking: CandidateRankingRow[]}> {
     return this.http.get<{offer: Offer; ranking: CandidateRankingRow[]}>(`${this.apiUrl}${id}/candidate-ranking/`);
   }
+
+  analyzeApplications(id: number): Observable<Record<string, unknown>> {
+    return this.http.post<Record<string, unknown>>(`${this.apiUrl}${id}/analyze-applications/`, {});
+  }
+
+  recalculateMatches(id: number): Observable<Record<string, unknown>> {
+    return this.http.post<Record<string, unknown>>(`${this.apiUrl}${id}/recalculate-matches/`, {});
+  }
 }

@@ -1,0 +1,43 @@
+.page-header {
+  padding: 140px 0 72px;
+  background: var(--bg-light);
+  border-bottom: 1px solid var(--border-color);
+  &.compact { padding-bottom: 52px; }
+  h1 { color: var(--finatech-night); font-size: clamp(2.25rem, 4vw, 3.5rem); margin-bottom: var(--spacing-sm); }
+  .subtitle { color: var(--text-secondary); font-size: 1.15rem; }
+}
+.offers-section { min-height: 420px; }
+.loading { display: flex; justify-content: center; padding: var(--spacing-xxl); }
+.state-message { padding: var(--spacing-xxl); text-align: center; color: var(--text-secondary); }
+.back-link { display: inline-block; margin-bottom: var(--spacing-md); color: var(--finatech-blue); font-weight: 600; }
+.offers-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 320px), 1fr)); gap: var(--spacing-lg); }
+.offer-card, .offer-detail { background: var(--bg-white); border: 1px solid var(--border-color); border-radius: var(--radius-lg); box-shadow: var(--shadow-sm); }
+.offer-card {
+  display: flex; flex-direction: column; gap: var(--spacing-md); padding: var(--spacing-lg);
+  transition: transform var(--transition-fast), box-shadow var(--transition-fast);
+  &:hover { transform: translateY(-3px); box-shadow: var(--shadow-md); }
+  h2 { color: var(--finatech-night); font-size: 1.4rem; margin: var(--spacing-xs) 0; }
+  .btn { align-self: flex-start; margin-top: auto; }
+}
+.offer-type { color: var(--finatech-blue); font-size: .8rem; font-weight: 700; letter-spacing: .05em; text-transform: uppercase; }
+.business-unit { color: var(--text-secondary); margin: 0; }
+.offer-meta { display: grid; gap: var(--spacing-xs); color: var(--text-secondary); }
+.offer-meta span { display: flex; align-items: center; gap: var(--spacing-xs); }
+.offer-meta mat-icon { color: var(--finatech-blue); font-size: 20px; width: 20px; height: 20px; }
+.skills { display: flex; flex-wrap: wrap; gap: var(--spacing-xs); }
+.skills span { padding: .35rem .7rem; border-radius: var(--radius-full); background: rgba(22, 137, 199, .1); color: var(--finatech-blue); font-size: .85rem; }
+.offer-detail { display: grid; grid-template-columns: minmax(0, 1fr) 320px; overflow: hidden; }
+.detail-main { padding: clamp(var(--spacing-lg), 4vw, var(--spacing-xl)); }
+.detail-main h2 { color: var(--finatech-night); margin-bottom: var(--spacing-md); }
+.description { color: var(--text-secondary); line-height: 1.8; white-space: pre-line; margin-bottom: var(--spacing-xl); }
+.detail-sidebar { padding: var(--spacing-lg); background: var(--bg-light); }
+.detail-sidebar dl { margin: 0 0 var(--spacing-lg); }
+.detail-sidebar dl div { padding: var(--spacing-sm) 0; border-bottom: 1px solid var(--border-color); }
+.detail-sidebar dt { color: var(--text-secondary); font-size: .85rem; }
+.detail-sidebar dd { margin: 4px 0 0; color: var(--finatech-night); font-weight: 600; }
+.apply-button { width: 100%; text-align: center; }
+@media (max-width: 767px) {
+  .page-header { padding-top: 120px; }
+  .offer-detail { grid-template-columns: 1fr; }
+  .detail-sidebar { order: -1; }
+}

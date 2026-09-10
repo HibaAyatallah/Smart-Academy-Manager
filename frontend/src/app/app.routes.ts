@@ -30,6 +30,8 @@ export const routes: Routes = [
       { path: '', loadComponent: () => import('./pages/public/home/home.component').then(m => m.HomeComponent), pathMatch: 'full' },
       { path: 'groupe', loadComponent: () => import('./pages/public/about/about.component').then(m => m.AboutComponent) },
       { path: 'expertises', loadComponent: () => import('./pages/public/careers/careers.component').then(m => m.CareersComponent) },
+      { path: 'offres', loadComponent: () => import('./pages/public/offers/public-offer-list.component').then(m => m.PublicOfferListComponent) },
+      { path: 'offres/:id', loadComponent: () => import('./pages/public/offers/public-offer-detail.component').then(m => m.PublicOfferDetailComponent) },
       { path: 'recrutement', loadComponent: () => import('./pages/public/recruitment/recruitment.component').then(m => m.RecruitmentComponent) },
       { path: 'contact', loadComponent: () => import('./pages/public/contact/contact.component').then(m => m.ContactComponent) },
       { path: 'politique-confidentialite', loadComponent: () => import('./pages/public/privacy/privacy.component').then(m => m.PrivacyComponent) },

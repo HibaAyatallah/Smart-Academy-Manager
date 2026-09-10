@@ -41,14 +41,17 @@ export class UserForm implements OnInit {
   businessUnits: BusinessUnit[] = [];
   isLoading = true; isSaving = false; errorMessage = '';
   get isEdit(): boolean { return this.userId !== null; }
-  get supportsBusinessUnit(): boolean { return ['EMPLOYEE', 'BU_MANAGER'].includes(this.form.controls.role.value); }
 
   ngOnInit(): void {
     const rawId = this.route.snapshot.paramMap.get('id'); this.userId = rawId ? Number(rawId) : null;
     const userRequest = this.userId ? this.service.getUser(this.userId) : of(null);
     forkJoin({ user: userRequest, businessUnits: this.buService.getBusinessUnits({ is_active: true }) })
       .pipe(finalize(() => this.isLoading = false)).subscribe({
-        next: ({ user, businessUnits }) => { this.businessUnits = businessUnits.results ?? []; if (user) this.populate(user); },
+        next: ({ user, businessUnits }) => {
+          const officialCodes = new Set(['NetSEC', 'System', 'Software', 'Achat']);
+          this.businessUnits = (businessUnits.results ?? []).filter(bu => officialCodes.has(bu.code));
+          if (user) this.populate(user);
+        },
         error: () => this.errorMessage = 'Impossible de préparer le formulaire utilisateur.',
       });
   }
@@ -57,7 +60,7 @@ export class UserForm implements OnInit {
     if (this.form.invalid || this.isSaving) { this.form.markAllAsTouched(); return; }
     const value = this.form.getRawValue();
     if (!this.isEdit && !value.password) { this.errorMessage = 'Le mot de passe est obligatoire.'; return; }
-    const payload: UserPayload = { ...value, business_unit_id: this.supportsBusinessUnit ? value.business_unit_id : null };
+    const payload: UserPayload = { ...value, business_unit_id: value.business_unit_id };
     if (this.isEdit) delete payload.password;
     this.isSaving = true; this.errorMessage = '';
     const request = this.userId ? this.service.updateUser(this.userId, payload) : this.service.createUser(payload);

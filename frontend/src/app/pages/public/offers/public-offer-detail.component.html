@@ -1,0 +1,11 @@
+<div class="page-header compact"><div class="container"><a class="back-link" routerLink="/offres">← Toutes les offres</a><h1 *ngIf="offer">{{ offer.title }}</h1><p class="subtitle" *ngIf="offer">{{ offer.business_unit_name }} · {{ offer.application_type_label }}</p></div></div>
+<section class="section offers-section"><div class="container">
+  <div class="loading" *ngIf="isLoading"><mat-spinner diameter="42"></mat-spinner></div>
+  <p class="state-message" *ngIf="!isLoading && (hasError || !offer)">Cette offre n’est pas disponible actuellement.</p>
+  <article class="offer-detail" *ngIf="!isLoading && offer">
+    <div class="detail-main"><h2>Description de l’offre</h2><p class="description">{{ offer.description }}</p><h2 *ngIf="skills(offer).length">Compétences recherchées</h2><div class="skills" *ngIf="skills(offer).length"><span *ngFor="let skill of skills(offer)">{{ skill }}</span></div></div>
+    <aside class="detail-sidebar"><dl>
+      <div><dt>Business Unit</dt><dd>{{ offer.business_unit_name }}</dd></div><div><dt>Type</dt><dd>{{ offer.application_type_label }}</dd></div><div><dt>Lieu</dt><dd>{{ offer.location || 'Non précisé' }}</dd></div><div><dt>Niveau requis</dt><dd>{{ level(offer) }}</dd></div><div><dt>Nombre de postes</dt><dd>{{ offer.number_of_positions }}</dd></div><div *ngIf="offer.application_deadline"><dt>Date limite</dt><dd>{{ offer.application_deadline | date:'dd/MM/yyyy' }}</dd></div>
+    </dl><a class="btn btn-primary apply-button" routerLink="/candidature" [queryParams]="{offer: offer.id}">Postuler à cette offre</a></aside>
+  </article>
+</div></section>

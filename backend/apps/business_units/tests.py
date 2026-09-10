@@ -68,6 +68,52 @@ class BusinessUnitTests(APITestCase):
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertEqual(len(response.data["results"]), 2)
 
+    def test_superadmin_gets_only_eligible_supervisors_for_selected_bu(self):
+        trainer = User.objects.create_user(
+            email="trainer-netsec@test.com", password="pwd", role=UserRole.TRAINER_TUTOR
+        )
+        other_employee = User.objects.create_user(
+            email="employee-system@test.com", password="pwd", role=UserRole.EMPLOYEE
+        )
+        unauthorized = User.objects.create_user(
+            email="hr-netsec@test.com", password="pwd", role=UserRole.HR
+        )
+        BusinessUnitMembership.objects.create(business_unit=self.bu1, user=trainer)
+        BusinessUnitMembership.objects.create(business_unit=self.bu2, user=other_employee)
+        BusinessUnitMembership.objects.create(business_unit=self.bu1, user=unauthorized)
+        self.client.force_authenticate(user=self.superadmin)
+
+        response = self.client.get(reverse("business-unit-supervisors", args=[self.bu1.id]))
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        ids = {item["id"] for item in response.data}
+        self.assertEqual(ids, {self.manager1.id, self.employee1.id, trainer.id})
+        self.assertNotIn(other_employee.id, ids)
+        self.assertNotIn(unauthorized.id, ids)
+
+        system_response = self.client.get(reverse("business-unit-supervisors", args=[self.bu2.id]))
+        self.assertEqual(
+            {item["id"] for item in system_response.data},
+            {self.manager2.id, other_employee.id},
+        )
+
+    def test_inactive_user_is_excluded_from_active_memberships(self):
+        employee = User.objects.create_user(
+            email="inactive-member@test.com", password="pwd",
+            role=UserRole.EMPLOYEE, is_active=False,
+        )
+        membership = BusinessUnitMembership.objects.create(
+            business_unit=self.bu1, user=employee, is_active=True,
+        )
+        self.client.force_authenticate(user=self.superadmin)
+
+        response = self.client.get(
+            reverse("business-unit-membership-list"), {"is_active": "true"},
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertNotIn(membership.id, [item["id"] for item in response.data["results"]])
+
     def test_superadmin_can_create_business_unit(self):
         self.client.force_authenticate(user=self.superadmin)
         response = self.client.post(

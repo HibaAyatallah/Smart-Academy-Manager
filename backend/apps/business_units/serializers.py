@@ -5,6 +5,18 @@ from apps.accounts.choices import UserRole
 from apps.business_units.permissions import is_bu_manager
 from .models import BusinessUnit, BusinessUnitMembership, BusinessUnitNeed, BusinessUnitNeedHistory
 
+User = get_user_model()
+
+
+class EligibleSupervisorSerializer(serializers.ModelSerializer):
+    full_name = serializers.CharField(read_only=True)
+    role_label = serializers.CharField(source="get_role_display", read_only=True)
+
+    class Meta:
+        model = User
+        fields = ["id", "email", "full_name", "role", "role_label"]
+        read_only_fields = fields
+
 
 class BusinessUnitSerializer(serializers.ModelSerializer):
     code = serializers.CharField(max_length=50)
@@ -76,7 +88,7 @@ class BusinessUnitMembershipSerializer(serializers.ModelSerializer):
     business_unit_name = serializers.CharField(source="business_unit.name", read_only=True)
     member_email = serializers.EmailField(write_only=True, required=False)
     user = serializers.PrimaryKeyRelatedField(
-        queryset=get_user_model().objects.all(), required=False
+        queryset=get_user_model().objects.filter(is_active=True), required=False
     )
 
     class Meta:
@@ -110,7 +122,9 @@ class BusinessUnitMembershipSerializer(serializers.ModelSerializer):
         business_unit = attrs.get("business_unit", getattr(self.instance, "business_unit", None))
 
         if self.instance is None and not user and email:
-            user = get_user_model().objects.filter(email__iexact=email).first()
+            user = get_user_model().objects.filter(
+                email__iexact=email, is_active=True,
+            ).first()
             if not user:
                 raise serializers.ValidationError({
                     "member_email": "Aucun collaborateur existant ne correspond à cet email."
@@ -220,6 +234,18 @@ class BusinessUnitNeedSerializer(serializers.ModelSerializer):
             "requester",
             getattr(self.instance, "requester", None),
         )
+        trainer = attrs.get("trainer", getattr(self.instance, "trainer", None))
+
+        if collaborator and not collaborator.is_active:
+            raise serializers.ValidationError({
+                "requester": "Ce collaborateur n’est plus actif."
+            })
+        if trainer and (
+            not trainer.is_active or trainer.role != UserRole.TRAINER_TUTOR
+        ):
+            raise serializers.ValidationError({
+                "trainer": "Le formateur doit être un compte formateur actif."
+            })
 
         if collaborator and business_unit:
             is_member = BusinessUnitMembership.objects.filter(

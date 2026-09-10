@@ -3,14 +3,14 @@ import { Component, OnInit, inject } from '@angular/core';
 import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
 import { MatButtonModule } from '@angular/material/button';import { MatCardModule } from '@angular/material/card';import { MatChipsModule } from '@angular/material/chips';import { MatFormFieldModule } from '@angular/material/form-field';import { MatInputModule } from '@angular/material/input';import { MatSelectModule } from '@angular/material/select';import { MatSlideToggleModule } from '@angular/material/slide-toggle';import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
 import { MatIconModule } from '@angular/material/icon';
-import { ActivatedRoute, Router } from '@angular/router';import { forkJoin } from 'rxjs';import { finalize } from 'rxjs/operators';
-import { BusinessUnit } from '../../../core/models/business-unit.models';import { EVALUATION_TYPE_LABELS, INTERN_DOCUMENT_LABELS, INTERNSHIP_STATUS_LABELS, InternDocument, InternDocumentRequirement, InternProfile } from '../../../core/models/internship.models';import { UserProfile } from '../../../core/models/auth.models';
-import { AuthService } from '../../../core/services/auth.service';import { BusinessUnitService } from '../../../core/services/business-unit.service';import { InternshipService } from '../../../core/services/internship.service';import { UserManagementService } from '../../../core/services/user-management.service';import { PageHeaderComponent } from '../../../shared/components/page-header/page-header.component';
+import { ActivatedRoute, Router } from '@angular/router';import { finalize } from 'rxjs/operators';
+import { BusinessUnit } from '../../../core/models/business-unit.models';import { EVALUATION_TYPE_LABELS, INTERN_DOCUMENT_LABELS, INTERNSHIP_STATUS_LABELS, InternDocument, InternDocumentRequirement, InternProfile } from '../../../core/models/internship.models';
+import { AuthService } from '../../../core/services/auth.service';import { BusinessUnitService, EligibleSupervisor } from '../../../core/services/business-unit.service';import { InternshipService } from '../../../core/services/internship.service';import { PageHeaderComponent } from '../../../shared/components/page-header/page-header.component';
 import { dateRangeValidator } from '../../../core/utils/date-validators';
 
 @Component({selector:'app-intern-detail',standalone:true,imports:[CommonModule,ReactiveFormsModule,MatButtonModule,MatCardModule,MatChipsModule,MatFormFieldModule,MatIconModule,MatInputModule,MatSelectModule,MatSlideToggleModule,MatSnackBarModule,PageHeaderComponent],templateUrl:'./intern-detail.component.html',styleUrl:'./intern-detail.component.scss'})
 export class InternDetailComponent implements OnInit {
- private readonly service=inject(InternshipService);private readonly auth=inject(AuthService);private readonly route=inject(ActivatedRoute);private readonly router=inject(Router);private readonly fb=inject(FormBuilder);private readonly snack=inject(MatSnackBar);private readonly buService=inject(BusinessUnitService);private readonly users=inject(UserManagementService);
+ private readonly service=inject(InternshipService);private readonly auth=inject(AuthService);private readonly route=inject(ActivatedRoute);private readonly router=inject(Router);private readonly fb=inject(FormBuilder);private readonly snack=inject(MatSnackBar);private readonly buService=inject(BusinessUnitService);
  readonly statuses=INTERNSHIP_STATUS_LABELS;readonly documentLabels=INTERN_DOCUMENT_LABELS;readonly evaluationLabels=EVALUATION_TYPE_LABELS;intern:InternProfile|null=null;loading=true;saving=false;error='';
  readonly todayStr = (() => {
    const d = new Date();
@@ -19,7 +19,7 @@ export class InternDetailComponent implements OnInit {
    const day = String(d.getDate()).padStart(2, '0');
    return `${year}-${month}-${day}`;
  })();
- businessUnits:Array<Pick<BusinessUnit,'id'|'name'>>=[];supervisors:Array<Pick<UserProfile,'id'|'full_name'|'email'>>=[];selectedFile:File|null=null;selectedRequirement:InternDocumentRequirement|null=null;
+ businessUnits:Array<Pick<BusinessUnit,'id'|'name'>>=[];supervisors:EligibleSupervisor[]=[];selectedFile:File|null=null;selectedRequirement:InternDocumentRequirement|null=null;
  readonly adminForm = this.fb.group({
    business_unit: [null as number | null],
    supervisor: [null as number | null],
@@ -41,9 +41,10 @@ export class InternDetailComponent implements OnInit {
  readonly requirementForm=this.fb.nonNullable.group({name:['',Validators.required],description:[''],document_type:['OTHER'],is_required:[true],due_date:['']});
  readonly evaluationForm=this.fb.nonNullable.group({evaluation_type:['MIDTERM'],technical_skills:[0],autonomy:[0],communication:[0],teamwork:[0],deadline_respect:[0],work_quality:[0],professionalism:[0],comments:['']});
  get role(){return this.auth.currentUserSnapshot?.role;}get canAdmin(){return this.role==='SUPER_ADMIN';}get canSupervise(){return false;}get canUpload(){return this.canAdmin||this.role==='INTERN';}get canEvaluate(){return this.canAdmin;}
- ngOnInit(){const raw=this.route.snapshot.paramMap.get('id');if(this.role==='INTERN'&&(raw===null||raw==='me')){this.service.getInterns().subscribe({next:r=>{if(r.results[0])this.load(r.results[0].id);else{this.loading=false;this.error='Aucun dossier de stage ne vous est affecté.';}},error:()=>{this.loading=false;this.error='Dossier inaccessible.';}});return;}const id=Number(raw);if(!Number.isInteger(id)||id<=0){this.router.navigate(['/internships']);return;}this.load(id);}
+ ngOnInit(){if(this.canAdmin)this.adminForm.controls.business_unit.valueChanges.subscribe(bu=>this.loadSupervisors(bu));const raw=this.route.snapshot.paramMap.get('id');if(this.role==='INTERN'&&(raw===null||raw==='me')){this.service.getInterns().subscribe({next:r=>{if(r.results[0])this.load(r.results[0].id);else{this.loading=false;this.error='Aucun dossier de stage ne vous est affecté.';}},error:()=>{this.loading=false;this.error='Dossier inaccessible.';}});return;}const id=Number(raw);if(!Number.isInteger(id)||id<=0){this.router.navigate(['/internships']);return;}this.load(id);}
  load(id:number){this.loading=true;this.error='';this.service.getIntern(id).pipe(finalize(()=>this.loading=false)).subscribe({next:i=>{this.intern=i;this.adminForm.patchValue(i as any);this.progressForm.patchValue({current_status:i.current_status,progress:i.progress,final_decision:i.final_decision});if(this.canAdmin)this.loadOptions();},error:()=>this.error='Dossier de stage introuvable ou inaccessible.'});}
- loadOptions(){forkJoin({bus:this.buService.getBusinessUnits(),users:this.users.getUsers({role:'EMPLOYEE',is_active:true})}).subscribe(({bus,users})=>{this.businessUnits=bus.results;this.supervisors=users.results;});}
+ loadOptions(){this.buService.getBusinessUnits().subscribe(bus=>this.businessUnits=bus.results);}
+ loadSupervisors(businessUnitId:number|null){if(!businessUnitId){this.supervisors=[];this.adminForm.controls.supervisor.setValue(null,{emitEvent:false});return;}this.buService.getEligibleSupervisors(businessUnitId).subscribe({next:supervisors=>{this.supervisors=supervisors;const selected=this.adminForm.controls.supervisor.value;if(selected&&!supervisors.some(user=>user.id===selected))this.adminForm.controls.supervisor.setValue(null,{emitEvent:false});},error:()=>{this.supervisors=[];this.adminForm.controls.supervisor.setValue(null,{emitEvent:false});this.notice('Impossible de charger les encadrants de cette Business Unit.');}});}
  saveAdmin(){if(!this.intern||this.adminForm.invalid)return;this.save(this.adminForm.getRawValue() as any);}
  saveProgress(){if(!this.intern||this.progressForm.invalid)return;this.save(this.progressForm.getRawValue() as any);}
  private save(data:Partial<InternProfile>){this.saving=true;this.service.updateIntern(this.intern!.id,data).pipe(finalize(()=>this.saving=false)).subscribe({next:i=>{this.intern=i;this.notice('Dossier mis à jour.');},error:e=>this.notice(e.error?.detail??e.error?.internship_end?.[0]??'Mise à jour impossible.')});}

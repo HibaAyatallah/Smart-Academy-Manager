@@ -11,6 +11,7 @@ from .serializers import (
     BusinessUnitSerializer,
     BusinessUnitMembershipSerializer,
     BusinessUnitNeedWorkflowSerializer,
+    EligibleSupervisorSerializer,
     NeedDecisionSerializer,
 )
 from .permissions import (
@@ -73,6 +74,14 @@ class BusinessUnitViewSet(viewsets.ModelViewSet):
                 )
         serializer.save()
 
+    @action(detail=True, methods=["get"], permission_classes=[IsSuperAdminOnly])
+    def supervisors(self, request, pk=None):
+        from .selectors import eligible_supervisors_for_business_unit
+
+        business_unit = self.get_object()
+        queryset = eligible_supervisors_for_business_unit(business_unit)
+        return Response(EligibleSupervisorSerializer(queryset, many=True).data)
+
 
 class BusinessUnitMembershipViewSet(viewsets.ModelViewSet):
     """
@@ -93,6 +102,9 @@ class BusinessUnitMembershipViewSet(viewsets.ModelViewSet):
     def get_queryset(self):
         user = self.request.user
         queryset = BusinessUnitMembership.objects.select_related("user", "business_unit").all()
+
+        if self.request.query_params.get("is_active", "").lower() in {"true", "1"}:
+            queryset = queryset.filter(user__is_active=True)
 
         if is_super_admin(user) or is_hr(user):
             return queryset

@@ -31,25 +31,51 @@
     </mat-card>
 
     <mat-card *ngIf="isSuperAdmin" class="ranking-card">
-      <mat-card-header><mat-card-title>Classement des candidats</mat-card-title></mat-card-header>
+      <mat-card-header>
+        <mat-card-title>Classement des candidats</mat-card-title>
+        <span class="spacer"></span>
+        <button mat-stroked-button type="button" [disabled]="rankingUpdating" (click)="updateAnalyses()">
+          Mettre à jour les analyses
+        </button>
+        <button mat-stroked-button type="button" [disabled]="rankingUpdating" (click)="recalculateMatches()">
+          Recalculer les scores
+        </button>
+      </mat-card-header>
       <mat-card-content>
         <div class="ranking-loading" *ngIf="rankingLoading"><mat-spinner diameter="32"></mat-spinner> Analyse des candidatures…</div>
         <p class="error-state" *ngIf="rankingError">{{ rankingError }}</p>
-        <p *ngIf="!rankingLoading && !ranking.length && !rankingError">Aucune candidature associée à cette offre.</p>
+        <p *ngIf="!rankingLoading && !ranking.length && !rankingError">Aucun candidat disponible dans le vivier.</p>
         <ol class="ranking-list" *ngIf="!rankingLoading && ranking.length">
           <li *ngFor="let row of ranking">
-            <div class="rank-number">{{ row.rank }}</div>
+            <div class="rank-number">{{ row.rank || '—' }}</div>
             <div class="rank-content">
-              <a [routerLink]="['/applications', row.application]"><strong>{{ row.candidate_name || 'Candidat #' + row.application }}</strong></a>
+              <div class="rank-heading">
+                <a [routerLink]="['/applications', row.application]"><strong>{{ row.candidate_name || 'Candidat #' + row.application }}</strong></a>
+                <span class="relationship-badge" [class.direct]="row.applied_to_current_offer">{{ row.relationship_label }}</span>
+              </div>
               <ng-container *ngIf="row.match; else analysisFailed">
-                <span>{{ row.match.score | number:'1.0-0' }}% — {{ matchLabel(row.match.score) }}</span>
+                <span>{{ row.match.score | number:'1.0-0' }}% — {{ row.match_label }}</span>
                 <mat-progress-bar mode="determinate" [value]="row.match.score"></mat-progress-bar>
+                <details class="match-details">
+                  <summary>Voir les détails</summary>
+                  <div class="score-grid">
+                    <span>Compétences <strong>{{ componentScore(row, 'skills') === null ? 'Indisponible' : (componentScore(row, 'skills') | number:'1.0-0') + ' %' }}</strong></span>
+                    <span>Expérience <strong>{{ componentScore(row, 'experience') === null ? 'Indisponible' : (componentScore(row, 'experience') | number:'1.0-0') + ' %' }}</strong></span>
+                    <span>Formation <strong>{{ componentScore(row, 'education') === null ? 'Indisponible' : (componentScore(row, 'education') | number:'1.0-0') + ' %' }}</strong></span>
+                    <span>Similarité IA <strong>{{ row.match.semantic_score === null ? 'Indisponible' : (row.match.semantic_score | number:'1.0-0') + ' %' }}</strong></span>
+                  </div>
+                  <div class="skill-details">
+                    <div><strong>Compétences trouvées</strong><span>{{ row.match.matched_skills.join(', ') || 'Aucune' }}</span></div>
+                    <div><strong>Compétences manquantes</strong><span>{{ row.match.missing_skills.join(', ') || 'Aucune' }}</span></div>
+                    <div><strong>Compétences supplémentaires</strong><span>{{ row.match.additional_skills.join(', ') || 'Aucune' }}</span></div>
+                  </div>
+                </details>
               </ng-container>
               <ng-template #analysisFailed><span class="analysis-error">Analyse indisponible — {{ row.analysis_error }}</span></ng-template>
             </div>
           </li>
         </ol>
-        <small>Classement déterministe par score, puis date de candidature et identifiant. Aucun rejet automatique.</small>
+        <small>Classement hybride basé sur les critères du profil et la similarité sémantique IA. Aucun rejet automatique : la décision finale appartient au responsable.</small>
       </mat-card-content>
     </mat-card>
   </div>

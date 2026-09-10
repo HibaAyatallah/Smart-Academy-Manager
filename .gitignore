@@ -65,3 +65,10 @@ temp_*.py
 .vscode/
 .DS_Store
 Thumbs.db
+
+# Local vector database
+backend/chroma/
+
+# Generated deployment artifacts
+backend_deploy/
+backend_deploy_final.zip

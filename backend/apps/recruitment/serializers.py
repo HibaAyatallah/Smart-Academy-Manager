@@ -30,12 +30,12 @@ User = get_user_model()
 
 
 class CandidateProfileSerializer(serializers.ModelSerializer):
-    email = serializers.EmailField(source="user.email", read_only=True)
-    first_name = serializers.CharField(source="user.first_name", read_only=True)
-    last_name = serializers.CharField(source="user.last_name", read_only=True)
-    full_name = serializers.CharField(source="user.full_name", read_only=True)
-    role = serializers.CharField(source="user.role", read_only=True)
-    is_active = serializers.BooleanField(source="user.is_active", read_only=True)
+    email = serializers.CharField(source="display_email", read_only=True)
+    first_name = serializers.CharField(source="display_first_name", read_only=True)
+    last_name = serializers.CharField(source="display_last_name", read_only=True)
+    full_name = serializers.CharField(source="display_full_name", read_only=True)
+    role = serializers.SerializerMethodField()
+    is_active = serializers.SerializerMethodField()
     study_level_label = serializers.CharField(source="get_study_level_display", read_only=True)
 
     class Meta:
@@ -60,6 +60,13 @@ class CandidateProfileSerializer(serializers.ModelSerializer):
         ]
 
 
+    def get_role(self, obj: CandidateProfile) -> str:
+        return obj.user.role if obj.user_id else UserRole.CANDIDATE
+
+    def get_is_active(self, obj: CandidateProfile) -> bool:
+        return bool(obj.user_id and obj.user.is_active)
+
+
 class OfferSerializer(serializers.ModelSerializer):
     business_unit_name = serializers.CharField(source="business_unit.name", read_only=True)
     created_by_email = serializers.EmailField(source="created_by.email", read_only=True)
@@ -78,6 +85,7 @@ class OfferSerializer(serializers.ModelSerializer):
             "application_type_label",
             "required_skills",
             "required_level",
+            "required_experience_years",
             "number_of_positions",
             "location",
             "start_date",
@@ -263,6 +271,7 @@ class EducationSerializer(serializers.Serializer):
 
 
 class CVAnalysisSerializer(serializers.ModelSerializer):
+    is_stale = serializers.SerializerMethodField()
     first_name = serializers.SerializerMethodField()
     last_name = serializers.SerializerMethodField()
     experiences = ExperienceSerializer(many=True, required=False)
@@ -275,12 +284,16 @@ class CVAnalysisSerializer(serializers.ModelSerializer):
                   "skills", "experiences", "education", "diplomas", "companies", "positions",
                   "languages", "certifications", "contact_details", "extraction_method",
                   "extraction_warnings", "extractor_version", "human_validated",
-                  "validated_by_email", "validated_at", "updated_at"]
+                  "validated_by_email", "validated_at", "updated_at", "is_stale"]
         read_only_fields = ["id", "extraction_method", "extraction_warnings", "extractor_version",
                             "human_validated", "validated_by_email", "validated_at", "updated_at"]
 
     def get_first_name(self, obj):
         return obj.full_name.split(maxsplit=1)[0] if obj.full_name else ""
+
+    def get_is_stale(self, obj):
+        from .analysis_pipeline import analysis_is_stale
+        return analysis_is_stale(obj.application, obj)
 
     def get_last_name(self, obj):
         return obj.full_name.split(maxsplit=1)[1] if obj.full_name and len(obj.full_name.split(maxsplit=1)) > 1 else ""
@@ -304,11 +317,11 @@ class CVReviewSerializer(CVAnalysisSerializer):
 
 
 class ApplicationMatchSerializer(serializers.ModelSerializer):
+    is_stale = serializers.SerializerMethodField()
     score = serializers.FloatField(read_only=True)
+    semantic_score = serializers.FloatField(read_only=True, allow_null=True)
     offer_title = serializers.CharField(source="offer.title", read_only=True)
-    candidate_name = serializers.CharField(
-        source="application.candidate_profile.user.full_name", read_only=True
-    )
+    candidate_name = serializers.SerializerMethodField()
 
     class Meta:
         model = ApplicationMatch
@@ -316,9 +329,25 @@ class ApplicationMatchSerializer(serializers.ModelSerializer):
             "id", "application", "offer", "offer_title", "candidate_name", "score",
             "matched_skills", "missing_skills", "additional_skills", "score_breakdown",
             "candidate_summary", "explanation", "algorithm_version", "human_decision",
-            "reviewed_at", "created_at", "updated_at",
+            "candidate_fingerprint", "offer_fingerprint", "candidate_representation_hash",
+            "offer_representation_hash", "semantic_score", "semantic_model",
+            "reviewed_at", "created_at", "updated_at", "is_stale",
         ]
         read_only_fields = fields
+
+    def get_candidate_name(self, obj):
+        return obj.application.candidate_profile.display_full_name
+
+    def get_is_stale(self, obj):
+        from .intelligence import match_is_stale
+        return match_is_stale(obj)
+
+    def to_representation(self, instance):
+        data = super().to_representation(instance)
+        if data["is_stale"]:
+            for field in ("score", "semantic_score", "score_breakdown", "candidate_summary"):
+                data[field] = None
+        return data
 
 
 class PublicApplicationCreateSerializer(serializers.Serializer):
@@ -420,7 +449,13 @@ class PublicApplicationCreateSerializer(serializers.Serializer):
             role=UserRole.CANDIDATE,
         )
         profile_data = dict(validated_data)
-        profile = CandidateProfile.objects.create(user=user, **profile_data)
+        profile = CandidateProfile.objects.create(
+            user=user,
+            account_email=user.email,
+            account_first_name=user.first_name,
+            account_last_name=user.last_name,
+            **profile_data,
+        )
         application = Application.objects.create(
             candidate_profile=profile,
             offer=offer,
@@ -451,10 +486,9 @@ class PublicApplicationCreateSerializer(serializers.Serializer):
         for document in other_documents:
             self._create_document(application, document, ApplicationDocumentType.OTHER, user)
 
-        try:
-            from .intelligence import extract_cv
-            analysis = extract_cv(application)
-            if cv_review:
+        analysis = CVAnalysis.objects.filter(application=application).first()
+        if analysis and cv_review:
+            try:
                 review = CVReviewSerializer(analysis, data=cv_review, partial=True)
                 review.is_valid(raise_exception=True); analysis = review.save()
                 user.first_name = cv_review.get("first_name", user.first_name)
@@ -467,9 +501,14 @@ class PublicApplicationCreateSerializer(serializers.Serializer):
                 profile.save(update_fields=["phone_number", "address", "updated_at"])
                 analysis.human_validated = True; analysis.validated_by = user; analysis.validated_at = timezone.now()
                 analysis.save(update_fields=["human_validated", "validated_by", "validated_at", "updated_at"])
-        except ValueError:
-            # A candidature remains valid even when CV text extraction is unavailable.
-            pass
+                # The automatic document pipeline matched the raw extraction.
+                # Reuse the now-reviewed structured analysis to refresh that
+                # same unique match without extracting the CV a second time.
+                from .analysis_pipeline import process_application_analysis
+                process_application_analysis(application)
+            except ValueError:
+                # A candidature remains valid even when CV text extraction is unavailable.
+                pass
 
         return application
 
@@ -598,12 +637,6 @@ class AuthenticatedApplicationCreateSerializer(serializers.Serializer):
         for document in other_documents:
             self._create_document(application, document, ApplicationDocumentType.OTHER, user)
 
-        try:
-            from .intelligence import extract_cv
-            extract_cv(application)
-        except ValueError:
-            pass
-
         return application
 
     def _create_document(self, application, uploaded_file, document_type, user):
@@ -628,7 +661,10 @@ class ApplicationConversionSerializer(serializers.Serializer):
         queryset=BusinessUnit.objects.filter(is_active=True)
     )
     supervisor = serializers.PrimaryKeyRelatedField(
-        queryset=User.objects.filter(role__in=[UserRole.EMPLOYEE, UserRole.BU_MANAGER, UserRole.SUPER_ADMIN, UserRole.TRAINER_TUTOR]),
+        queryset=User.objects.filter(
+            is_active=True,
+            role__in=[UserRole.EMPLOYEE, UserRole.BU_MANAGER, UserRole.SUPER_ADMIN, UserRole.TRAINER_TUTOR],
+        ),
         required=False,
         allow_null=True,
     )
@@ -648,6 +684,13 @@ class ApplicationConversionSerializer(serializers.Serializer):
         conversion_type = data.get("conversion_type")
         if conversion_type == "INTERN" and not data.get("supervisor"):
             errors["supervisor"] = "Le superviseur est requis pour un stagiaire."
+        if conversion_type == "INTERN" and data.get("supervisor") and data.get("business_unit"):
+            from apps.business_units.selectors import eligible_supervisors_for_business_unit
+
+            if not eligible_supervisors_for_business_unit(data["business_unit"]).filter(
+                pk=data["supervisor"].pk
+            ).exists():
+                errors["supervisor"] = "Le superviseur n'est pas éligible pour cette Business Unit."
         start = data.get("internship_start")
         end = data.get("internship_end")
         if start and start < today:
@@ -831,6 +874,18 @@ class InternProfileSerializer(serializers.ModelSerializer):
             errors["internship_end"] = "La date ne peut pas être antérieure à aujourd’hui."
         if start and end and start > end:
             errors.setdefault("internship_end", "La date de fin doit être postérieure ou égale à la date de début.")
+        business_unit = attrs.get("business_unit", getattr(self.instance, "business_unit", None))
+        supervisor = attrs.get("supervisor", getattr(self.instance, "supervisor", None))
+        if supervisor:
+            from apps.business_units.selectors import eligible_supervisors_for_business_unit
+
+            if not business_unit or not eligible_supervisors_for_business_unit(
+                business_unit
+            ).filter(pk=supervisor.pk).exists():
+                errors["supervisor"] = (
+                    "L'encadrant doit être actif, appartenir à la Business Unit du stage "
+                    "et avoir le rôle Collaborateur, Formateur ou Manager BU."
+                )
         if errors:
             raise serializers.ValidationError(errors)
         return attrs

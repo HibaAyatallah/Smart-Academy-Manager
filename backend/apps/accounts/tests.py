@@ -278,7 +278,7 @@ class UserPermissionTests(APITestCase):
         manager = User.objects.create_user(
             email="manager@example.com", password="StrongPass123!", role=UserRole.BU_MANAGER
         )
-        business_unit = BusinessUnit.objects.create(name="Data", code="DATA", manager=manager)
+        business_unit = BusinessUnit.objects.create(name="Software", code="Software")
         self.client.force_authenticate(user=self.super_admin)
         response = self.client.post(
             reverse("user-list"),
@@ -295,13 +295,146 @@ class UserPermissionTests(APITestCase):
         ).exists())
         self.assertEqual(response.data["business_units"][0]["id"], business_unit.id)
 
-    def test_super_admin_delete_only_deactivates_user(self):
+    def test_super_admin_can_change_user_business_unit_and_audit_it(self):
+        from apps.notifications.models import AuditLog
+
+        old_bu = BusinessUnit.objects.create(name="NetSEC", code="NetSEC")
+        new_bu = BusinessUnit.objects.create(name="System", code="System")
+        BusinessUnitMembership.objects.create(user=self.employee, business_unit=old_bu)
+        self.client.force_authenticate(user=self.super_admin)
+
+        response = self.client.patch(
+            reverse("user-detail", args=[self.employee.id]),
+            {"business_unit_id": new_bu.id},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertFalse(BusinessUnitMembership.objects.get(
+            user=self.employee, business_unit=old_bu
+        ).is_active)
+        self.assertTrue(BusinessUnitMembership.objects.get(
+            user=self.employee, business_unit=new_bu
+        ).is_active)
+        log = AuditLog.objects.get(action="USER_BUSINESS_UNIT_CHANGED")
+        self.assertEqual(log.actor, self.super_admin)
+        self.assertEqual(log.target_id, str(self.employee.id))
+        self.assertEqual(log.metadata["old_business_unit"]["code"], "NetSEC")
+        self.assertEqual(log.metadata["new_business_unit"]["code"], "System")
+
+    def test_user_assignment_rejects_non_official_business_unit(self):
+        legacy_bu = BusinessUnit.objects.create(name="Legacy", code="Software")
+        # Simulate an inconsistent legacy row without creating a duplicate
+        # official BU name; validation is based on the canonical code.
+        BusinessUnit.objects.filter(pk=legacy_bu.pk).update(code="Legacy")
+        self.client.force_authenticate(user=self.super_admin)
+
+        response = self.client.patch(
+            reverse("user-detail", args=[self.employee.id]),
+            {"business_unit_id": legacy_bu.id},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("business_unit_id", response.data)
+
+    def test_super_admin_retires_internal_user_and_hides_it_by_default(self):
+        from apps.notifications.models import AuditLog
+
+        user_id = self.employee.id
+        email = self.employee.email
+        membership = BusinessUnitMembership.objects.create(
+            business_unit=BusinessUnit.objects.create(name="Delete BU", code="DELETE"),
+            user=self.employee,
+            is_active=True,
+        )
         self.client.force_authenticate(user=self.super_admin)
         response = self.client.delete(reverse("user-detail", args=[self.employee.id]))
         self.assertEqual(response.status_code, status.HTTP_204_NO_CONTENT)
-        self.employee.refresh_from_db()
-        self.assertFalse(self.employee.is_active)
-        self.assertTrue(User.objects.filter(pk=self.employee.id).exists())
+        self.assertTrue(User.objects.filter(pk=user_id, is_active=False).exists())
+        membership.refresh_from_db()
+        self.assertFalse(membership.is_active)
+        self.assertNotEqual(self.client.post(reverse("token_obtain_pair"), {
+            "email": email, "password": "StrongPass123!"
+        }, format="json").status_code, status.HTTP_200_OK)
+        listed_ids = [item["id"] for item in self.client.get(reverse("user-list")).data["results"]]
+        self.assertNotIn(user_id, listed_ids)
+        self.assertEqual(
+            self.client.get("/api/reports/summary/").status_code,
+            status.HTTP_200_OK,
+        )
+        self.assertTrue(AuditLog.objects.filter(
+            actor=self.super_admin,
+            action="USER_DEACTIVATED",
+            metadata__user_id=user_id,
+            metadata__reason="MANUAL_SUPER_ADMIN",
+            metadata__deletion_mode="DEACTIVATED",
+        ).exists())
+
+        inactive_ids = [
+            item["id"] for item in self.client.get(
+                reverse("user-list"), {"is_active": "false"}
+            ).data["results"]
+        ]
+        self.assertIn(user_id, inactive_ids)
+
+    def test_internal_user_retirement_preserves_project_history(self):
+        from apps.projects.models import Project
+
+        business_unit = BusinessUnit.objects.create(name="Hard delete BU", code="HARD")
+        project = Project.objects.create(
+            title="Historical project", description="Kept", business_unit=business_unit,
+            supervisor=self.employee, created_by=self.employee,
+        )
+        self.client.force_authenticate(user=self.super_admin)
+        response = self.client.delete(reverse("user-detail", args=[self.employee.id]))
+
+        self.assertEqual(response.status_code, status.HTTP_204_NO_CONTENT)
+        project.refresh_from_db()
+        self.assertEqual(project.supervisor_id, self.employee.id)
+        self.assertEqual(project.created_by_id, self.employee.id)
+
+    def test_candidate_manual_delete_detaches_and_preserves_application(self):
+        from apps.recruitment.choices import ApplicationType, StudyLevel
+        from apps.recruitment.models import Application, CandidateProfile
+
+        candidate = User.objects.create_user(
+            email="delete-candidate@example.com", password="StrongPass123!",
+            role=UserRole.CANDIDATE,
+        )
+        profile = CandidateProfile.objects.create(
+            user=candidate, phone_number="", current_school="",
+            study_level=StudyLevel.MASTER, study_field="",
+        )
+        application = Application.objects.create(
+            candidate_profile=profile, application_type=ApplicationType.HIRING,
+        )
+        self.client.force_authenticate(user=self.super_admin)
+
+        response = self.client.delete(reverse("user-detail", args=[candidate.id]))
+
+        self.assertEqual(response.status_code, status.HTTP_204_NO_CONTENT)
+        self.assertFalse(User.objects.filter(pk=candidate.id).exists())
+        profile.refresh_from_db()
+        self.assertIsNone(profile.user_id)
+        self.assertTrue(Application.objects.filter(pk=application.pk).exists())
+
+    def test_super_admin_cannot_delete_own_account(self):
+        self.client.force_authenticate(user=self.super_admin)
+        response = self.client.delete(reverse("user-detail", args=[self.super_admin.id]))
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertEqual(
+            response.data["detail"],
+            "Vous ne pouvez pas supprimer votre propre compte.",
+        )
+        self.super_admin.refresh_from_db()
+        self.assertTrue(self.super_admin.is_active)
+        from apps.notifications.models import AuditLog
+        self.assertFalse(AuditLog.objects.filter(
+            action="USER_HARD_DELETED",
+            metadata__user_id=self.super_admin.id,
+        ).exists())
 
     # ── HR is blocked from ALL user management ──────────────────────────────
 

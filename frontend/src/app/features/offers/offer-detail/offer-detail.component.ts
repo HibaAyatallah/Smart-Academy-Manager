@@ -49,6 +49,7 @@ export class OfferDetailComponent implements OnInit {
   errorMessage = '';
   ranking: CandidateRankingRow[] = [];
   rankingLoading = false;
+  rankingUpdating = false;
   rankingError = '';
 
   get isCandidate(): boolean {
@@ -60,26 +61,45 @@ export class OfferDetailComponent implements OnInit {
   }
 
   ngOnInit(): void {
-    this.route.paramMap
-      .pipe(
-        switchMap((params) => {
-          this.isLoading = true;
-          this.errorMessage = '';
-          const id = Number(params.get('id'));
-          return this.offerService.getOffer(id);
-        }),
-        finalize(() => (this.isLoading = false)),
-      )
-      .subscribe({
-        next: (offer) => {
-          this.offer = offer;
-          if (this.isSuperAdmin) this.loadRanking(offer.id);
-        },
-        error: () => {
-          this.errorMessage = 'Impossible de charger l\'offre. Elle a peut-être été supprimée ou n\'est plus disponible.';
-        },
-      });
-  }
+  this.route.paramMap
+    .pipe(
+      switchMap((params) => {
+        this.isLoading = true;
+        this.errorMessage = '';
+        this.offer = null;
+
+        const id = Number(params.get('id'));
+
+        if (!id || Number.isNaN(id)) {
+          throw new Error('Identifiant de l’offre invalide.');
+        }
+
+        return this.offerService.getOffer(id).pipe(
+          finalize(() => {
+            this.isLoading = false;
+          })
+        );
+      })
+    )
+    .subscribe({
+      next: (offer) => {
+        this.offer = offer;
+
+        if (this.isSuperAdmin) {
+          this.loadRanking(offer.id);
+        }
+      },
+
+      error: (error) => {
+        console.error('Erreur chargement offre :', error);
+
+        this.isLoading = false;
+
+        this.errorMessage =
+          'Impossible de charger l\'offre. Elle a peut-être été supprimée ou n\'est plus disponible.';
+      },
+    });
+}
 
   loadRanking(offerId: number): void {
     this.rankingLoading = true;
@@ -92,12 +112,38 @@ export class OfferDetailComponent implements OnInit {
     });
   }
 
-  matchLabel(score: number): string {
-    if (score >= 90) return 'Excellent match';
-    if (score >= 75) return 'Strong match';
-    if (score >= 60) return 'Moderate match';
-    if (score >= 40) return 'Weak match';
-    return 'Very weak match';
+  updateAnalyses(): void {
+    if (!this.offer || this.rankingUpdating) return;
+    this.rankingUpdating = true;
+    this.offerService.analyzeApplications(this.offer.id).pipe(
+      finalize(() => this.rankingUpdating = false),
+    ).subscribe({
+      next: () => {
+        this.snackBar.open('Analyses et scores mis à jour.', 'Fermer', { duration: 3000 });
+        this.loadRanking(this.offer!.id);
+      },
+      error: () => this.snackBar.open('Impossible de mettre à jour les analyses.', 'Fermer', { duration: 3000 }),
+    });
+  }
+
+  recalculateMatches(): void {
+    if (!this.offer || this.rankingUpdating) return;
+    this.rankingUpdating = true;
+    this.offerService.recalculateMatches(this.offer.id).pipe(
+      finalize(() => this.rankingUpdating = false),
+    ).subscribe({
+      next: () => {
+        this.snackBar.open('Scores recalculés.', 'Fermer', { duration: 3000 });
+        this.loadRanking(this.offer!.id);
+      },
+      error: () => this.snackBar.open('Impossible de recalculer les scores.', 'Fermer', { duration: 3000 }),
+    });
+  }
+
+  componentScore(row: CandidateRankingRow, component: string): number | null {
+    const value = row.score_details?.[component];
+    if (!value || typeof value !== 'object' || !('score' in value)) return null;
+    return value.score;
   }
 
   publish(): void {

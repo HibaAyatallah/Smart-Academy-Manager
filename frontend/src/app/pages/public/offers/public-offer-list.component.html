@@ -1,0 +1,23 @@
+<div class="page-header">
+  <div class="container text-center"><h1>Nos offres</h1><p class="subtitle">Découvrez les opportunités actuellement ouvertes chez Finatech.</p></div>
+</div>
+<section class="section offers-section">
+  <div class="container">
+    <div class="loading" *ngIf="isLoading"><mat-spinner diameter="42"></mat-spinner></div>
+    <p class="state-message" *ngIf="!isLoading && hasError">Les offres ne peuvent pas être chargées actuellement.</p>
+    <p class="state-message" *ngIf="!isLoading && !hasError && !offers.length">Aucune offre disponible actuellement.</p>
+    <div class="offers-grid" *ngIf="!isLoading && !hasError && offers.length">
+      <article class="offer-card" *ngFor="let offer of offers">
+        <div class="offer-heading"><span class="offer-type">{{ offer.application_type_label }}</span><h2>{{ offer.title }}</h2><p class="business-unit">{{ offer.business_unit_name }}</p></div>
+        <div class="offer-meta">
+          <span><mat-icon>location_on</mat-icon>{{ offer.location || 'Lieu non précisé' }}</span>
+          <span><mat-icon>school</mat-icon>{{ level(offer) }}</span>
+          <span><mat-icon>groups</mat-icon>{{ offer.number_of_positions }} poste(s)</span>
+          <span *ngIf="offer.application_deadline"><mat-icon>event</mat-icon>Date limite : {{ offer.application_deadline | date:'dd/MM/yyyy' }}</span>
+        </div>
+        <div class="skills" *ngIf="skills(offer).length"><span *ngFor="let skill of skills(offer)">{{ skill }}</span></div>
+        <a class="btn btn-primary" [routerLink]="['/offres', offer.id]">Voir l’offre</a>
+      </article>
+    </div>
+  </div>
+</section>

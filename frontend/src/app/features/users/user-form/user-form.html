@@ -7,7 +7,7 @@
   <mat-form-field appearance="outline"><mat-label>Nom</mat-label><input matInput formControlName="last_name"></mat-form-field>
   <mat-form-field appearance="outline"><mat-label>Téléphone</mat-label><input matInput formControlName="phone_number"></mat-form-field>
   <mat-form-field appearance="outline"><mat-label>Rôle</mat-label><mat-select formControlName="role"><mat-option *ngFor="let role of roles" [value]="role">{{ roleLabels[role] }}</mat-option></mat-select></mat-form-field>
-  <mat-form-field appearance="outline" *ngIf="supportsBusinessUnit"><mat-label>Business Unit</mat-label><mat-select formControlName="business_unit_id"><mat-option [value]="null">Non assignée</mat-option><mat-option *ngFor="let bu of businessUnits" [value]="bu.id">{{ bu.name }} ({{ bu.code }})</mat-option></mat-select></mat-form-field>
+  <mat-form-field appearance="outline"><mat-label>Business Unit</mat-label><mat-select formControlName="business_unit_id"><mat-option [value]="null">Non assignée</mat-option><mat-option *ngFor="let bu of businessUnits" [value]="bu.id">{{ bu.name }} ({{ bu.code }})</mat-option></mat-select></mat-form-field>
   <mat-slide-toggle formControlName="is_active">Compte actif</mat-slide-toggle>
   <div class="actions"><a mat-button routerLink="/users">Annuler</a><button mat-flat-button color="primary" type="submit" [disabled]="isSaving">{{ isSaving ? 'Enregistrement…' : 'Enregistrer' }}</button></div>
 </form></mat-card>

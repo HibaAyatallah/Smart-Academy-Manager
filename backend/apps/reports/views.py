@@ -18,7 +18,7 @@ from apps.business_units.models import BusinessUnit, BusinessUnitMembership, Bus
 from apps.projects.models import Project
 from apps.recruitment.models import Application, InternProfile, Offer
 from apps.recruitment.choices import ApplicationStatus, InternshipStatus, OfferStatus
-from apps.business_units.choices import NeedStatus
+from apps.business_units.choices import BusinessUnitCode, NeedStatus
 from apps.trainings.models import SessionAttendance, Training, TrainingCertificate, TrainingEnrollment, TrainingSession
 from apps.trainings.choices import TrainingType
 from apps.notifications.models import AuditLog
@@ -30,8 +30,14 @@ class IsBUManagerOnly(BasePermission):
     def has_permission(self, request, view):
         return bool(request.user and request.user.is_authenticated and request.user.role == UserRole.BU_MANAGER)
 
-def grouped(qs, field): 
-    return [{"label":str(row[field] or "UNSPECIFIED"),"value":row["value"]} for row in qs.values(field).annotate(value=Count("id")).order_by(field)]
+def grouped(qs, field):
+    """Group populated values only; missing relations are not chart categories."""
+    qs = qs.exclude(**{f"{field}__isnull": True})
+    return [
+        {"label": str(row[field]), "value": row["value"]}
+        for row in qs.values(field).annotate(value=Count("id")).order_by(field)
+        if row[field] not in (None, "")
+    ]
 
 def dated(qs, field, start, end):
     if start: qs=qs.filter(**{f"{field}__date__gte":start})
@@ -46,7 +52,7 @@ def report_data(params, user=None):
     scoped_bu_ids = None
     if user and user.role == UserRole.BU_MANAGER:
         scoped_bu_ids = list(user.managed_business_units.values_list("id", flat=True))
-        if bu and str(bu).isdigit() and int(bu) not in scoped_bu_ids:
+        if bu and (not str(bu).isdigit() or int(bu) not in scoped_bu_ids):
             raise PermissionDenied("Access denied for this Business Unit.")
         if not bu:
             bu = scoped_bu_ids
@@ -64,7 +70,7 @@ def report_data(params, user=None):
     needs = dated(BusinessUnitNeed.objects.all(), "created_at", start, end)
     offers = dated(Offer.objects.all(), "created_at", start, end)
     
-    if bu:
+    if bu or scoped_bu_ids is not None:
         lookup = "__in" if isinstance(bu, list) else ""
         applications = applications.filter(**{f"offer__business_unit_id{lookup}": bu})
         interns = interns.filter(**{f"business_unit_id{lookup}": bu})
@@ -139,38 +145,57 @@ def report_data(params, user=None):
     recent_applications = [
         {
             "id": app.id,
-            "candidate_name": app.candidate_profile.user.full_name if (hasattr(app, 'candidate_profile') and app.candidate_profile and hasattr(app.candidate_profile, 'user') and app.candidate_profile.user) else "UNSPECIFIED",
-            "offer_title": app.offer.title if app.offer else "UNSPECIFIED",
-            "business_unit": app.offer.business_unit.name if app.offer and app.offer.business_unit else "UNSPECIFIED",
+            "candidate_name": app.candidate_profile.display_full_name,
+            "offer_title": app.offer.title if app.offer else "—",
+            "business_unit": app.offer.business_unit.name if app.offer and app.offer.business_unit else "—",
             "submitted_at": app.submitted_at,
             "status": app.status
         }
         for app in recent_apps_qs
     ]
 
-    apps_bu_status_qs = applications.values("offer__business_unit__name", "status").annotate(count=Count("id"))
+    apps_bu_status_qs = applications.exclude(
+        offer__business_unit__isnull=True,
+    ).values("offer__business_unit__name", "status").annotate(count=Count("id"))
     applications_by_bu_status = [
         {
-            "business_unit": row["offer__business_unit__name"] or "UNSPECIFIED",
+            "business_unit": row["offer__business_unit__name"],
             "status": row["status"],
             "count": row["count"]
         }
         for row in apps_bu_status_qs
     ]
 
-    interns_bu = active_interns.values("business_unit__name").annotate(count=Count("id"))
-    collabs_bu = BusinessUnitMembership.objects.filter(is_active=True, user__in=active_collaborators).values("business_unit__name").annotate(count=Count("id"))
-    workforce_dict = {}
+    official_bu_codes = list(BusinessUnitCode.values)
+    interns_bu = (
+        active_interns.filter(
+            business_unit__is_active=True,
+            business_unit__code__in=official_bu_codes,
+        )
+        .values("business_unit__code")
+        .annotate(count=Count("id"))
+    )
+    collabs_bu = (
+        BusinessUnitMembership.objects.filter(
+            is_active=True,
+            user__in=active_collaborators,
+            business_unit__is_active=True,
+            business_unit__code__in=official_bu_codes,
+        )
+        .values("business_unit__code")
+        .annotate(count=Count("id"))
+    )
+    # This dashboard has a fixed business contract: one category for each
+    # official BU, in canonical order. Unassigned users and legacy/non-official
+    # BUs are deliberately absent rather than grouped under a synthetic label.
+    workforce_dict = {
+        code: {"business_unit": code, "interns": 0, "collaborators": 0}
+        for code in official_bu_codes
+    }
     for row in interns_bu:
-        bu_name = row["business_unit__name"] or "UNSPECIFIED"
-        if bu_name not in workforce_dict:
-            workforce_dict[bu_name] = {"business_unit": bu_name, "interns": 0, "collaborators": 0}
-        workforce_dict[bu_name]["interns"] = row["count"]
+        workforce_dict[row["business_unit__code"]]["interns"] = row["count"]
     for row in collabs_bu:
-        bu_name = row["business_unit__name"] or "UNSPECIFIED"
-        if bu_name not in workforce_dict:
-            workforce_dict[bu_name] = {"business_unit": bu_name, "interns": 0, "collaborators": 0}
-        workforce_dict[bu_name]["collaborators"] = row["count"]
+        workforce_dict[row["business_unit__code"]]["collaborators"] = row["count"]
     workforce_by_bu = list(workforce_dict.values())
 
     pending_statuses = [ApplicationStatus.RECEIVED, ApplicationStatus.UNDER_REVIEW]
@@ -375,15 +400,15 @@ class HRDashboardView(APIView):
                 {
                     "name": intern.user.full_name,
                     "date": intern.internship_start,
-                    "bu": intern.business_unit.name if intern.business_unit else "UNSPECIFIED"
-                } for intern in upcoming_starts if intern.internship_start
+                    "bu": intern.business_unit.name
+                } for intern in upcoming_starts if intern.internship_start and intern.business_unit
             ],
             "ends": [
                 {
                     "name": intern.user.full_name,
                     "date": intern.internship_end,
-                    "bu": intern.business_unit.name if intern.business_unit else "UNSPECIFIED"
-                } for intern in upcoming_ends if intern.internship_end
+                    "bu": intern.business_unit.name
+                } for intern in upcoming_ends if intern.internship_end and intern.business_unit
             ]
         }
 

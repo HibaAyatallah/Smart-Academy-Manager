@@ -74,7 +74,10 @@ class ProjectSerializer(serializers.ModelSerializer):
     business_unit_name = serializers.CharField(source="business_unit.name", read_only=True)
     supervisor_name = serializers.CharField(source="supervisor.full_name", read_only=True)
     supervisor_email = serializers.EmailField(source="supervisor.email", read_only=True)
-    assignee_ids = serializers.PrimaryKeyRelatedField(source="assignees", many=True, queryset=User.objects.all(), required=False)
+    assignee_ids = serializers.PrimaryKeyRelatedField(
+        source="assignees", many=True,
+        queryset=User.objects.filter(is_active=True), required=False,
+    )
     assignees = serializers.SerializerMethodField()
     deliverables = ProjectDeliverableSerializer(many=True, read_only=True)
     comments = ProjectCommentSerializer(many=True, read_only=True)
@@ -111,13 +114,13 @@ class ProjectSerializer(serializers.ModelSerializer):
         if errors:
             raise serializers.ValidationError(errors)
         supervisor = attrs.get("supervisor", getattr(self.instance, "supervisor", None))
-        if supervisor and supervisor.role != UserRole.EMPLOYEE:
+        if supervisor and (supervisor.role != UserRole.EMPLOYEE or not supervisor.is_active):
             raise serializers.ValidationError({"supervisor": "Le superviseur doit être un collaborateur."})
         business_unit = attrs.get("business_unit", getattr(self.instance, "business_unit", None))
         assignees = attrs.get("assignees")
         if assignees is not None:
             for user in assignees:
-                if user.role not in {UserRole.EMPLOYEE, UserRole.INTERN}:
+                if not user.is_active or user.role not in {UserRole.EMPLOYEE, UserRole.INTERN}:
                     raise serializers.ValidationError({"assignee_ids": "Seuls les collaborateurs et stagiaires peuvent être affectés."})
                 if user.role == UserRole.EMPLOYEE and not BusinessUnitMembership.objects.filter(user=user, business_unit=business_unit, is_active=True).exists():
                     raise serializers.ValidationError({"assignee_ids": f"{user.email} n'appartient pas à cette Business Unit."})

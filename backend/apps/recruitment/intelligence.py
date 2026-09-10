@@ -1,4 +1,5 @@
 import hashlib
+import logging
 import re
 import unicodedata
 from datetime import date
@@ -7,12 +8,21 @@ from io import BytesIO
 from pathlib import Path
 
 from django.db import transaction
+from django.db.models import Prefetch
 
 from .choices import ApplicationDocumentType
-from .models import Application, ApplicationMatch, CVAnalysis, Offer, TrainingRecommendation
+from .embeddings import EmbeddingError, embedding_model_identifier, semantic_score as calculate_semantic_score
+from .models import Application, ApplicationDocument, ApplicationMatch, CVAnalysis, Offer, TrainingRecommendation
+from .representations import (
+    build_candidate_representation,
+    build_offer_representation,
+    candidate_matching_fingerprint,
+    offer_matching_fingerprint,
+    text_hash,
+)
 
 EXTRACTOR_VERSION = "structured-v7"
-MATCHING_VERSION = "explainable-v2"
+MATCHING_VERSION = "hybrid-v1"
 MIN_USABLE_PDF_CHARACTERS = 60
 SECTION_NAMES = {
     "skills": ("compétences", "competences", "skills", "technologies", "technical skills", "compétences techniques", "compétences professionnelles", "competences professionnelles", "compétences personnelles", "competences personnelles", "professional skills", "soft skills"),
@@ -91,6 +101,8 @@ TECH_SKILL_PATTERN = re.compile(
     re.I,
 )
 
+logger = logging.getLogger(__name__)
+
 SKILL_ALIASES = {
     "python3": "Python", "python": "Python", "django": "Django",
     "drf": "Django REST Framework", "django rest framework": "Django REST Framework",
@@ -105,6 +117,10 @@ SKILL_ALIASES = {
 
 class CVExtractionError(ValueError):
     pass
+
+
+class MatchingCalculationError(ValueError):
+    """Raised when no honest application score can be calculated."""
 
 
 @dataclass
@@ -134,7 +150,7 @@ def _extract_pdf(file_bytes: bytes) -> ExtractedDocument:
         ) from exc
     if _usable_character_count(ocr_text) < MIN_USABLE_PDF_CHARACTERS:
         raise CVExtractionError(
-            "L’OCR a été exécuté, mais le CV scanné ne contient pas assez de texte exploitable."
+            "Ce PDF ne contient pas de texte exploitable, même après exécution de l’OCR."
         )
     return ExtractedDocument(
         ocr_text,
@@ -755,19 +771,30 @@ def parse_cv_text(text: str) -> dict:
     return _validate_parsed_data(data)
 
 
-def extract_cv_data(uploaded_file, filename: str | None = None) -> dict:
+def extract_cv_data(uploaded_file, filename: str | None = None, *, include_raw_text=False) -> dict:
     document, raw = extract_document(uploaded_file, filename)
     data = parse_cv_text(document.text)
     data.update({"source_sha256": hashlib.sha256(raw).hexdigest(), "extraction_method": document.method, "extraction_warnings": document.warnings, "extractor_version": EXTRACTOR_VERSION})
+    if include_raw_text:
+        data["raw_text"] = document.text
     return data
 
 
+def cv_document_sha256(document: ApplicationDocument) -> str:
+    """Hash the stored bytes of a CV without relying on names or timestamps."""
+    with document.file.open("rb") as source:
+        digest = hashlib.sha256()
+        for chunk in iter(lambda: source.read(1024 * 1024), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
 def extract_cv(application: Application, *, force=False) -> CVAnalysis:
-    document = application.documents.filter(document_type=ApplicationDocumentType.CV).order_by("-uploaded_at").first()
+    document = application.documents.filter(document_type=ApplicationDocumentType.CV).order_by("-uploaded_at", "-id").first()
     if not document:
         raise CVExtractionError("Aucun CV n’est associé à cette candidature.")
     with document.file.open("rb") as source:
-        data = extract_cv_data(source, document.original_name or document.file.name)
+        data = extract_cv_data(source, document.original_name or document.file.name, include_raw_text=True)
     data.pop("first_name", None)
     data.pop("last_name", None)
     existing = getattr(application, "cv_analysis", None)
@@ -886,6 +913,24 @@ def _candidate_summary(*, matched, missing, experience_years, education_score, s
     return " ".join(sentences)
 
 
+def normalized_weighted_score(weighted: list[tuple[float, int]]) -> tuple[float, int]:
+    """Normalize available criteria to 100 without treating missing ones as zero."""
+    if not weighted:
+        raise MatchingCalculationError(
+            "Aucun critère exploitable n’est disponible pour calculer un score fiable."
+        )
+    total_weight = sum(weight for _, weight in weighted)
+    if total_weight <= 0:
+        raise MatchingCalculationError("La somme des poids disponibles doit être positive.")
+    for value, weight in weighted:
+        if weight <= 0 or not 0 <= value <= 100:
+            raise MatchingCalculationError("Une composante du score est hors limites.")
+    score = round(sum(value * weight for value, weight in weighted) / total_weight, 2)
+    if not 0 <= score <= 100:  # Defensive invariant for future scoring components.
+        raise MatchingCalculationError("Le score final calculé est hors limites.")
+    return score, total_weight
+
+
 def calculate_match(application: Application, offer: Offer, analysis: CVAnalysis) -> dict:
     candidate = _skill_set(analysis.skills)
     required = _skill_set(_offer_skills(offer))
@@ -906,10 +951,19 @@ def calculate_match(application: Application, offer: Offer, analysis: CVAnalysis
         components["skills"] = {"score": None, "weight": 50, "available": False}
 
     years = approximate_experience_years(analysis.experiences)
+    required_years = float(offer.required_experience_years) if offer.required_experience_years is not None else None
+    experience_score = None
+    if required_years is not None and years is not None:
+        experience_score = 100.0 if required_years <= 0 or years >= required_years else round(100 * years / required_years, 2)
+        weighted.append((experience_score, 25))
     components["experience"] = {
-        "score": None, "weight": 25, "available": False,
-        "candidate_years": years, "required_years": None,
-        "explanation": "L’offre ne contient pas de critère d’expérience chiffré.",
+        "score": experience_score, "weight": 25, "available": experience_score is not None,
+        "candidate_years": years, "required_years": required_years,
+        "explanation": (
+            "Comparaison déterministe des années d’expérience datées."
+            if required_years is not None
+            else "L’offre ne contient pas de critère d’expérience chiffré."
+        ),
     }
 
     required_rank = EDUCATION_RANK.get(offer.required_level)
@@ -923,9 +977,37 @@ def calculate_match(application: Application, offer: Offer, analysis: CVAnalysis
         education_score = None
         components["education"] = {"score": None, "weight": 15, "available": False}
     components["additional"] = {"score": None, "weight": 10, "available": False}
+    candidate_text = build_candidate_representation(application, analysis)
+    offer_text = build_offer_representation(offer)
+    semantic_model = embedding_model_identifier()
+    semantic_value = None
+    semantic_error = ""
+    try:
+        semantic_value = calculate_semantic_score(candidate_text, offer_text)
+        weighted.append((semantic_value, 30))
+    except (EmbeddingError, ValueError) as exc:
+        semantic_error = getattr(exc, "code", "embedding_configuration_error")
+        logger.warning(
+            "Semantic matching unavailable application_id=%s offer_id=%s code=%s detail=%s",
+            application.pk,
+            offer.pk,
+            semantic_error,
+            str(exc),
+        )
+    components["semantic"] = {
+        "score": semantic_value,
+        "weight": 30,
+        "available": semantic_value is not None,
+        "model": semantic_model,
+        "error_code": semantic_error,
+        "explanation": (
+            "Similarité cosinus calculée à partir d’embeddings locaux."
+            if semantic_value is not None
+            else "Embeddings indisponibles ; composante exclue du score."
+        ),
+    }
 
-    total_weight = sum(weight for _, weight in weighted)
-    score = round(sum(value * weight for value, weight in weighted) / total_weight, 2) if total_weight else 0.0
+    score, total_weight = normalized_weighted_score(weighted)
     components["normalized_weight"] = total_weight
     components["label"] = _score_label(score)
     return {
@@ -935,17 +1017,53 @@ def calculate_match(application: Application, offer: Offer, analysis: CVAnalysis
             matched=matched, missing=missing, experience_years=years,
             education_score=education_score, score=score,
         ),
-        "explanation": f"Score déterministe calculé sur {total_weight} point(s) de critères disponibles, puis normalisé sur 100.",
+        "explanation": (
+            f"Score hybride calculé sur {total_weight} point(s) de critères disponibles "
+            "(compétences, expérience, formation et similarité sémantique lorsqu’elle est "
+            "disponible), puis normalisé sur 100."
+        ),
         "algorithm_version": MATCHING_VERSION,
+        "candidate_fingerprint": candidate_matching_fingerprint(application, analysis),
+        "offer_fingerprint": offer_matching_fingerprint(offer),
+        "candidate_representation_hash": text_hash(candidate_text),
+        "offer_representation_hash": text_hash(offer_text),
+        "semantic_score": semantic_value,
+        "semantic_model": semantic_model,
     }
 
 
+def match_is_stale(match: ApplicationMatch, application: Application | None = None, offer: Offer | None = None, analysis: CVAnalysis | None = None) -> bool:
+    """Return whether persisted matching inputs or algorithm have changed."""
+    application = application or match.application
+    offer = offer or match.offer
+    analysis = analysis or CVAnalysis.objects.filter(application=application).first()
+    from .analysis_pipeline import analysis_is_stale
+    if (
+        analysis is None
+        or analysis_is_stale(application, analysis)
+        or match.algorithm_version != MATCHING_VERSION
+        or match.semantic_model != embedding_model_identifier()
+    ):
+        return True
+    return (
+        match.candidate_fingerprint != candidate_matching_fingerprint(application, analysis)
+        or match.offer_fingerprint != offer_matching_fingerprint(offer)
+    )
+
+
 @transaction.atomic
-def match_application(application: Application, *, include_recommendations=True) -> list[ApplicationMatch]:
-    analysis = getattr(application, "cv_analysis", None) or extract_cv(application)
+def match_application(
+    application: Application,
+    *,
+    include_recommendations=True,
+    target_offer: Offer | None = None,
+) -> list[ApplicationMatch]:
+    # Reverse one-to-one relations can keep a stale in-memory instance after a
+    # CV review. Matching must always use the latest persisted structured data.
+    analysis = CVAnalysis.objects.filter(application=application).first() or extract_cv(application)
     results = []
-    offers = Offer.objects.all()
-    if application.offer_id:
+    offers = Offer.objects.filter(pk=target_offer.pk) if target_offer is not None else Offer.objects.all()
+    if target_offer is None and application.offer_id:
         offers = offers.filter(pk=application.offer_id)
     for offer in offers:
         defaults = calculate_match(application, offer, analysis)
@@ -955,27 +1073,133 @@ def match_application(application: Application, *, include_recommendations=True)
         results.append(item)
     if not include_recommendations:
         return results
-    missing_all = {skill for item in results for skill in item.missing_skills}
-    from apps.trainings.models import Training
-    for training in Training.objects.all():
-        searchable = f"{training.title} {training.description} {training.category} {training.objectives}".casefold()
-        covered = sorted(skill for skill in missing_all if skill in searchable)
-        if covered:
-            TrainingRecommendation.objects.update_or_create(application=application, training=training, defaults={"score": round(100 * len(covered) / len(missing_all), 2), "skill_gaps": covered, "explanation": f"Cette formation couvre {len(covered)} écart(s) de compétences détecté(s).", "human_decision": "PENDING"})
+    update_training_recommendations(application, results)
     return results
 
 
-def rank_offer_candidates(offer: Offer) -> list[dict]:
-    applications = offer.applications.select_related(
-        "candidate_profile__user", "cv_analysis"
-    ).prefetch_related("documents").order_by("submitted_at", "id")
-    rows = []
+def update_training_recommendations(application, results):
+    missing_all = {skill for item in results for skill in item.missing_skills}
+    from apps.trainings.models import Training
+    relevant_ids = []
+    for training in Training.objects.all():
+        searchable = f"{training.title} {training.description} {training.category} {training.objectives}".casefold()
+        covered = sorted(skill for skill in missing_all if skill.casefold() in searchable)
+        if covered:
+            relevant_ids.append(training.pk)
+            TrainingRecommendation.objects.update_or_create(application=application, training=training, defaults={"score": round(100 * len(covered) / len(missing_all), 2), "skill_gaps": covered, "explanation": f"Cette formation couvre {len(covered)} écart(s) de compétences détecté(s)."})
+    # Keep human-reviewed history, but remove obsolete pending suggestions.
+    TrainingRecommendation.objects.filter(application=application, human_decision="PENDING").exclude(training_id__in=relevant_ids).delete()
+
+
+def _offer_candidate_pool(offer: Offer) -> list[dict]:
+    """Select one stable representative application per candidate profile."""
+    applications = Application.objects.select_related(
+        "candidate_profile__user", "cv_analysis", "offer"
+    ).prefetch_related(
+        Prefetch(
+            "documents",
+            queryset=ApplicationDocument.objects.filter(
+                document_type=ApplicationDocumentType.CV,
+            ).order_by("-uploaded_at", "-id"),
+            to_attr="ranking_cv_documents",
+        ),
+        Prefetch(
+            "matches",
+            queryset=ApplicationMatch.objects.filter(offer=offer),
+            to_attr="ranking_offer_matches",
+        ),
+    ).order_by("candidate_profile_id", "-submitted_at", "-id")
+    grouped = {}
     for application in applications:
-        try:
-            match = match_application(application, include_recommendations=False)[0]
-            rows.append({"application": application, "match": match, "analysis_error": ""})
-        except (CVExtractionError, IndexError) as exc:
-            rows.append({"application": application, "match": None, "analysis_error": str(exc)})
+        grouped.setdefault(application.candidate_profile_id, []).append(application)
+
+    pool = []
+    for candidate_applications in grouped.values():
+        direct_application = next(
+            (item for item in candidate_applications if item.offer_id == offer.pk),
+            None,
+        )
+        if direct_application is not None:
+            relationship = "APPLIED_TO_OFFER"
+            relationship_label = "A postulé à cette offre"
+        elif any(item.offer_id is not None for item in candidate_applications):
+            relationship = "OTHER_APPLICATION"
+            relationship_label = "Autre candidature"
+        else:
+            relationship = "TALENT_POOL"
+            relationship_label = "Vivier de candidats"
+
+        def usable(item):
+            analysis = getattr(item, "cv_analysis", None)
+            documents = item.ranking_cv_documents
+            if analysis is None or not documents:
+                return False
+            try:
+                return (
+                    analysis.extractor_version == EXTRACTOR_VERSION
+                    and analysis.source_sha256 == cv_document_sha256(documents[0])
+                )
+            except (OSError, ValueError):
+                return False
+
+        usable_applications = [item for item in candidate_applications if usable(item)]
+        with_documents = [item for item in candidate_applications if item.ranking_cv_documents]
+        representative = next(
+            (item for item in usable_applications if item.offer_id == offer.pk),
+            usable_applications[0] if usable_applications else next(
+                (item for item in with_documents if item.offer_id == offer.pk),
+                with_documents[0] if with_documents else direct_application or candidate_applications[0],
+            ),
+        )
+        pool.append({
+            "application": representative,
+            "relationship": relationship,
+            "relationship_label": relationship_label,
+            "applied_to_current_offer": direct_application is not None,
+        })
+    return pool
+
+
+def rank_offer_candidates(offer: Offer, *, force=False) -> list[dict]:
+    """Match the current offer against every usable candidate in the talent pool."""
+    from .analysis_pipeline import analysis_is_stale, process_application_analysis
+    rows = []
+    for pool_item in _offer_candidate_pool(offer):
+        application = pool_item["application"]
+        if force:
+            result = process_application_analysis(application)
+            if result.error:
+                rows.append({**pool_item, "match": None, "analysis_error": result.error})
+                continue
+            application.refresh_from_db()
+        cv_documents = application.ranking_cv_documents
+        analysis = getattr(application, "cv_analysis", None)
+        match = next(iter(application.ranking_offer_matches), None)
+        if not cv_documents:
+            match = None
+            analysis_error = "Aucun CV n’est associé à cette candidature."
+        elif analysis is None:
+            match = None
+            analysis_error = "Le CV n’a pas encore pu être analysé."
+        elif analysis_is_stale(application, analysis):
+            match = None
+            analysis_error = "Le CV actuel doit être analysé ou réanalysé."
+        else:
+            if force or match is None or match_is_stale(match, application=application, offer=offer, analysis=analysis):
+                try:
+                    match = match_application(
+                        application,
+                        include_recommendations=False,
+                        target_offer=offer,
+                    )[0]
+                except MatchingCalculationError as exc:
+                    match = None
+                    analysis_error = str(exc)
+                else:
+                    analysis_error = ""
+            else:
+                analysis_error = ""
+        rows.append({**pool_item, "match": match, "analysis_error": analysis_error})
     return sorted(
         rows,
         key=lambda row: (

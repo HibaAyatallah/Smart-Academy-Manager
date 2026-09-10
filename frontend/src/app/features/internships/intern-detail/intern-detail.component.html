@@ -14,7 +14,7 @@
     <mat-card-title>Administration du stage</mat-card-title>
     <form [formGroup]="adminForm" (ngSubmit)="saveAdmin()" class="form-grid">
       <mat-form-field appearance="outline"><mat-label>Business Unit</mat-label><mat-select formControlName="business_unit"><mat-option [value]="null">Non affectée</mat-option><mat-option *ngFor="let bu of businessUnits" [value]="bu.id">{{bu.name}}</mat-option></mat-select></mat-form-field>
-      <mat-form-field appearance="outline"><mat-label>Encadrant</mat-label><mat-select formControlName="supervisor"><mat-option [value]="null">Non affecté</mat-option><mat-option *ngFor="let user of supervisors" [value]="user.id">{{user.full_name||user.email}}</mat-option></mat-select></mat-form-field>
+      <mat-form-field appearance="outline"><mat-label>Encadrant</mat-label><mat-select formControlName="supervisor"><mat-option [value]="null">Non affecté</mat-option><mat-option *ngFor="let user of supervisors" [value]="user.id">{{user.full_name||user.email}} - {{user.role_label}}</mat-option></mat-select></mat-form-field>
       <mat-form-field appearance="outline"><mat-label>Sujet</mat-label><input matInput formControlName="subject_title"></mat-form-field>
       <mat-form-field appearance="outline"><mat-label>École</mat-label><input matInput formControlName="school"></mat-form-field>
       <mat-form-field appearance="outline"><mat-label>Spécialisation</mat-label><input matInput formControlName="specialization"></mat-form-field>

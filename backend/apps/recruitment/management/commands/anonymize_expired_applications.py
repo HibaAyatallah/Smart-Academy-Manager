@@ -20,13 +20,17 @@ class Command(BaseCommand):
         for application in applications:
             user = application.candidate
             profile = application.candidate_profile
-            user.first_name = "Anonymise"
-            user.last_name = ""
-            user.email = f"anonymized-{user.pk}@smart-academy.local"
-            user.phone_number = ""
-            user.is_active = False
-            user.save(update_fields=["first_name", "last_name", "email", "phone_number", "is_active", "updated_at"])
+            if user:
+                user.first_name = "Anonymise"
+                user.last_name = ""
+                user.email = f"anonymized-{user.pk}@smart-academy.local"
+                user.phone_number = ""
+                user.is_active = False
+                user.save(update_fields=["first_name", "last_name", "email", "phone_number", "is_active", "updated_at"])
 
+            profile.account_email = ""
+            profile.account_first_name = "Anonymise"
+            profile.account_last_name = ""
             profile.phone_number = ""
             profile.current_school = ""
             profile.study_level_other = ""

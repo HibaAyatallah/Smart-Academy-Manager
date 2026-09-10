@@ -1,6 +1,18 @@
 import { routes } from './app.routes';
 
 describe('Application routes', () => {
+  it('exposes the public offer list and detail without an auth guard', () => {
+    const publicShell = routes.find((route) => !route.canActivate?.length && route.children);
+    const list = publicShell?.children?.find((route) => route.path === 'offres');
+    const detail = publicShell?.children?.find((route) => route.path === 'offres/:id');
+    expect(list).toBeDefined();
+    expect(detail).toBeDefined();
+    expect(list?.canActivate).toBeUndefined();
+    expect(detail?.canActivate).toBeUndefined();
+    expect(list?.loadComponent).toBeDefined();
+    expect(detail?.loadComponent).toBeDefined();
+  });
+
   it('exposes connected routes before the wildcard', () => {
     const privateShell = routes.find((route) => route.canActivate?.length && route.children);
     const privatePaths = privateShell?.children?.map((route) => route.path) ?? [];

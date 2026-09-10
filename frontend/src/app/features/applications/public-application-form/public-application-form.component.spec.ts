@@ -65,7 +65,7 @@ describe('PublicApplicationFormComponent', () => {
         },
         {
           provide: ActivatedRoute,
-          useValue: { snapshot: { queryParamMap: { get: () => null } } },
+          useValue: { snapshot: { queryParamMap: { get: (key: string) => key === 'offer' ? '2' : null } } },
         },
       ],
     }).compileComponents();
@@ -236,7 +236,9 @@ describe('PublicApplicationFormComponent', () => {
     component.submit();
 
     expect(applicationService.submitPublicApplication).toHaveBeenCalledTimes(1);
-    expect(applicationService.submitPublicApplication.calls.mostRecent().args[0] instanceof FormData).toBeTrue();
+    const payload = applicationService.submitPublicApplication.calls.mostRecent().args[0];
+    expect(payload instanceof FormData).toBeTrue();
+    expect(payload.get('offer')).toBe('2');
   });
 
   it('shows the exact experience position error and returns to verification', () => {

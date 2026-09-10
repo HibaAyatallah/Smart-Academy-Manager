@@ -14,6 +14,7 @@
         <a routerLink="/" routerLinkActive="active" [routerLinkActiveOptions]="{exact: true}">{{'public.home'|translate}}</a>
         <a routerLink="/groupe" routerLinkActive="active">{{'public.group'|translate}}</a>
         <a routerLink="/expertises" routerLinkActive="active">{{'public.expertise'|translate}}</a>
+        <a [routerLink]="['/offres']" routerLinkActive="active">{{'public.offers'|translate}}</a>
         <a routerLink="/contact" routerLinkActive="active">{{'public.contact'|translate}}</a>
       </nav>
 
@@ -34,6 +35,7 @@
       <a routerLink="/" routerLinkActive="active" [routerLinkActiveOptions]="{exact: true}" (click)="closeMobileMenu()">{{'public.home'|translate}}</a>
       <a routerLink="/groupe" routerLinkActive="active" (click)="closeMobileMenu()">{{'public.group'|translate}}</a>
       <a routerLink="/expertises" routerLinkActive="active" (click)="closeMobileMenu()">{{'public.expertise'|translate}}</a>
+      <a [routerLink]="['/offres']" routerLinkActive="active" (click)="closeMobileMenu()">{{'public.offers'|translate}}</a>
       <a routerLink="/contact" routerLinkActive="active" (click)="closeMobileMenu()">{{'public.contact'|translate}}</a>
       <div class="mobile-actions">
         <a routerLink="/candidature" class="btn btn-outline full-width" (click)="closeMobileMenu()">{{'public.apply'|translate}}</a>
@@ -60,7 +62,7 @@
 
       <div class="footer-col">
         <h3>{{'public.discover'|translate}}</h3>
-        <a routerLink="/">{{'public.home'|translate}}</a><a routerLink="/groupe">{{'public.group'|translate}}</a><a routerLink="/expertises">{{'public.expertise'|translate}}</a><a routerLink="/contact">{{'public.contact'|translate}}</a>
+        <a routerLink="/">{{'public.home'|translate}}</a><a routerLink="/groupe">{{'public.group'|translate}}</a><a routerLink="/expertises">{{'public.expertise'|translate}}</a><a [routerLink]="['/offres']">{{'public.offers'|translate}}</a><a routerLink="/contact">{{'public.contact'|translate}}</a>
       </div>
 
       <div class="footer-col">

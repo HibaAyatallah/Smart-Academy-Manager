@@ -34,6 +34,15 @@ describe('BusinessUnitService', () => {
     request.flush({});
   });
 
+  it('loads eligible supervisors for the selected Business Unit', () => {
+    service.getEligibleSupervisors(7).subscribe();
+    const request = http.expectOne('/api/business-units/7/supervisors/');
+    expect(request.request.method).toBe('GET');
+    request.flush([
+      { id: 3, email: 'manager@test.com', full_name: 'Manager NetSEC', role: 'BU_MANAGER', role_label: 'Manager BU' },
+    ]);
+  });
+
   it('loads needs from the DRF paginated endpoint', () => {
     service.getNeeds({ business_unit: 7 }).subscribe();
     const request = http.expectOne((candidate) => candidate.url === '/api/business-unit-needs/');

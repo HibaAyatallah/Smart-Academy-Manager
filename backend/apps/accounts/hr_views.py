@@ -227,7 +227,7 @@ class HRCollaboratorsByBUView(APIView):
         bus = BusinessUnit.objects.filter(is_active=True).select_related("manager").order_by("name")
         for bu in bus:
             memberships = BusinessUnitMembership.objects.filter(
-                business_unit=bu, is_active=True
+                business_unit=bu, is_active=True, user__is_active=True,
             ).select_related("user").order_by("user__last_name", "user__first_name")
             members_data = []
             for m in memberships:

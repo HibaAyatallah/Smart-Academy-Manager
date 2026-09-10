@@ -58,7 +58,7 @@ def generate_professional_email(first_name: str, last_name: str) -> str:
     return email
 
 
-def generate_account_for_user(payload: dict, actor=None) -> dict:
+def generate_account_for_user(payload: dict, actor=None, *, existing_user=None) -> dict:
     """
     Creates or updates the User, generates credentials, and creates the appropriate profile.
     
@@ -87,8 +87,8 @@ def generate_account_for_user(payload: dict, actor=None) -> dict:
     role = payload.get("role", UserRole.EMPLOYEE)
     business_unit = payload.get("business_unit")
     
-    user = None
-    if contact_email:
+    user = existing_user
+    if user is None and contact_email:
         user = User.objects.filter(contact_email=contact_email).first()
         if not user:
             user = User.objects.filter(email=contact_email).first()

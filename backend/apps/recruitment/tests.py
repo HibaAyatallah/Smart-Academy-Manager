@@ -146,6 +146,13 @@ class RecruitmentAPITests(APITestCase):
         application = Application.objects.get(candidate_profile__user__email="candidate-offer@example.com")
         self.assertEqual(application.offer_id, offer.id)
         self.assertEqual(response.data["offer"], offer.id)
+        self.assertEqual(response.data["offer_title"], offer.title)
+
+        self.client.force_authenticate(user=self.super_admin)
+        ranking_response = self.client.get(f"/api/offers/{offer.id}/candidate-ranking/")
+        self.assertEqual(ranking_response.status_code, status.HTTP_200_OK)
+        self.assertEqual(len(ranking_response.data["ranking"]), 1)
+        self.assertEqual(ranking_response.data["ranking"][0]["application"], application.id)
 
     def test_candidate_can_access_only_own_application(self):
         own_application = self.create_application("candidate@example.com")
@@ -466,6 +473,7 @@ class RecruitmentAPITests(APITestCase):
         bu = BusinessUnit.objects.create(
             name="Tech", code="TECH", manager=bu_manager
         )
+        BusinessUnitMembership.objects.create(business_unit=bu, user=self.employee)
         self.client.force_authenticate(user=self.super_admin)
 
         payload = {
@@ -509,8 +517,11 @@ class RecruitmentAPITests(APITestCase):
         self.assertTrue(EmployeeProfile.objects.filter(user=application.candidate).exists())
         self.assertTrue(BusinessUnitMembership.objects.filter(user=application.candidate, business_unit=bu).exists())
 
-    def test_rejecting_application_disables_candidate_account(self):
+    def test_rejecting_application_hard_deletes_candidate_account(self):
+        from apps.notifications.models import AuditLog
+
         application = self.create_application("candidate@example.com")
+        candidate_id = application.candidate.pk
         self.client.force_authenticate(user=self.super_admin)
 
         response = self.client.post(
@@ -521,9 +532,56 @@ class RecruitmentAPITests(APITestCase):
 
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         application.refresh_from_db()
-        application.candidate.refresh_from_db()
         self.assertEqual(application.status, ApplicationStatus.REJECTED)
-        self.assertFalse(application.candidate.is_active)
+        self.assertFalse(User.objects.filter(pk=candidate_id).exists())
+        self.assertIsNone(application.candidate_profile.user)
+        self.assertEqual(application.candidate_profile.display_email, "candidate@example.com")
+        self.assertTrue(AuditLog.objects.filter(
+            action="USER_HARD_DELETED",
+            metadata__user_id=candidate_id,
+            metadata__reason="APPLICATION_REJECTED",
+        ).exists())
+        list_response = self.client.get("/api/applications/")
+        self.assertEqual(list_response.status_code, status.HTTP_200_OK)
+        listed = next(item for item in list_response.data["results"] if item["id"] == application.id)
+        self.assertEqual(listed["candidate_profile"]["email"], "candidate@example.com")
+
+    def test_rejecting_application_without_account_is_safe(self):
+        profile = CandidateProfile.objects.create(
+            user=None, account_email="detached@example.com", phone_number="",
+            current_school="", study_level=StudyLevel.MASTER, study_field="",
+        )
+        application = Application.objects.create(
+            candidate_profile=profile, application_type=ApplicationType.PFA_INTERNSHIP,
+        )
+        self.client.force_authenticate(user=self.super_admin)
+
+        response = self.client.post(
+            f"/api/applications/{application.pk}/reject/",
+            {"reason": "Profil non retenu."}, format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        application.refresh_from_db()
+        self.assertEqual(application.status, ApplicationStatus.REJECTED)
+
+    def test_rejecting_one_application_keeps_candidate_with_another_active_application(self):
+        application = self.create_application("multi-candidate@example.com")
+        other = Application.objects.create(
+            candidate_profile=application.candidate_profile,
+            application_type=ApplicationType.PFA_INTERNSHIP,
+        )
+        candidate_id = application.candidate.pk
+        self.client.force_authenticate(user=self.super_admin)
+
+        response = self.client.post(
+            f"/api/applications/{application.pk}/reject/",
+            {"reason": "Une candidature seulement."}, format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertTrue(User.objects.filter(pk=candidate_id, is_active=True).exists())
+        self.assertEqual(other.status, ApplicationStatus.RECEIVED)
 
     def test_invalid_file_extension_is_rejected(self):
         response = self.client.post(
@@ -875,6 +933,8 @@ class InternshipWorkflowTests(APITestCase):
         self.intern_user = User.objects.create_user(email="intern@example.com", password="pwd", role=UserRole.INTERN)
         self.other_intern_user = User.objects.create_user(email="other-intern@example.com", password="pwd", role=UserRole.INTERN)
         self.bu = BusinessUnit.objects.create(name="Intern BU", code="INT", manager=self.manager)
+        BusinessUnitMembership.objects.create(business_unit=self.bu, user=self.supervisor)
+        BusinessUnitMembership.objects.create(business_unit=self.bu, user=self.other_supervisor)
         self.profile = InternProfile.objects.create(user=self.intern_user, business_unit=self.bu, supervisor=self.supervisor)
         self.other_profile = InternProfile.objects.create(user=self.other_intern_user, business_unit=self.bu, supervisor=self.other_supervisor)
         self.requirement = InternDocumentRequirement.objects.create(
@@ -890,6 +950,36 @@ class InternshipWorkflowTests(APITestCase):
             "current_status": "ACTIVE", "progress": 15,
         })
         self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+
+    def test_superadmin_cannot_assign_supervisor_from_another_business_unit(self):
+        other_bu = BusinessUnit.objects.create(name="Other Intern BU", code="OTHER_INT")
+        foreign_supervisor = User.objects.create_user(
+            email="foreign-supervisor@example.com", password="pwd", role=UserRole.EMPLOYEE
+        )
+        BusinessUnitMembership.objects.create(
+            business_unit=other_bu, user=foreign_supervisor
+        )
+        self.client.force_authenticate(self.admin)
+
+        response = self.client.patch(
+            f"/api/interns/{self.profile.id}/",
+            {"business_unit": self.bu.id, "supervisor": foreign_supervisor.id},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("supervisor", response.data)
+        self.profile.refresh_from_db()
+        self.assertEqual(self.profile.supervisor, self.supervisor)
+
+    def test_existing_intern_returns_current_eligible_supervisor(self):
+        self.client.force_authenticate(self.admin)
+
+        response = self.client.get(f"/api/interns/{self.profile.id}/")
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data["business_unit"], self.bu.id)
+        self.assertEqual(response.data["supervisor"], self.supervisor.id)
 
     def test_employee_cannot_access_internship_management(self):
         self.client.force_authenticate(self.supervisor)

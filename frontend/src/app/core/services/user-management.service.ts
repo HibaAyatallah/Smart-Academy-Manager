@@ -41,4 +41,8 @@ export class UserManagementService {
   updateUser(id: number, payload: Partial<UserPayload>): Observable<UserProfile> {
     return this.http.patch<UserProfile>(`${this.baseUrl}${id}/`, payload);
   }
+
+  deleteUser(id: number): Observable<void> {
+    return this.http.delete<void>(`${this.baseUrl}${id}/`);
+  }
 }
