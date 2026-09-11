@@ -40,10 +40,13 @@ class BusinessUnit(models.Model):
 
     def clean(self):
         # manager is optional (BU can exist without an assigned manager initially)
-        if self.manager_id and self.manager.role != UserRole.BU_MANAGER:
+        if self.manager_id and (not self.manager.is_active or self.manager.role != UserRole.BU_MANAGER):
             raise ValidationError(
                 {"manager": "Le manager assigné doit avoir le rôle BU_MANAGER."}
             )
+
+        if self.manager_id and BusinessUnit.objects.filter(manager_id=self.manager_id, is_active=True).exclude(pk=self.pk).exists():
+            raise ValidationError({"manager": "Ce manager possède déjà une BU active. Effectuez un transfert depuis la gestion utilisateur."})
 
 
 class BusinessUnitMembership(models.Model):
@@ -86,7 +89,13 @@ class BusinessUnitMembership(models.Model):
         return f"{self.user.email} - {self.business_unit.code}"
 
     def clean(self):
+        if self.is_active and self.user_id and self.user.role == UserRole.BU_MANAGER:
+            raise ValidationError({"user": "Le manager est affecté via BusinessUnit.manager, pas via une appartenance classique."})
         if self.is_active and self.business_unit_id and self.user_id:
+            if not self.business_unit.is_active:
+                raise ValidationError({"business_unit": "La Business Unit doit être active."})
+            if BusinessUnitMembership.objects.filter(user_id=self.user_id, is_active=True).exclude(pk=self.pk).exists():
+                raise ValidationError({"user": "Cet utilisateur possède déjà une appartenance active."})
             # Check for duplicate active membership in the same Business Unit
             if BusinessUnitMembership.objects.filter(
                 business_unit_id=self.business_unit_id,

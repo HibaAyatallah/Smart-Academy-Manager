@@ -23,7 +23,8 @@ from unittest.mock import patch
 
 from apps.accounts.choices import UserRole
 from apps.business_units.models import BusinessUnit, BusinessUnitMembership
-from apps.recruitment.models import EmployeeProfile
+from apps.recruitment.models import EmployeeProfile, InternProfile
+from apps.notifications.models import AuditLog
 from apps.accounts.services.account_generation import generate_professional_email
 from apps.accounts.services.bulk_import import parse_and_validate_file, execute_import
 
@@ -365,3 +366,117 @@ class BulkImportTests(TestCase):
         self.assertTrue(user.check_password(response.json()["results"][0]["Mot de passe temporaire"]))
         self.assertTrue(EmployeeProfile.objects.filter(user=user).exists())
         self.assertTrue(BusinessUnitMembership.objects.filter(user=user, business_unit=self.bu_netsec).exists())
+
+    def test_import_manager_uses_manager_relation_without_membership(self):
+        self.client.force_authenticate(user=self.super_admin)
+        valid_rows = [{
+            "row": 2,
+            "payload": {
+                "first_name": "Mina", "last_name": "Manager",
+                "contact_email": "manager-import@perso.com", "phone_number": "",
+                "role": UserRole.BU_MANAGER, "business_unit": self.bu_system.id,
+                "position": "Manager", "supervisor": None,
+            },
+        }]
+
+        response = self.client.post(
+            reverse("import-confirm"), {"valid_rows": valid_rows}, format="json",
+        )
+
+        self.assertEqual(response.status_code, 200, response.json())
+        manager = User.objects.get(contact_email="manager-import@perso.com")
+        self.bu_system.refresh_from_db()
+        self.assertEqual(self.bu_system.manager_id, manager.pk)
+        self.assertFalse(manager.bu_memberships.filter(is_active=True).exists())
+        self.assertEqual(BusinessUnit.objects.filter(manager=manager).count(), 1)
+
+    def test_import_intern_accepts_supervisor_from_same_bu(self):
+        supervisor = User.objects.create_user(
+            email="supervisor-import@finatech.com", role=UserRole.EMPLOYEE,
+        )
+        BusinessUnitMembership.objects.create(
+            user=supervisor, business_unit=self.bu_netsec,
+        )
+        self.client.force_authenticate(user=self.super_admin)
+        valid_rows = [{
+            "row": 2,
+            "payload": {
+                "first_name": "Ines", "last_name": "Intern",
+                "contact_email": "intern-import@perso.com", "phone_number": "",
+                "role": UserRole.INTERN, "business_unit": self.bu_netsec.id,
+                "position": "Stagiaire", "supervisor": supervisor.id,
+                "school": "ENSA", "specialization": "Réseaux",
+            },
+        }]
+
+        response = self.client.post(
+            reverse("import-confirm"), {"valid_rows": valid_rows}, format="json",
+        )
+
+        self.assertEqual(response.status_code, 200, response.json())
+        profile = InternProfile.objects.get(user__contact_email="intern-import@perso.com")
+        self.assertEqual(profile.business_unit_id, self.bu_netsec.pk)
+        self.assertEqual(profile.supervisor_id, supervisor.pk)
+        self.assertEqual(
+            profile.user.bu_memberships.get(is_active=True).business_unit_id,
+            self.bu_netsec.pk,
+        )
+
+    def test_import_intern_rejects_other_bu_supervisor_transactionally(self):
+        supervisor = User.objects.create_user(
+            email="wrong-supervisor@finatech.com", role=UserRole.EMPLOYEE,
+        )
+        BusinessUnitMembership.objects.create(
+            user=supervisor, business_unit=self.bu_system,
+        )
+        self.client.force_authenticate(user=self.super_admin)
+        initial_count = User.objects.count()
+        valid_rows = [{
+            "row": 2,
+            "payload": {
+                "first_name": "Noa", "last_name": "Intern",
+                "contact_email": "invalid-intern-import@perso.com", "phone_number": "",
+                "role": UserRole.INTERN, "business_unit": self.bu_netsec.id,
+                "position": "Stagiaire", "supervisor": supervisor.id,
+            },
+        }]
+
+        response = self.client.post(
+            reverse("import-confirm"), {"valid_rows": valid_rows}, format="json",
+        )
+
+        self.assertEqual(response.status_code, 400, response.json())
+        self.assertIn("supervisor", response.json())
+        self.assertEqual(User.objects.count(), initial_count)
+        self.assertFalse(
+            User.objects.filter(contact_email="invalid-intern-import@perso.com").exists()
+        )
+
+    def test_import_transfer_audit_keeps_old_and_new_business_units(self):
+        employee = User.objects.create_user(
+            email="transfer@finatech.com", contact_email="transfer@perso.com",
+            role=UserRole.EMPLOYEE,
+        )
+        BusinessUnitMembership.objects.create(user=employee, business_unit=self.bu_netsec)
+        self.client.force_authenticate(user=self.super_admin)
+        valid_rows = [{
+            "row": 2,
+            "payload": {
+                "first_name": "Tara", "last_name": "Transfer",
+                "contact_email": "transfer@perso.com", "phone_number": "",
+                "role": UserRole.EMPLOYEE, "business_unit": self.bu_achat.id,
+                "position": "Acheteuse", "supervisor": None,
+            },
+        }]
+
+        response = self.client.post(
+            reverse("import-confirm"), {"valid_rows": valid_rows}, format="json",
+        )
+
+        self.assertEqual(response.status_code, 200, response.json())
+        log = AuditLog.objects.get(
+            action="USER_BUSINESS_UNIT_CHANGED", target_id=str(employee.pk),
+        )
+        self.assertEqual(log.actor_id, self.super_admin.pk)
+        self.assertEqual(log.metadata["old_business_unit"]["id"], self.bu_netsec.pk)
+        self.assertEqual(log.metadata["new_business_unit"]["id"], self.bu_achat.pk)

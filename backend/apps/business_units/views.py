@@ -114,11 +114,8 @@ class BusinessUnitMembershipViewSet(viewsets.ModelViewSet):
         return queryset.none()
 
     def perform_destroy(self, instance):
-        if is_bu_manager(self.request.user):
-            instance.is_active = False
-            instance.save(update_fields=["is_active"])
-            return
-        instance.delete()
+        from .services import retire_membership
+        retire_membership(instance, self.request)
 
 
 class BusinessUnitNeedViewSet(viewsets.ModelViewSet):

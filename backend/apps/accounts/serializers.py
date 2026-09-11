@@ -41,89 +41,24 @@ class UserBusinessUnitMixin:
             raise serializers.ValidationError("Cette Business Unit n'existe pas ou n'est pas active.")
         return value
 
-    def assign_business_unit(self, user, business_unit_id):
-        from apps.business_units.models import BusinessUnit, BusinessUnitMembership
-
-        previous = self._current_business_unit(user)
-
-        # A manager has one current BU through BusinessUnit.manager; all other
-        # users use the existing membership relation. Historical project and
-        # training rows are intentionally not rewritten.
-        BusinessUnit.objects.filter(manager=user).exclude(
-            pk=business_unit_id if user.role == UserRole.BU_MANAGER else None
-        ).update(manager=None)
-        BusinessUnitMembership.objects.filter(user=user, is_active=True).exclude(
-            business_unit_id=business_unit_id if user.role != UserRole.BU_MANAGER else None
-        ).update(is_active=False)
-
-        if user.role == UserRole.BU_MANAGER:
-            BusinessUnitMembership.objects.filter(user=user, is_active=True).update(is_active=False)
-            if business_unit_id:
-                BusinessUnit.objects.filter(pk=business_unit_id).update(manager=user)
-        elif business_unit_id:
-            membership = BusinessUnitMembership.objects.filter(
-                user=user, business_unit_id=business_unit_id, is_active=False
-            ).order_by("-joined_at").first()
-            if membership:
-                membership.is_active = True
-                membership.save(update_fields=["is_active"])
-            elif not BusinessUnitMembership.objects.filter(
-                user=user, business_unit_id=business_unit_id, is_active=True
-            ).exists():
-                BusinessUnitMembership.objects.create(
-                    user=user, business_unit_id=business_unit_id, is_active=True
-                )
-
-        # InternProfile also stores the operational BU. Keep it aligned when
-        # the user is already an intern, without touching internship history.
-        if user.role == UserRole.INTERN:
-            from apps.recruitment.models import InternProfile
-            InternProfile.objects.filter(user=user).update(business_unit_id=business_unit_id)
-
-        current = self._current_business_unit(user)
-        self._audit_business_unit_change(user, previous, current)
+    def validate(self, attrs):
+        role = attrs.get("role", getattr(self.instance, "role", UserRole.CANDIDATE))
+        if role == UserRole.INTERN and (self.instance is None or not hasattr(self.instance, "intern_profile")):
+            raise serializers.ValidationError({"role": "Créez le dossier stagiaire par conversion de candidature ou par l'import métier ; la création directe d'un compte INTERN est interdite."})
+        if role == UserRole.CLIENT and attrs.get("business_unit_id") is not None:
+            raise serializers.ValidationError({"business_unit_id": "Un client externe ne peut pas avoir de BU interne."})
+        return attrs
 
     @staticmethod
-    def _current_business_unit(user):
-        from apps.business_units.models import BusinessUnit
-
-        return BusinessUnit.objects.filter(
-            models.Q(manager=user)
-            | models.Q(memberships__user=user, memberships__is_active=True)
-        ).distinct().order_by("id").first()
-
-    def _audit_business_unit_change(self, user, previous, current):
-        if getattr(previous, "pk", None) == getattr(current, "pk", None):
-            return
-        request = self.context.get("request")
-        actor = getattr(request, "user", None)
-        if not is_super_admin(actor):
-            return
-
-        from apps.notifications.models import AuditLog
-
-        AuditLog.objects.create(
-            actor=actor,
-            actor_email=actor.email,
-            method=request.method,
-            path=request.path[:500],
-            action="USER_BUSINESS_UNIT_CHANGED",
-            target_type="users",
-            target_id=str(user.pk),
-            status_code=201 if request.method == "POST" else 200,
-            metadata={
-                "user_id": user.pk,
-                "user_email": user.email,
-                "old_business_unit": self._business_unit_metadata(previous),
-                "new_business_unit": self._business_unit_metadata(current),
-            },
-        )
-
-    @staticmethod
-    def _business_unit_metadata(business_unit):
-        if not business_unit:
-            return None
-        return {"id": business_unit.pk, "code": business_unit.code, "name": business_unit.name}
+    def ensure_business_profile(user):
+        from apps.trainings.models import ClientProfile
+        from apps.recruitment.models import CandidateProfile, EmployeeProfile
+        if user.role == UserRole.CLIENT:
+            ClientProfile.objects.get_or_create(user=user)
+        elif user.role in (UserRole.EMPLOYEE, UserRole.TRAINER_TUTOR, UserRole.BU_MANAGER):
+            EmployeeProfile.objects.get_or_create(user=user)
+        elif user.role == UserRole.CANDIDATE:
+            CandidateProfile.objects.get_or_create(user=user, defaults={"phone_number": user.phone_number})
 
 
 class SmartAcademyTokenObtainPairSerializer(TokenObtainPairSerializer):
@@ -171,11 +106,18 @@ class UserSerializer(UserBusinessUnitMixin, serializers.ModelSerializer):
         return value
 
     def update(self, instance, validated_data):
-        business_unit_id = validated_data.pop("business_unit_id", None)
+        from apps.business_units.services import UNSET, assign_business_unit, current_business_unit, validate_supervised_interns
+        business_unit_id = validated_data.pop("business_unit_id", UNSET)
         with transaction.atomic():
+            instance = User.objects.select_for_update().get(pk=instance.pk)
+            previous = current_business_unit(instance)
+            old_role = instance.role
             instance = super().update(instance, validated_data)
-            if "business_unit_id" in self.initial_data or "role" in self.initial_data:
-                self.assign_business_unit(instance, business_unit_id)
+            self.ensure_business_profile(instance)
+            if business_unit_id is not UNSET or instance.role != old_role:
+                target = getattr(previous, "pk", None) if business_unit_id is UNSET else business_unit_id
+                assign_business_unit(instance, target, request=self.context.get("request"), previous=previous)
+            validate_supervised_interns(instance)
         return instance
 
 
@@ -205,7 +147,9 @@ class UserCreateSerializer(UserBusinessUnitMixin, serializers.ModelSerializer):
         password = validated_data.pop("password")
         with transaction.atomic():
             user = User.objects.create_user(password=password, **validated_data)
-            self.assign_business_unit(user, business_unit_id)
+            from apps.business_units.services import assign_business_unit
+            self.ensure_business_profile(user)
+            assign_business_unit(user, business_unit_id, request=self.context.get("request"))
         return user
 
     def validate_role(self, value):

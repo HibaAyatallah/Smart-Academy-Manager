@@ -2,6 +2,9 @@ import logging
 import unicodedata
 import pandas as pd
 from django.contrib.auth import get_user_model
+from django.db import transaction
+from types import SimpleNamespace
+from apps.business_units.services import assign_business_unit, current_business_unit
 from django.core.exceptions import ValidationError
 from django.core.validators import validate_email
 from apps.accounts.choices import UserRole
@@ -325,6 +328,7 @@ def parse_and_validate_file(file_obj, filename: str) -> dict:
     }
 
 
+@transaction.atomic
 def execute_import(valid_rows: list, actor) -> list:
     """
     Executes the import for the valid rows using a multi-pass strategy.
@@ -336,6 +340,8 @@ def execute_import(valid_rows: list, actor) -> list:
     
     user_mapping = {}
     row_results = {}
+    previous_units = {}
+    audit_request = SimpleNamespace(user=actor, method="POST", path="/api/import/confirm/")
     
     # Pass 1: User Base Accounts Creation
     for row_data in valid_rows:
@@ -345,7 +351,10 @@ def execute_import(valid_rows: list, actor) -> list:
         # Bypass relations for now
         payload["business_unit"] = None
         payload["supervisor"] = None
+        payload["_defer_business_unit_assignment"] = True
         
+        existing = User.objects.filter(contact_email=payload["contact_email"]).first() or User.objects.filter(email=payload["contact_email"]).first()
+        previous_units[row_num] = current_business_unit(existing) if existing else None
         gen_result = generate_account_for_user(payload, actor=actor)
         user_obj = gen_result["user"]
         
@@ -395,18 +404,9 @@ def execute_import(valid_rows: list, actor) -> list:
         if bu_obj:
             row_results[row_data["row"]]["Business Unit"] = bu_obj.name
             
-            if role == UserRole.INTERN:
-                InternProfile.objects.filter(user=user_obj).update(business_unit=bu_obj)
-                
-            if role != UserRole.CLIENT:
-                BusinessUnitMembership.objects.update_or_create(
-                    user=user_obj,
-                    business_unit=bu_obj,
-                    defaults={
-                        "is_active": True,
-                        "position": payload.get("position", "")
-                    }
-                )
+        assign_business_unit(user_obj, getattr(bu_obj, "pk", None), request=audit_request, previous=previous_units[row_data["row"]])
+        if bu_obj and role != UserRole.BU_MANAGER:
+            BusinessUnitMembership.objects.filter(user=user_obj, business_unit=bu_obj, is_active=True).update(position=payload.get("position", ""))
 
     # Pass 4: Supervisor Resolution
     for row_data in valid_rows:
@@ -445,7 +445,13 @@ def execute_import(valid_rows: list, actor) -> list:
                         
             if supervisor_obj:
                 user_obj = user_mapping[payload["contact_email"]]
-                InternProfile.objects.filter(user=user_obj).update(supervisor=supervisor_obj)
+                profile = InternProfile.objects.get(user=user_obj)
+                assign_business_unit(
+                    user_obj,
+                    profile.business_unit_id,
+                    supervisor=supervisor_obj,
+                    previous=profile.business_unit,
+                )
                 
     for row_num in sorted(row_results.keys()):
         results.append(row_results[row_num])

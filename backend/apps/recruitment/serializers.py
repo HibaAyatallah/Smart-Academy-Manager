@@ -876,16 +876,20 @@ class InternProfileSerializer(serializers.ModelSerializer):
             errors.setdefault("internship_end", "La date de fin doit être postérieure ou égale à la date de début.")
         business_unit = attrs.get("business_unit", getattr(self.instance, "business_unit", None))
         supervisor = attrs.get("supervisor", getattr(self.instance, "supervisor", None))
-        if supervisor:
-            from apps.business_units.selectors import eligible_supervisors_for_business_unit
-
-            if not business_unit or not eligible_supervisors_for_business_unit(
-                business_unit
-            ).filter(pk=supervisor.pk).exists():
-                errors["supervisor"] = (
-                    "L'encadrant doit être actif, appartenir à la Business Unit du stage "
-                    "et avoir le rôle Collaborateur, Formateur ou Manager BU."
-                )
+        if business_unit and not business_unit.is_active:
+            errors["business_unit"] = "La Business Unit doit être active."
+        from apps.business_units.services import validate_supervisor
+        validate_supervisor(business_unit, supervisor)
         if errors:
             raise serializers.ValidationError(errors)
         return attrs
+
+    def update(self, instance, validated_data):
+        from apps.business_units.services import assign_business_unit
+        with transaction.atomic():
+            if "business_unit" in validated_data or "supervisor" in validated_data:
+                unit = validated_data.pop("business_unit", instance.business_unit)
+                supervisor = validated_data.pop("supervisor", instance.supervisor)
+                assign_business_unit(instance.user, getattr(unit, "pk", None), supervisor=supervisor, request=self.context.get("request"))
+                instance.refresh_from_db()
+            return super().update(instance, validated_data)

@@ -262,6 +262,8 @@ class UserImportViewSet(viewsets.ViewSet):
             with transaction.atomic():
                 results = execute_import(valid_rows, request.user)
             return Response({"results": results})
+        except serializers.ValidationError as exc:
+            return Response(exc.detail, status=400)
         except ValueError as exc:
             logger.warning("Bulk import rejected error_type=%s", exc.__class__.__name__)
             return Response({"error": "Les données d'import sont incohérentes."}, status=400)

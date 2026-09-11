@@ -305,7 +305,7 @@ class BusinessUnitTests(APITestCase):
             reverse("business-unit-list"),
             {"name": "BI", "code": "BI", "manager": self.manager1.id},
         )
-        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED, response.data)
         self.assertTrue(BusinessUnit.objects.filter(code="BI", name="BI").exists())
 
     def test_manager_cannot_deactivate_own_bu(self):

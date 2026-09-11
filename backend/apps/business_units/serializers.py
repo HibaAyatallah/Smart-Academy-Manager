@@ -1,5 +1,7 @@
 from rest_framework import serializers
 from django.contrib.auth import get_user_model
+from django.db import transaction
+from .services import UNSET, assign_business_unit, current_business_unit, audit_business_unit_change, validate_supervised_interns
 
 from apps.accounts.choices import UserRole
 from apps.business_units.permissions import is_bu_manager
@@ -20,6 +22,7 @@ class EligibleSupervisorSerializer(serializers.ModelSerializer):
 
 class BusinessUnitSerializer(serializers.ModelSerializer):
     code = serializers.CharField(max_length=50)
+    is_active = serializers.BooleanField(required=False, default=True)
     manager_email = serializers.EmailField(source="manager.email", read_only=True)
     manager_name = serializers.CharField(source="manager.full_name", read_only=True)
 
@@ -46,7 +49,7 @@ class BusinessUnitSerializer(serializers.ModelSerializer):
                     "Vous ne pouvez pas retirer le manager de votre Business Unit."
                 )
             return value
-        if value.role != UserRole.BU_MANAGER:
+        if not value.is_active or value.role != UserRole.BU_MANAGER:
             raise serializers.ValidationError("Le manager doit avoir le role BU_MANAGER.")
         if request and is_bu_manager(request.user):
             if self.instance is None or value.pk != self.instance.manager_id:
@@ -80,6 +83,28 @@ class BusinessUnitSerializer(serializers.ModelSerializer):
         if queryset.exists():
             raise serializers.ValidationError("Une Business Unit avec ce code existe déjà.")
         return value
+
+    @transaction.atomic
+    def create(self, validated_data):
+        manager = validated_data.pop("manager", None)
+        instance = super().create(validated_data)
+        if manager:
+            assign_business_unit(manager, instance.pk, request=self.context.get("request"))
+            instance.refresh_from_db()
+        return instance
+
+    @transaction.atomic
+    def update(self, instance, validated_data):
+        manager = validated_data.pop("manager", UNSET)
+        previous_manager = instance.manager
+        instance = super().update(instance, validated_data)
+        if manager is not UNSET:
+            if manager:
+                assign_business_unit(manager, instance.pk, request=self.context.get("request"))
+            elif previous_manager:
+                assign_business_unit(previous_manager, None, request=self.context.get("request"))
+            instance.refresh_from_db()
+        return instance
 
 
 class BusinessUnitMembershipSerializer(serializers.ModelSerializer):
@@ -136,15 +161,40 @@ class BusinessUnitMembershipSerializer(serializers.ModelSerializer):
             raise serializers.ValidationError({
                 "member_email": "Seul un compte collaborateur peut être ajouté à une Business Unit."
             })
-        if business_unit and user and BusinessUnitMembership.objects.filter(
-            business_unit=business_unit, user=user, is_active=True
+        if self.instance and (user.pk != self.instance.user_id or business_unit.pk != self.instance.business_unit_id):
+            raise serializers.ValidationError({"business_unit": "Une appartenance historique ne peut pas être réaffectée. Utilisez la gestion utilisateur pour transférer la BU."})
+        active = attrs.get("is_active", getattr(self.instance, "is_active", True))
+        if active and business_unit and not business_unit.is_active:
+            raise serializers.ValidationError({"business_unit": "La Business Unit doit être active."})
+        if active and business_unit and user and BusinessUnitMembership.objects.filter(
+            user=user, is_active=True
         ).exclude(pk=getattr(self.instance, "pk", None)).exists():
             raise serializers.ValidationError({
-                "member_email": "Ce collaborateur est déjà membre actif de cette Business Unit."
+                "member_email": "Ce collaborateur possède déjà une appartenance active. Utilisez la gestion utilisateur pour un transfert."
             })
         if request and is_bu_manager(request.user) and self.instance is None:
             attrs["is_active"] = True
         return attrs
+
+    @transaction.atomic
+    def create(self, validated_data):
+        User.objects.select_for_update().get(pk=validated_data["user"].pk)
+        validated_data = self.validate(validated_data)
+        user = validated_data["user"]
+        previous = current_business_unit(user)
+        instance = super().create(validated_data)
+        audit_business_unit_change(user, previous, current_business_unit(user), self.context.get("request"))
+        return instance
+
+    @transaction.atomic
+    def update(self, instance, validated_data):
+        User.objects.select_for_update().get(pk=instance.user_id)
+        validated_data = self.validate(validated_data)
+        previous = current_business_unit(instance.user)
+        instance = super().update(instance, validated_data)
+        validate_supervised_interns(instance.user)
+        audit_business_unit_change(instance.user, previous, current_business_unit(instance.user), self.context.get("request"))
+        return instance
 
 class BusinessUnitNeedHistorySerializer(serializers.ModelSerializer):
     changed_by_email = serializers.EmailField(source="changed_by.email", read_only=True)
