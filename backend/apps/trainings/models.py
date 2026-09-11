@@ -75,6 +75,15 @@ class Training(models.Model):
     class Meta:
         ordering = ['-created_at']
 
+    def clean(self):
+        super().clean()
+        if self.pk:
+            previous_client = type(self).objects.filter(pk=self.pk).values_list("external_client_id", flat=True).first()
+            if previous_client != self.external_client_id and self.sessions.exists():
+                raise ValidationError({
+                    "external_client": "Le client ne peut pas être changé tant que la formation possède des sessions."
+                })
+
     def __str__(self):
         return self.title
 
@@ -138,6 +147,11 @@ class TrainingSession(models.Model):
         if self.maximum_participants is not None and self.maximum_participants <= 0:
             raise ValidationError("Le nombre maximum de participants doit être supérieur à zéro.")
         
+        if self.training_id and self.external_client_id != self.training.external_client_id:
+            raise ValidationError({
+                "external_client": "Le client de la session doit correspondre au client de la formation (aucun pour une formation interne)."
+            })
+
         if self.training_id:
             delivery_mode = self.training.delivery_mode
             if delivery_mode in [DeliveryMode.REMOTE, DeliveryMode.HYBRID, DeliveryMode.E_LEARNING]:

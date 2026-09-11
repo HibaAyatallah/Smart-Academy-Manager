@@ -452,15 +452,15 @@ def build_safe_context(user) -> SafeContext:
         sources.append(AnswerSource(facts[-1],"aggregate","Stagiaires de ma BU","BU_INTERNS",None,"/internships"))
         suggestions = ["Quels sont les besoins de ma BU ?", "Quelles sont les formations de ma BU ?"]
     elif user.role in [UserRole.HR, UserRole.SUPER_ADMIN]:
-        facts = [
-            f"Applications total: {Application.objects.count()}",
-            f"Interns total: {InternProfile.objects.count()}",
-            f"Business units total: {BusinessUnit.objects.count()}",
-            f"Trainings total: {Training.objects.count()}",
-            f"Training sessions total: {TrainingSession.objects.count()}",
-        ]
         if user.role == UserRole.SUPER_ADMIN:
-            facts.append(f"Users total: {User.objects.count()}")
+            facts = [
+                f"Applications total: {Application.objects.count()}",
+                f"Interns total: {InternProfile.objects.count()}",
+                f"Business units total: {BusinessUnit.objects.count()}",
+                f"Trainings total: {Training.objects.count()}",
+                f"Training sessions total: {TrainingSession.objects.count()}",
+                f"Users total: {User.objects.count()}",
+            ]
         else:
             # HR cannot consult recruitment, BU management or reserved/draft training.
             from apps.trainings.choices import TrainingStatus, SessionStatus
@@ -494,7 +494,7 @@ def build_safe_context(user) -> SafeContext:
         profile = ClientProfile.objects.filter(user=user).first()
         if profile:
             for training in profile.reserved_trainings.prefetch_related("sessions"):
-                fact = json.dumps(ClientTrainingSerializer(training).data, ensure_ascii=False, default=str)
+                fact = json.dumps(ClientTrainingSerializer(training, context={"user": user}).data, ensure_ascii=False, default=str)
                 facts.append(fact)
                 sources.append(AnswerSource(fact, "training", training.title, f"TRN-{training.pk}", training.pk, "/client/trainings"))
     else:

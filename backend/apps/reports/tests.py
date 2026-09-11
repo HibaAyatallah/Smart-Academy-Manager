@@ -28,6 +28,34 @@ class ReportTests(APITestCase):
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertEqual(response.data["recent_activities"], [])
 
+    def test_hr_summary_is_unchanged_by_recruitment_data(self):
+        from apps.recruitment.models import Application, CandidateProfile, Offer
+        self.client.force_authenticate(self.hr)
+        before = self.client.get("/api/reports/summary/").data
+        candidate = User.objects.create_user(email="secret-candidate@test.com", role="CANDIDATE", first_name="SECRET_CANDIDATE")
+        profile = CandidateProfile.objects.create(user=candidate)
+        offer = Offer.objects.create(title="SECRET_OFFER", description="Confidential", business_unit=self.bu, application_type="HIRING")
+        Application.objects.create(candidate_profile=profile, offer=offer, application_type="HIRING")
+        after = self.client.get("/api/reports/summary/").data
+        self.assertEqual(before, after)
+        for forbidden in ["recent_applications", "application_statuses", "recruitment", "candidates_by_bu", "SECRET_CANDIDATE", "SECRET_OFFER"]:
+            self.assertNotIn(forbidden, str(after))
+        self.client.force_authenticate(self.admin)
+        response = self.client.get("/api/reports/summary/")
+        self.assertEqual(response.data["cards"]["applications"], 1)
+        self.assertIn("SECRET_CANDIDATE", str(response.data))
+        self.assertIn("SECRET_OFFER", str(response.data))
+
+    def test_hr_summary_excludes_reserved_and_unpublished_trainings(self):
+        from apps.trainings.models import ClientProfile, Training
+        self.client.force_authenticate(self.hr)
+        before = self.client.get("/api/reports/summary/").data
+        client_user = User.objects.create_user(email="report-client@test.com", role="CLIENT")
+        profile = ClientProfile.objects.create(user=client_user)
+        Training.objects.create(title="Reserved", duration=1, status="PUBLISHED", external_client=profile)
+        Training.objects.create(title="Draft", duration=1, status="DRAFT")
+        self.assertEqual(before, self.client.get("/api/reports/summary/").data)
+
     def test_other_roles_are_denied(self):
         self.client.force_authenticate(self.employee); self.assertEqual(self.client.get("/api/reports/summary/").status_code,status.HTTP_403_FORBIDDEN)
 

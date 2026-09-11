@@ -20,7 +20,8 @@ from apps.recruitment.models import Application, InternProfile, Offer
 from apps.recruitment.choices import ApplicationStatus, InternshipStatus, OfferStatus
 from apps.business_units.choices import BusinessUnitCode, NeedStatus
 from apps.trainings.models import SessionAttendance, Training, TrainingCertificate, TrainingEnrollment, TrainingSession
-from apps.trainings.choices import TrainingType
+from apps.trainings.choices import TrainingType, TrainingStatus
+from apps.trainings.selectors import visible_sessions
 from apps.notifications.models import AuditLog
 from apps.accounts.permissions import IsHROnly
 from rest_framework.permissions import BasePermission
@@ -44,7 +45,34 @@ def dated(qs, field, start, end):
     if end: qs=qs.filter(**{f"{field}__date__lte":end})
     return qs
 
+def hr_report_data(params, user):
+    """Build the HR response from authorized datasets only, before aggregation."""
+    start, end, bu = params.get("date_from"), params.get("date_to"), params.get("business_unit")
+    interns = dated(InternProfile.objects.filter(user__role=UserRole.INTERN, user__is_active=True), "created_at", start, end)
+    collaborators = dated(User.objects.filter(role=UserRole.EMPLOYEE, is_active=True), "created_at", start, end)
+    trainings = dated(Training.objects.filter(status=TrainingStatus.PUBLISHED, external_client__isnull=True), "created_at", start, end)
+    sessions = dated(visible_sessions(TrainingSession.objects.all(), user), "created_at", start, end)
+    if bu:
+        interns = interns.filter(business_unit_id=bu)
+        collaborators = collaborators.filter(bu_memberships__business_unit_id=bu, bu_memberships__is_active=True).distinct()
+        trainings = trainings.filter(business_unit_id=bu)
+        sessions = sessions.filter(training__business_unit_id=bu)
+    if params.get("training_type"):
+        trainings = trainings.filter(training_type=params["training_type"])
+        sessions = sessions.filter(training__training_type=params["training_type"])
+    return {
+        "filters": {"date_from": start or "", "date_to": end or "", "business_unit": bu or "", "training_type": params.get("training_type", "")},
+        "cards": {"interns": interns.count(), "active_collaborators": collaborators.count(), "trainings": trainings.count(), "sessions": sessions.count()},
+        "series": {"internships": grouped(interns, "current_status"), "trainings": grouped(trainings, "status"), "sessions": grouped(sessions, "status")},
+        "recent_activities": [],
+        "insights": [],
+        "kpis": {},
+    }
+
+
 def report_data(params, user=None):
+    if user and user.role == UserRole.HR:
+        return hr_report_data(params, user)
     start,end,bu=params.get("date_from"),params.get("date_to"),params.get("business_unit")
     status_filter = params.get("status")
     training_type = params.get("training_type")
@@ -286,7 +314,7 @@ def report_data(params, user=None):
             "certificate_rate": round(100 * certificates.count() / max(enrollments.count(), 1), 1),
             "active_memberships": BusinessUnitMembership.objects.filter(
                 is_active=True,
-                **({"business_unit_id__in" if isinstance(bu, list) else "business_unit_id": bu} if bu else {}),
+                **({"business_unit_id__in" if isinstance(bu, list) else "business_unit_id": bu} if bu or scoped_bu_ids is not None else {}),
             ).count()
         }
     }
@@ -413,9 +441,9 @@ class HRDashboardView(APIView):
         }
 
         trainings_overview = {
-            "active_trainings": Training.objects.filter(status__in=["PLANNED", "ONGOING"]).count(),
-            "upcoming_sessions": TrainingSession.objects.filter(status="PLANNED", start_date__gte=today).count(),
-            "ongoing_sessions": TrainingSession.objects.filter(status="ONGOING").count()
+            "active_trainings": Training.objects.filter(status__in=["PLANNED", "ONGOING"], external_client__isnull=True).count(),
+            "upcoming_sessions": visible_sessions(TrainingSession.objects.all(), request.user).filter(status="PLANNED", start_date__gte=today).count(),
+            "ongoing_sessions": visible_sessions(TrainingSession.objects.all(), request.user).filter(status="ONGOING").count()
         }
 
         return Response({

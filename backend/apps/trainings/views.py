@@ -20,6 +20,7 @@ from .permissions import IsSuperAdminOrReadOnly, IsClientProfile, IsNotClientPro
 from apps.accounts.permissions import IsSuperAdminOnly
 from apps.accounts.choices import UserRole
 from .choices import TrainingStatus, SessionStatus, EnrollmentStatus
+from .selectors import visible_sessions
 
 
 def _certificate_pdf(enrollment, number):
@@ -117,10 +118,7 @@ class TrainingViewSet(viewsets.ModelViewSet):
         )
         results = []
         for training in trainings:
-            sessions = [
-                session for session in training.sessions.all()
-                if training.trainer_id == request.user.id or session.trainer_id == request.user.id
-            ]
+            sessions = visible_sessions(training.sessions.all(), request.user)
             business_unit = training.business_unit
             manager = business_unit.manager if business_unit else None
             results.append({
@@ -174,42 +172,12 @@ class TrainingSessionViewSet(viewsets.ModelViewSet):
     ordering_fields = ["start_date", "start_time"]
 
     def get_queryset(self):
-        user = self.request.user
-        if not user.is_authenticated or user.role == UserRole.CLIENT:
-            return TrainingSession.objects.none()
-            
-        qs = TrainingSession.objects.all().select_related("training", "trainer", "external_client")
-        
-        if user.role == UserRole.SUPER_ADMIN:
-            return qs
+        queryset = TrainingSession.objects.select_related("training", "trainer", "external_client")
+        # Clients use the dedicated response with only public client fields.
+        if self.request.user.role == UserRole.CLIENT:
+            return queryset.none()
+        return visible_sessions(queryset, self.request.user)
 
-        # HR: read-only access to open/planned/full sessions of published internal trainings.
-        # HR must NOT see sessions of client-reserved trainings or cancelled/completed sessions.
-        if user.role == UserRole.HR:
-            return qs.filter(
-                status__in=[SessionStatus.OPEN, SessionStatus.PLANNED, SessionStatus.FULL],
-                external_client__isnull=True,
-                training__status=TrainingStatus.PUBLISHED,
-            )
-
-        if user.role == UserRole.BU_MANAGER:
-            bu_ids = user.managed_business_units.values_list("id", flat=True)
-            return qs.filter(
-                Q(external_client__isnull=True),
-                Q(training__business_unit__isnull=True) | Q(training__business_unit__id__in=bu_ids)
-            )
-            
-        if user.role == UserRole.TRAINER_TUTOR:
-            return qs.filter(trainer=user)
-            
-        bu_ids = user.bu_memberships.filter(is_active=True).values_list("business_unit_id", flat=True)
-        return qs.filter(
-            status__in=[SessionStatus.OPEN, SessionStatus.PLANNED, SessionStatus.FULL],
-            external_client__isnull=True
-        ).filter(
-            Q(training__business_unit__isnull=True) | Q(training__business_unit__id__in=bu_ids)
-        )
-        
     def perform_update(self, serializer):
         instance = self.get_object()
         if instance.status in [SessionStatus.COMPLETED, SessionStatus.CANCELLED]:
@@ -288,7 +256,7 @@ class ClientTrainingSessionViewSet(viewsets.ReadOnlyModelViewSet):
             return TrainingSession.objects.none()
         try:
             profile = user.client_profile
-            return profile.sessions.all()
+            return visible_sessions(profile.sessions.all(), user)
         except ClientProfile.DoesNotExist:
             return TrainingSession.objects.none()
 
@@ -320,7 +288,12 @@ class TrainingEnrollmentViewSet(viewsets.ModelViewSet):
             
         if user.role == UserRole.BU_MANAGER:
             managed_bus = user.managed_business_units.all()
-            return qs.filter(Q(user__bu_memberships__business_unit__in=managed_bus, user__bu_memberships__is_active=True) | Q(user=user)).distinct()
+            return qs.filter(
+                Q(user__bu_memberships__business_unit__in=managed_bus, user__bu_memberships__is_active=True) | Q(user=user),
+                Q(training__business_unit__in=managed_bus) | Q(training__business_unit__isnull=True),
+                training__external_client__isnull=True,
+                session__external_client__isnull=True,
+            ).distinct()
             
         if user.role == UserRole.TRAINER_TUTOR:
             return qs.filter(Q(session__trainer=user) | Q(user=user))

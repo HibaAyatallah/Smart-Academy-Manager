@@ -1,4 +1,6 @@
+from django.core.exceptions import ValidationError as DjangoValidationError
 from rest_framework import serializers
+from .selectors import visible_sessions
 from .models import ClientProfile, Training, TrainingSession, TrainingEnrollment, EnrollmentHistory, SessionAttendance, AttendanceHistory, TrainingCertificate
 from .choices import EnrollmentStatus, SessionStatus
 from apps.accounts.choices import UserRole
@@ -62,16 +64,29 @@ class TrainingSessionSerializer(serializers.ModelSerializer):
             
         try:
             instance.clean()
-        except Exception as e:
-            from rest_framework.exceptions import ValidationError
-            raise ValidationError(e)
+        except DjangoValidationError as exc:
+            raise serializers.ValidationError(exc.message_dict if hasattr(exc, "message_dict") else exc.messages)
             
         return attrs
 
 
 class TrainingSerializer(serializers.ModelSerializer):
-    # We might not want to embed all sessions, but it's useful. Let's make it optional or read_only.
-    sessions = TrainingSessionSerializer(many=True, read_only=True)
+    sessions = serializers.SerializerMethodField()
+
+    def get_sessions(self, obj) -> list[dict]:
+        user = self.context.get("user") or getattr(self.context.get("request"), "user", None)
+        return TrainingSessionSerializer(
+            visible_sessions(obj.sessions.all(), user), many=True, context=self.context,
+        ).data
+
+    def validate(self, attrs):
+        if self.instance and "external_client" in attrs:
+            client_id = getattr(attrs["external_client"], "pk", None)
+            if client_id != self.instance.external_client_id and self.instance.sessions.exists():
+                raise serializers.ValidationError({
+                    "external_client": "Le client ne peut pas être changé tant que la formation possède des sessions."
+                })
+        return attrs
 
     class Meta:
         model = Training
@@ -102,7 +117,13 @@ class ClientTrainingSessionSerializer(serializers.ModelSerializer):
 
 
 class ClientTrainingSerializer(serializers.ModelSerializer):
-    sessions = ClientTrainingSessionSerializer(many=True, read_only=True)
+    sessions = serializers.SerializerMethodField()
+
+    def get_sessions(self, obj) -> list[dict]:
+        user = self.context.get("user") or getattr(self.context.get("request"), "user", None)
+        return ClientTrainingSessionSerializer(
+            visible_sessions(obj.sessions.all(), user), many=True, context=self.context,
+        ).data
 
     class Meta:
         model = Training
