@@ -19,11 +19,14 @@ import {
   Application,
   ApplicationDocument,
   ApplicationMatch,
+  ApplicationConversionResponse,
+  ApplicationConversionType,
   MatchScoreComponent,
   ApplicationStatus,
   EDUCATION_LEVEL_LABELS,
 } from '../../../core/models/application.models';
 import { ApplicationService } from '../../../core/services/application.service';
+import { AuthService } from '../../../core/services/auth.service';
 import { PageHeaderComponent } from '../../../shared/components/page-header/page-header.component';
 import {
   ConfirmDialogComponent,
@@ -35,6 +38,10 @@ import {
   ScheduleInterviewDialogResult,
 } from '../shared/schedule-interview-dialog/schedule-interview-dialog.component';
 import { CVReviewComponent } from '../cv-review/cv-review.component';
+import {
+  ConversionDialogComponent,
+  ConversionDialogData,
+} from '../shared/conversion-dialog/conversion-dialog.component';
 
 @Component({
   selector: 'app-application-detail',
@@ -61,6 +68,7 @@ import { CVReviewComponent } from '../cv-review/cv-review.component';
 })
 export class ApplicationDetailComponent implements OnInit {
   private readonly applicationService = inject(ApplicationService);
+  private readonly authService = inject(AuthService);
   private readonly dialog = inject(MatDialog);
   private readonly route = inject(ActivatedRoute);
   private readonly snackBar = inject(MatSnackBar);
@@ -189,7 +197,7 @@ export class ApplicationDetailComponent implements OnInit {
     this.confirmAndRun(
       {
         title: 'Accepter la candidature',
-        message: 'Le role du compte sera transforme automatiquement. Confirmer ?',
+        message: 'La conversion du compte pourra ensuite être effectuée depuis cette candidature. Confirmer ?',
         confirmLabel: 'Accepter',
       },
       () => this.applicationService.accept(this.requireApplicationId()),
@@ -246,6 +254,37 @@ export class ApplicationDetailComponent implements OnInit {
 
   canReject(statusValue: ApplicationStatus): boolean {
     return !['ACCEPTED', 'REJECTED', 'ARCHIVED'].includes(statusValue);
+  }
+
+  canConvert(application: Application): boolean {
+    return this.authService.currentUserSnapshot?.role === 'SUPER_ADMIN'
+      && application.status === 'ACCEPTED'
+      && !application.conversion
+      && application.candidate_profile.role === 'CANDIDATE';
+  }
+
+  openConversion(conversionType: ApplicationConversionType): void {
+    if (this.isActionRunning || !this.canConvert(this.requireApplication())) return;
+    const application = this.requireApplication();
+    this.isActionRunning = true;
+    this.dialog.open<ConversionDialogComponent, ConversionDialogData, ApplicationConversionResponse>(
+      ConversionDialogComponent,
+      {
+        data: {
+          applicationId: application.id,
+          candidateName: application.candidate_profile.full_name,
+          candidateSchool: application.candidate_profile.current_school,
+          conversionType,
+        },
+        width: '760px',
+        maxWidth: '95vw',
+      },
+    ).afterClosed().subscribe(result => {
+      this.isActionRunning = false;
+      if (!result) return;
+      this.snackBar.open(result.detail, 'Fermer', { duration: 3500 });
+      this.loadApplication();
+    });
   }
 
   typeLabel(value: Application['application_type']): string {

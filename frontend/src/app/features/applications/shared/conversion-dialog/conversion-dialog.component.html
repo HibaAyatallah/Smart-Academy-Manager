@@ -1,0 +1,80 @@
+<h2 mat-dialog-title>
+  {{ isIntern ? 'Convertir en stagiaire' : 'Convertir en collaborateur' }}
+</h2>
+<form [formGroup]="form" (ngSubmit)="submit()">
+  <mat-dialog-content>
+    <p>{{ data.candidateName }}</p>
+    <p class="dialog-error" *ngIf="generalError">{{ generalError }}</p>
+    <mat-spinner *ngIf="isLoading" diameter="28" />
+
+    <div class="form-grid" *ngIf="!isLoading">
+      <mat-form-field appearance="outline">
+        <mat-label>Business Unit</mat-label>
+        <mat-select formControlName="business_unit" required>
+          <mat-option *ngFor="let unit of businessUnits" [value]="unit.id">
+            {{ unit.name }}
+          </mat-option>
+        </mat-select>
+        <mat-error *ngIf="form.controls.business_unit.hasError('required')">La Business Unit est obligatoire.</mat-error>
+        <mat-error *ngIf="fieldErrors.business_unit">{{ fieldErrors.business_unit }}</mat-error>
+      </mat-form-field>
+
+      <ng-container *ngIf="isIntern">
+        <mat-form-field appearance="outline">
+          <mat-label>Encadrant</mat-label>
+          <mat-select formControlName="supervisor" required>
+            <mat-option *ngFor="let supervisor of supervisors" [value]="supervisor.id">
+              {{ supervisor.full_name || supervisor.email }}
+            </mat-option>
+          </mat-select>
+          <mat-error *ngIf="form.controls.supervisor.hasError('required')">L’encadrant est obligatoire.</mat-error>
+          <mat-error *ngIf="fieldErrors.supervisor">{{ fieldErrors.supervisor }}</mat-error>
+        </mat-form-field>
+        <mat-form-field appearance="outline">
+          <mat-label>École</mat-label>
+          <input matInput formControlName="school" maxlength="255">
+          <mat-error *ngIf="fieldErrors.school">{{ fieldErrors.school }}</mat-error>
+        </mat-form-field>
+        <mat-form-field appearance="outline">
+          <mat-label>Spécialisation</mat-label>
+          <input matInput formControlName="specialization" maxlength="255">
+          <mat-error *ngIf="fieldErrors.specialization">{{ fieldErrors.specialization }}</mat-error>
+        </mat-form-field>
+        <mat-form-field appearance="outline">
+          <mat-label>Type de stage</mat-label>
+          <input matInput formControlName="internship_type" maxlength="32">
+          <mat-error *ngIf="fieldErrors.internship_type">{{ fieldErrors.internship_type }}</mat-error>
+        </mat-form-field>
+        <mat-form-field appearance="outline">
+          <mat-label>Date de début</mat-label>
+          <input matInput type="date" formControlName="internship_start">
+          <mat-error *ngIf="fieldErrors.internship_start">{{ fieldErrors.internship_start }}</mat-error>
+        </mat-form-field>
+        <mat-form-field appearance="outline">
+          <mat-label>Date de fin</mat-label>
+          <input matInput type="date" formControlName="internship_end">
+          <mat-error *ngIf="fieldErrors.internship_end">{{ fieldErrors.internship_end }}</mat-error>
+        </mat-form-field>
+        <mat-form-field appearance="outline" class="wide">
+          <mat-label>Sujet du stage</mat-label>
+          <input matInput formControlName="subject_title" maxlength="255">
+          <mat-error *ngIf="fieldErrors.subject_title">{{ fieldErrors.subject_title }}</mat-error>
+        </mat-form-field>
+        <mat-slide-toggle formControlName="paid">Stage rémunéré</mat-slide-toggle>
+        <label class="file-field wide">
+          Cahier des charges PDF (optionnel)
+          <input type="file" accept="application/pdf,.pdf" (change)="selectSpecification($event)">
+        </label>
+        <p class="dialog-error wide" *ngIf="fieldErrors.conversion_type">{{ fieldErrors.conversion_type }}</p>
+      </ng-container>
+    </div>
+  </mat-dialog-content>
+  <mat-dialog-actions align="end">
+    <button mat-button type="button" [mat-dialog-close]="undefined" [disabled]="isSaving">Annuler</button>
+    <button mat-flat-button color="primary" type="submit" [disabled]="isSaving || isLoading">
+      <mat-spinner *ngIf="isSaving" diameter="18" />
+      {{ isSaving ? 'Conversion…' : 'Confirmer la conversion' }}
+    </button>
+  </mat-dialog-actions>
+</form>
+

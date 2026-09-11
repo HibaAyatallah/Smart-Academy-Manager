@@ -9,6 +9,8 @@ import {
   ApplicationDocument,
   ApplicationFilters,
   ApplicationMatch,
+  ApplicationConversionPayload,
+  ApplicationConversionResponse,
   CVAnalysis,
   PaginatedResponse,
 } from '../models/application.models';
@@ -156,6 +158,26 @@ export class ApplicationService {
     return this.http.post<Application>(`${this.apiBaseUrl}applications/${id}/reject/`, {
       reason,
     });
+  }
+
+  convertApplication(
+    id: number,
+    payload: ApplicationConversionPayload,
+  ): Observable<ApplicationConversionResponse> {
+    if (payload.specification_pdf) {
+      const body = new FormData();
+      for (const [key, value] of Object.entries(payload)) {
+        if (value !== null && value !== undefined && value !== '') {
+          body.append(key, value instanceof File ? value : String(value));
+        }
+      }
+      return this.http.post<ApplicationConversionResponse>(
+        `${this.apiBaseUrl}applications/${id}/convert/`, body,
+      );
+    }
+    return this.http.post<ApplicationConversionResponse>(
+      `${this.apiBaseUrl}applications/${id}/convert/`, payload,
+    );
   }
 
   uploadCV(id: number, file: File): Observable<{document: ApplicationDocument; analysis: CVAnalysis | null; analysis_error: string}> {

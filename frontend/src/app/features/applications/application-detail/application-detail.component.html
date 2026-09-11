@@ -70,7 +70,31 @@
           >
             Refuser
           </button>
+          <button
+            mat-flat-button
+            color="primary"
+            type="button"
+            *ngIf="canConvert(application)"
+            (click)="openConversion('INTERN')"
+            [disabled]="isActionRunning"
+          >
+            Convertir en stagiaire
+          </button>
+          <button
+            mat-stroked-button
+            type="button"
+            *ngIf="canConvert(application)"
+            (click)="openConversion('EMPLOYEE')"
+            [disabled]="isActionRunning"
+          >
+            Convertir en collaborateur
+          </button>
         </div>
+        <p *ngIf="application.conversion">
+          Conversion effectuée :
+          {{ application.conversion.type === 'INTERN' ? 'stagiaire' : 'collaborateur' }}
+          (profil #{{ application.conversion.profile_id }}).
+        </p>
       </mat-card-content>
     </mat-card>
 

@@ -101,6 +101,37 @@ export interface Application {
   interviews: ApplicationInterview[];
   status_history: ApplicationStatusHistory[];
   cv_analysis?: CVAnalysis | null;
+  conversion?: ApplicationConversionState | null;
+}
+
+export type ApplicationConversionType = 'INTERN' | 'EMPLOYEE';
+
+export interface ApplicationConversionState {
+  type: ApplicationConversionType;
+  profile_id: number;
+}
+
+export interface ApplicationConversionPayload {
+  conversion_type: ApplicationConversionType;
+  business_unit: number;
+  supervisor?: number | null;
+  school?: string;
+  specialization?: string;
+  internship_type?: string;
+  paid?: boolean;
+  internship_start?: string | null;
+  internship_end?: string | null;
+  subject_title?: string;
+  specification_pdf?: File | null;
+}
+
+export interface ApplicationConversionResponse {
+  detail: string;
+  conversion_type: ApplicationConversionType;
+  profile_id: number;
+  login_email: string;
+  credentials_preserved: boolean;
+  application: Application;
 }
 
 export interface CVExperience { position: string; company: string; start_date: string; end_date: string; duration: string; description: string; }

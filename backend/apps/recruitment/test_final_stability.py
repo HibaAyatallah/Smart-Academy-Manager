@@ -8,7 +8,7 @@ from rest_framework.test import APIClient
 
 from apps.accounts.models import User
 from apps.accounts.services.user_deletion import delete_user_account
-from apps.business_units.models import BusinessUnit
+from apps.business_units.models import BusinessUnit, BusinessUnitMembership
 from .analysis_pipeline import process_application_analysis, recalculate_offer_matches
 from .intelligence import rank_offer_candidates, update_training_recommendations
 from .models import Application, ApplicationDocument, CandidateProfile, CVAnalysis, InternProfile, Offer
@@ -107,7 +107,9 @@ class FinalRecruitmentStabilityTests(TestCase):
     def test_conversion_is_locked_and_repeated_conversion_is_rejected(self):
         self.application.status = "ACCEPTED"
         self.application.save()
-        payload = {"conversion_type": "INTERN", "business_unit": self.bu, "supervisor": self.admin}
+        supervisor = User.objects.create_user(email="final-supervisor@test.com", role="EMPLOYEE")
+        BusinessUnitMembership.objects.create(user=supervisor, business_unit=self.bu)
+        payload = {"conversion_type": "INTERN", "business_unit": self.bu, "supervisor": supervisor}
         convert_accepted_application(self.application, payload, self.admin)
         with self.assertRaises(ValidationError):
             convert_accepted_application(self.application, payload, self.admin)

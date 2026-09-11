@@ -539,8 +539,21 @@ class ApplicationViewSet(viewsets.ModelViewSet):
         serializer = ApplicationConversionSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         from .services import convert_accepted_application
-        convert_accepted_application(application, serializer.validated_data, request.user)
-        return Response({"detail": "Candidat converti avec succès."}, status=status.HTTP_200_OK)
+        profile = convert_accepted_application(
+            application, serializer.validated_data, request.user, request=request,
+        )
+        application.refresh_from_db()
+        return Response(
+            {
+                "detail": "Candidat converti avec succès.",
+                "conversion_type": serializer.validated_data["conversion_type"],
+                "profile_id": profile.pk,
+                "login_email": application.candidate.email,
+                "credentials_preserved": True,
+                "application": self.get_serializer(application).data,
+            },
+            status=status.HTTP_200_OK,
+        )
 
 
 class ApplicationDocumentViewSet(viewsets.ReadOnlyModelViewSet):

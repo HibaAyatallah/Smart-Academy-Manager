@@ -117,7 +117,7 @@ def transition_application(application: Application, new_status: str, actor, com
     return locked_application
 
 @transaction.atomic
-def convert_accepted_application(application: Application, payload: dict, actor) -> None:
+def convert_accepted_application(application: Application, payload: dict, actor, request=None):
     application = Application.objects.select_for_update().get(pk=application.pk)
     if application.status != ApplicationStatus.ACCEPTED:
         raise ValidationError("L'application doit être acceptée pour procéder à la conversion.")
@@ -158,7 +158,13 @@ def convert_accepted_application(application: Application, payload: dict, actor)
     }
 
     with transaction.atomic():
-        result = generate_account_for_user(payload_for_generation, actor=actor, existing_user=candidate)
+        result = generate_account_for_user(
+            payload_for_generation,
+            actor=actor,
+            existing_user=candidate,
+            preserve_existing_credentials=True,
+            assignment_request=request,
+        )
         user = result["user"]
 
         # Link the source application
@@ -181,8 +187,25 @@ def convert_accepted_application(application: Application, payload: dict, actor)
                 "business_unit": bu.code,
                 "supervisor_id": supervisor.id if supervisor else None,
                 "generated_email": result["email"],
+                "credentials_preserved": True,
             },
         )
+        from apps.notifications.services import queue_email
+        queue_email(
+            recipient=user,
+            event="account.created",
+            event_key=f"candidate-converted:{application.pk}:{conversion_type}",
+            subject="Votre espace Smart Academy a été mis à jour",
+            context={
+                "message": (
+                    "Votre candidature a été convertie. "
+                    "Connectez-vous avec votre adresse et votre mot de passe habituels."
+                ),
+                "link": "/login",
+                "button_label": "Accéder à mon espace",
+            },
+        )
+        return profile
 
 
 def reject_candidate_account(application: Application, actor=None) -> None:

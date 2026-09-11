@@ -641,6 +641,7 @@ class ThrottleTests(APITestCase):
             role=UserRole.EMPLOYEE,
         )
         cache.clear()
+        self.addCleanup(cache.clear)
 
     def test_excessive_login_attempts_throttled(self):
         """Excessive login attempts are throttled (429)"""

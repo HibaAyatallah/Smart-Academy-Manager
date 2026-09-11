@@ -69,4 +69,43 @@ describe('ApplicationService', () => {
 
     expect(errorMessage).toBe('Accès refusé.');
   });
+
+  it('posts an employee conversion with the backend contract', () => {
+    service.convertApplication(7, {
+      conversion_type: 'EMPLOYEE', business_unit: 3,
+    }).subscribe();
+
+    const request = httpController.expectOne('/api/applications/7/convert/');
+    expect(request.request.method).toBe('POST');
+    expect(request.request.body).toEqual({
+      conversion_type: 'EMPLOYEE', business_unit: 3,
+    });
+    request.flush({
+      detail: 'Candidat converti avec succès.', conversion_type: 'EMPLOYEE',
+      profile_id: 9, login_email: 'candidate@example.com',
+      credentials_preserved: true, application: { id: 7 } as Application,
+    });
+  });
+
+  it('uses multipart when the internship specification is supplied', () => {
+    const specification = new File(['%PDF-1.4'], 'specification.pdf', {
+      type: 'application/pdf',
+    });
+    service.convertApplication(7, {
+      conversion_type: 'INTERN', business_unit: 3, supervisor: 5,
+      paid: true, specification_pdf: specification,
+    }).subscribe();
+
+    const request = httpController.expectOne('/api/applications/7/convert/');
+    expect(request.request.body instanceof FormData).toBeTrue();
+    expect(request.request.body.get('conversion_type')).toBe('INTERN');
+    expect(request.request.body.get('business_unit')).toBe('3');
+    expect(request.request.body.get('supervisor')).toBe('5');
+    expect(request.request.body.get('specification_pdf')).toBe(specification);
+    request.flush({
+      detail: 'Candidat converti avec succès.', conversion_type: 'INTERN',
+      profile_id: 10, login_email: 'candidate@example.com',
+      credentials_preserved: true, application: { id: 7 } as Application,
+    });
+  });
 });

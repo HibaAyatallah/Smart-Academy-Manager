@@ -221,6 +221,7 @@ class ApplicationSerializer(serializers.ModelSerializer):
     status_label = serializers.CharField(source="get_status_display", read_only=True)
     offer_title = serializers.CharField(source="offer.title", read_only=True)
     cv_analysis = serializers.SerializerMethodField()
+    conversion = serializers.SerializerMethodField()
 
     class Meta:
         model = Application
@@ -245,6 +246,7 @@ class ApplicationSerializer(serializers.ModelSerializer):
             "interviews",
             "status_history",
             "cv_analysis",
+            "conversion",
         ]
         read_only_fields = fields
 
@@ -252,6 +254,16 @@ class ApplicationSerializer(serializers.ModelSerializer):
     def get_cv_analysis(self, obj):
         analysis = getattr(obj, "cv_analysis", None)
         return CVAnalysisSerializer(analysis).data if analysis else None
+
+    @extend_schema_field(serializers.DictField(allow_null=True))
+    def get_conversion(self, obj):
+        intern_profile = getattr(obj, "created_intern_profile", None)
+        if intern_profile:
+            return {"type": "INTERN", "profile_id": intern_profile.pk}
+        employee_profile = getattr(obj, "created_employee_profile", None)
+        if employee_profile:
+            return {"type": "EMPLOYEE", "profile_id": employee_profile.pk}
+        return None
 
 
 class ExperienceSerializer(serializers.Serializer):
@@ -663,7 +675,7 @@ class ApplicationConversionSerializer(serializers.Serializer):
     supervisor = serializers.PrimaryKeyRelatedField(
         queryset=User.objects.filter(
             is_active=True,
-            role__in=[UserRole.EMPLOYEE, UserRole.BU_MANAGER, UserRole.SUPER_ADMIN, UserRole.TRAINER_TUTOR],
+            role__in=[UserRole.EMPLOYEE, UserRole.BU_MANAGER, UserRole.TRAINER_TUTOR],
         ),
         required=False,
         allow_null=True,
@@ -685,12 +697,21 @@ class ApplicationConversionSerializer(serializers.Serializer):
         if conversion_type == "INTERN" and not data.get("supervisor"):
             errors["supervisor"] = "Le superviseur est requis pour un stagiaire."
         if conversion_type == "INTERN" and data.get("supervisor") and data.get("business_unit"):
-            from apps.business_units.selectors import eligible_supervisors_for_business_unit
-
-            if not eligible_supervisors_for_business_unit(data["business_unit"]).filter(
-                pk=data["supervisor"].pk
-            ).exists():
+            from apps.business_units.services import validate_supervisor
+            try:
+                validate_supervisor(data["business_unit"], data["supervisor"])
+            except serializers.ValidationError:
                 errors["supervisor"] = "Le superviseur n'est pas éligible pour cette Business Unit."
+        if conversion_type == "EMPLOYEE":
+            internship_fields = {
+                "supervisor", "internship_start", "internship_end", "internship_type",
+                "school", "specialization", "paid", "subject_title", "specification_pdf",
+            }
+            supplied = internship_fields.intersection(self.initial_data.keys())
+            if supplied:
+                errors["conversion_type"] = (
+                    "Les informations de stage ne sont pas acceptées pour une conversion en collaborateur."
+                )
         start = data.get("internship_start")
         end = data.get("internship_end")
         if start and start < today:

@@ -6,7 +6,6 @@ from django.db import transaction
 from django.contrib.auth import get_user_model
 
 from apps.accounts.choices import UserRole
-from apps.business_units.models import BusinessUnitMembership
 from apps.business_units.services import assign_business_unit, current_business_unit
 from apps.recruitment.models import InternProfile, EmployeeProfile
 from apps.trainings.models import ClientProfile
@@ -59,7 +58,14 @@ def generate_professional_email(first_name: str, last_name: str) -> str:
     return email
 
 
-def generate_account_for_user(payload: dict, actor=None, *, existing_user=None) -> dict:
+def generate_account_for_user(
+    payload: dict,
+    actor=None,
+    *,
+    existing_user=None,
+    preserve_existing_credentials=False,
+    assignment_request=None,
+) -> dict:
     """
     Creates or updates the User, generates credentials, and creates the appropriate profile.
     
@@ -88,7 +94,6 @@ def generate_account_for_user(payload: dict, actor=None, *, existing_user=None) 
     role = payload.get("role", UserRole.EMPLOYEE)
     business_unit = payload.get("business_unit")
     defer_business_unit_assignment = payload.get("_defer_business_unit_assignment", False)
-    conversion_mode = existing_user is not None
     
     user = existing_user
     if user is None and contact_email:
@@ -123,7 +128,7 @@ def generate_account_for_user(payload: dict, actor=None, *, existing_user=None) 
             user.role = role
             user.is_active = True
             
-            if not user.email.endswith("@finatech.com"):
+            if not preserve_existing_credentials and not user.email.endswith("@finatech.com"):
                 if not user.contact_email:
                     user.contact_email = user.email
                 generated_email = generate_professional_email(first_name or user.first_name, last_name or user.last_name)
@@ -144,13 +149,6 @@ def generate_account_for_user(payload: dict, actor=None, *, existing_user=None) 
                 "internship_start": payload.get("internship_start"),
                 "internship_end": payload.get("internship_end"),
             }
-            if conversion_mode:
-                # Candidate conversion is a separate workflow and keeps its
-                # established assignment contract in this step.
-                intern_defaults.update({
-                    "business_unit": business_unit,
-                    "supervisor": payload.get("supervisor"),
-                })
             InternProfile.objects.update_or_create(
                 user=user,
                 defaults=intern_defaults,
@@ -160,20 +158,11 @@ def generate_account_for_user(payload: dict, actor=None, *, existing_user=None) 
         elif role in [UserRole.EMPLOYEE, UserRole.BU_MANAGER, UserRole.TRAINER_TUTOR]:
             EmployeeProfile.objects.update_or_create(user=user)
 
-        if conversion_mode:
-            if business_unit and role != UserRole.CLIENT:
-                BusinessUnitMembership.objects.update_or_create(
-                    user=user,
-                    business_unit=business_unit,
-                    defaults={
-                        "is_active": True,
-                        "position": payload.get("position", ""),
-                    },
-                )
-        elif not defer_business_unit_assignment:
+        if not defer_business_unit_assignment:
             assign_business_unit(
                 user,
                 getattr(business_unit, "pk", business_unit),
+                request=assignment_request,
                 supervisor=payload.get("supervisor"),
                 previous=previous_business_unit,
             )

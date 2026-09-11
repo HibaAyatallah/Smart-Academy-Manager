@@ -8,6 +8,7 @@ import { EMPTY, of, Subject, throwError } from 'rxjs';
 
 import { Application } from '../../../core/models/application.models';
 import { ApplicationService } from '../../../core/services/application.service';
+import { AuthService } from '../../../core/services/auth.service';
 import { ApplicationDetailComponent } from './application-detail.component';
 
 const submittedApplication: Application = {
@@ -53,6 +54,13 @@ describe('ApplicationDetailComponent', () => {
   let applicationService: jasmine.SpyObj<ApplicationService>;
   let snackBar: jasmine.SpyObj<MatSnackBar>;
   let dialog: jasmine.SpyObj<MatDialog>;
+  const authServiceStub = {
+    currentUserSnapshot: {
+      id: 99, email: 'admin@test.com', first_name: 'Admin', last_name: '',
+      full_name: 'Admin', phone_number: '', role: 'SUPER_ADMIN',
+      preferred_language: 'fr',
+    },
+  };
 
   beforeEach(async () => {
     applicationService = jasmine.createSpyObj<ApplicationService>('ApplicationService', [
@@ -72,6 +80,7 @@ describe('ApplicationDetailComponent', () => {
         { provide: ApplicationService, useValue: applicationService },
         { provide: MatSnackBar, useValue: snackBar },
         { provide: MatDialog, useValue: dialog },
+        { provide: AuthService, useValue: authServiceStub },
         {
           provide: ActivatedRoute,
           useValue: { snapshot: { paramMap: convertToParamMap({ id: '7' }) } },
@@ -157,5 +166,58 @@ describe('ApplicationDetailComponent', () => {
     component.loadApplication();
 
     expect(component.isLoading).toBeFalse();
+  });
+
+  it('shows both conversion actions only to a Super Admin for an accepted candidate', () => {
+    component.application = {
+      ...submittedApplication, status: 'ACCEPTED', conversion: null,
+    };
+    fixture.detectChanges();
+    const text = fixture.nativeElement.textContent as string;
+    expect(text).toContain('Convertir en stagiaire');
+    expect(text).toContain('Convertir en collaborateur');
+
+    authServiceStub.currentUserSnapshot.role = 'HR';
+    fixture.detectChanges();
+    const hrText = fixture.nativeElement.textContent as string;
+    expect(hrText).not.toContain('Convertir en stagiaire');
+    expect(hrText).not.toContain('Convertir en collaborateur');
+  });
+
+  it('hides conversion actions after a conversion is recorded', () => {
+    component.application = {
+      ...submittedApplication,
+      status: 'ACCEPTED',
+      candidate_profile: { ...submittedApplication.candidate_profile, role: 'INTERN' },
+      conversion: { type: 'INTERN', profile_id: 12 },
+    };
+    fixture.detectChanges();
+    expect(fixture.nativeElement.textContent).not.toContain('Convertir en stagiaire');
+  });
+
+  it('opens the selected conversion form and refreshes the application after success', () => {
+    authServiceStub.currentUserSnapshot.role = 'SUPER_ADMIN';
+    const accepted = { ...submittedApplication, status: 'ACCEPTED' as const, conversion: null };
+    const converted = {
+      ...accepted,
+      candidate_profile: { ...accepted.candidate_profile, role: 'EMPLOYEE' as const },
+      conversion: { type: 'EMPLOYEE' as const, profile_id: 22 },
+    };
+    component.application = accepted;
+    applicationService.getApplication.and.returnValue(of(converted));
+    dialog.open.and.returnValue({ afterClosed: () => of({
+      detail: 'Candidat converti avec succès.', conversion_type: 'EMPLOYEE',
+      profile_id: 22, login_email: 'candidate@example.com',
+      credentials_preserved: true, application: converted,
+    }) } as ReturnType<MatDialog['open']>);
+
+    component.openConversion('EMPLOYEE');
+
+    expect(dialog.open).toHaveBeenCalled();
+    expect(applicationService.getApplication).toHaveBeenCalledWith(7);
+    expect(component.application?.conversion?.type).toBe('EMPLOYEE');
+    expect(snackBar.open).toHaveBeenCalledWith(
+      'Candidat converti avec succès.', 'Fermer', { duration: 3500 },
+    );
   });
 });
