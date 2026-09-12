@@ -8,7 +8,12 @@ from django.conf import settings
 
 from apps.recruitment.analysis_pipeline import analysis_is_stale
 from apps.recruitment.choices import ApplicationDocumentType
-from apps.recruitment.embeddings import EmbeddingError, embedding_model_identifier, get_or_create_embedding
+from apps.recruitment.embeddings import (
+    EmbeddingError,
+    embedding_model_identifier,
+    expected_embedding_dimensions,
+    get_or_create_embedding,
+)
 from apps.recruitment.models import Application, CVRAGIndexState
 
 from .chunking import chunk_sections, cv_sections
@@ -18,7 +23,7 @@ from .vector_store import VectorRecord, get_vector_store
 logger = logging.getLogger(__name__)
 
 
-def _fingerprint(application, analysis, document) -> str:
+def current_index_fingerprint(application, analysis, document) -> str:
     data = {
         "application_id": application.pk,
         "cv_sha256": analysis.source_sha256,
@@ -34,20 +39,13 @@ def _fingerprint(application, analysis, document) -> str:
     return hashlib.sha256(payload.encode("utf-8")).hexdigest()
 
 
-def _chunk_id(application_id: int, fingerprint: str, section: str, index: int, content_hash: str) -> str:
+def chunk_id(application_id: int, fingerprint: str, section: str, index: int, content_hash: str) -> str:
     raw = f"{application_id}:{fingerprint}:{section}:{index}:{content_hash}"
     return "cv-" + hashlib.sha256(raw.encode("utf-8")).hexdigest()
 
 
-def index_candidate_cv(application_or_id, *, force=False, vector_store=None) -> dict:
-    application_id = getattr(application_or_id, "pk", application_or_id)
-    try:
-        application = Application.objects.select_related(
-            "candidate_profile__user", "cv_analysis"
-        ).get(pk=application_id)
-    except (Application.DoesNotExist, TypeError, ValueError) as exc:
-        raise RAGValidationError("Candidature introuvable.") from exc
-
+def current_index_material(application):
+    """Return the current document, analysis, fingerprint, chunks and stable ids."""
     document = application.documents.filter(
         document_type=ApplicationDocumentType.CV,
     ).order_by("-uploaded_at", "-id").first()
@@ -59,7 +57,7 @@ def index_candidate_cv(application_or_id, *, force=False, vector_store=None) -> 
     if analysis_is_stale(application, analysis):
         raise RAGValidationError("L’analyse du CV est obsolète et doit être actualisée avant indexation.")
 
-    fingerprint = _fingerprint(application, analysis, document)
+    fingerprint = current_index_fingerprint(application, analysis, document)
     chunks = chunk_sections(
         cv_sections(analysis),
         size=settings.RAG_CHUNK_SIZE,
@@ -67,13 +65,26 @@ def index_candidate_cv(application_or_id, *, force=False, vector_store=None) -> 
     )
     if not chunks:
         raise RAGValidationError("L’analyse du CV ne contient aucun texte indexable.")
+    expected_ids = {
+        chunk_id(application.pk, fingerprint, chunk.section, chunk.chunk_index, chunk.content_hash)
+        for chunk in chunks
+    }
+    return document, analysis, fingerprint, chunks, expected_ids
+
+
+def index_candidate_cv(application_or_id, *, force=False, vector_store=None) -> dict:
+    application_id = getattr(application_or_id, "pk", application_or_id)
+    try:
+        application = Application.objects.select_related(
+            "candidate_profile__user", "cv_analysis"
+        ).get(pk=application_id)
+    except (Application.DoesNotExist, TypeError, ValueError) as exc:
+        raise RAGValidationError("Candidature introuvable.") from exc
+
+    document, analysis, fingerprint, chunks, expected_ids = current_index_material(application)
 
     store = vector_store or get_vector_store()
     application_filter = {"application_id": application.pk}
-    expected_ids = {
-        _chunk_id(application.pk, fingerprint, chunk.section, chunk.chunk_index, chunk.content_hash)
-        for chunk in chunks
-    }
     state = CVRAGIndexState.objects.filter(application=application).first()
     if (
         not force
@@ -91,7 +102,7 @@ def index_candidate_cv(application_or_id, *, force=False, vector_store=None) -> 
     records = []
     try:
         for chunk in chunks:
-            chunk_id = _chunk_id(
+            record_id = chunk_id(
                 application.pk, fingerprint, chunk.section, chunk.chunk_index, chunk.content_hash
             )
             metadata = {
@@ -107,9 +118,11 @@ def index_candidate_cv(application_or_id, *, force=False, vector_store=None) -> 
                 "rag_index_version": settings.RAG_INDEX_VERSION,
                 "embedding_model": settings.RECRUITMENT_EMBEDDING_MODEL,
                 "embedding_version": settings.RECRUITMENT_EMBEDDING_VERSION,
+                "embedding_dimensions": expected_embedding_dimensions(),
+                "content_fingerprint": fingerprint,
             }
             records.append(VectorRecord(
-                id=chunk_id,
+                id=record_id,
                 text=chunk.text,
                 embedding=get_or_create_embedding(chunk.text),
                 metadata=metadata,

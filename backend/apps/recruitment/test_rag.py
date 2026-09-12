@@ -12,7 +12,8 @@ from apps.business_units.models import BusinessUnit
 from .choices import ApplicationDocumentType, ApplicationType
 from .models import Application, ApplicationDocument, CandidateProfile, CVRAGIndexState, Offer
 from .rag.chunking import chunk_sections, chunk_text
-from .rag.errors import RAGEmbeddingError, VectorStoreError
+from .embeddings import EmbeddingUnavailableError
+from .rag.errors import RAGEmbeddingError, RAGStaleIndexError, RAGValidationError, VectorStoreError
 from .rag.indexer import index_candidate_cv
 from .rag.retriever import retrieve_cv_context
 from .rag.vector_store import ChromaVectorStore, VectorRecord
@@ -38,6 +39,7 @@ class FakeVectorStore:
         self.records = {}
         self.upsert_calls = 0
         self.deleted = []
+        self.query_calls = 0
 
     def upsert(self, records: list[VectorRecord]):
         self.upsert_calls += 1
@@ -52,6 +54,7 @@ class FakeVectorStore:
         return {item.id for item in self.records.values() if self._matches(item.metadata, where)}
 
     def query(self, embedding, *, top_k, where=None):
+        self.query_calls += 1
         rows = []
         for item in self.records.values():
             if where and not self._matches(item.metadata, where):
@@ -77,6 +80,11 @@ class BrokenVectorStore(FakeVectorStore):
         raise VectorStoreError("offline")
 
 
+class BrokenWriteVectorStore(FakeVectorStore):
+    def upsert(self, records):
+        raise VectorStoreError("offline")
+
+
 class RAGChunkingTests(SimpleTestCase):
     def test_chunking_is_deterministic_section_aware_and_overlapping(self):
         text = " ".join(f"token{i}" for i in range(80))
@@ -94,6 +102,15 @@ class RAGChunkingTests(SimpleTestCase):
             chunk_text("text", size=50, overlap=10)
         with self.assertRaises(ValueError):
             chunk_text("text", size=100, overlap=100)
+
+    def test_empty_and_duplicate_chunks_are_removed(self):
+        chunks = chunk_sections(
+            [("EMPTY", "  \t  "), ("SKILLS", "Python Django"), ("RAW_TEXT", "python django")],
+            size=140,
+            overlap=25,
+        )
+        self.assertEqual(len(chunks), 1)
+        self.assertEqual(chunks[0].section, "SKILLS")
 
 
 class ChromaVectorStoreTests(SimpleTestCase):
@@ -122,7 +139,13 @@ class ChromaVectorStoreTests(SimpleTestCase):
         self.assertEqual(store.collection.requested, 2)
 
 
-@override_settings(MEDIA_ROOT=MEDIA_ROOT, RAG_CHUNK_SIZE=140, RAG_CHUNK_OVERLAP=25, RAG_MAX_TOP_K=10)
+@override_settings(
+    MEDIA_ROOT=MEDIA_ROOT,
+    RAG_CHUNK_SIZE=140,
+    RAG_CHUNK_OVERLAP=25,
+    RAG_MAX_TOP_K=10,
+    RECRUITMENT_EMBEDDING_DIMENSIONS=3,
+)
 class RAGServiceTests(TestCase):
     @classmethod
     def tearDownClass(cls):
@@ -179,9 +202,12 @@ class RAGServiceTests(TestCase):
             "candidate_profile_id", "application_id", "application_document_id", "candidate_name",
             "source_type", "section", "chunk_index", "cv_sha256", "extractor_version",
             "rag_index_version", "embedding_model", "embedding_version",
+            "embedding_dimensions", "content_fingerprint",
         ):
             self.assertIn(key, metadata)
         self.assertEqual(metadata["source_type"], "CV")
+        self.assertEqual(metadata["embedding_dimensions"], 3)
+        self.assertEqual(metadata["content_fingerprint"], first["content_fingerprint"])
         self.assertEqual(CVRAGIndexState.objects.get(application=self.application).chunk_count, len(self.store.records))
 
     def test_analysis_content_and_index_version_changes_replace_old_chunks(self):
@@ -214,6 +240,11 @@ class RAGServiceTests(TestCase):
         )
         self.application.refresh_from_db()
 
+        with self.assertRaises(RAGStaleIndexError):
+            retrieve_cv_context(
+                "Python", application_id=self.application.id, vector_store=self.store
+            )
+
         second = index_candidate_cv(self.application, vector_store=self.store)
 
         self.assertNotEqual(first["content_fingerprint"], second["content_fingerprint"])
@@ -238,18 +269,116 @@ class RAGServiceTests(TestCase):
         self.assertIn("Python", python_rows[0]["text"])
 
         candidate_rows = retrieve_cv_context(
-            "Java Spring", candidate_profile_id=other.candidate_profile_id,
+            "Java Spring", application_id=other.id, candidate_profile_id=other.candidate_profile_id,
             top_k=1, vector_store=self.store,
         )
         self.assertEqual(len(candidate_rows), 1)
         self.assertEqual(candidate_rows[0]["metadata"]["candidate_profile_id"], other.candidate_profile_id)
 
     def test_embedding_and_vector_store_failures_are_clear(self):
+        index_candidate_cv(self.application, vector_store=self.store)
         with patch(
             "apps.recruitment.rag.retriever.get_or_create_embedding",
-            side_effect=__import__("apps.recruitment.embeddings", fromlist=["EmbeddingUnavailableError"]).EmbeddingUnavailableError("offline"),
+            side_effect=EmbeddingUnavailableError("offline"),
         ):
             with self.assertRaises(RAGEmbeddingError):
-                retrieve_cv_context("Python", vector_store=self.store)
+                retrieve_cv_context("Python", application_id=self.application.id, vector_store=self.store)
         with self.assertRaises(VectorStoreError):
-            retrieve_cv_context("Python", vector_store=BrokenVectorStore())
+            broken = BrokenVectorStore()
+            broken.records.update(self.store.records)
+            retrieve_cv_context("Python", application_id=self.application.id, vector_store=broken)
+
+    def test_retrieval_requires_application_and_rejects_empty_query(self):
+        with self.assertRaises(RAGValidationError):
+            retrieve_cv_context("Python", vector_store=self.store)
+        with self.assertRaises(RAGValidationError):
+            retrieve_cv_context(" ", application_id=self.application.id, vector_store=self.store)
+
+    def test_unindexed_and_changed_analysis_are_rejected_before_embedding(self):
+        with patch("apps.recruitment.rag.retriever.get_vector_store") as get_store:
+            with self.assertRaises(RAGStaleIndexError):
+                retrieve_cv_context("Python", application_id=self.application.id)
+            get_store.assert_not_called()
+        self.assertEqual(self.store.query_calls, 0)
+
+        index_candidate_cv(self.application, vector_store=self.store)
+        self.application.cv_analysis.skills = ["Rust"]
+        self.application.cv_analysis.save(update_fields=["skills"])
+        with patch("apps.recruitment.rag.retriever.get_or_create_embedding") as embedding:
+            with self.assertRaises(RAGStaleIndexError):
+                retrieve_cv_context("Python", application_id=self.application.id, vector_store=self.store)
+            embedding.assert_not_called()
+
+    def test_model_version_and_dimension_changes_make_index_stale(self):
+        index_candidate_cv(self.application, vector_store=self.store)
+        for changed_setting in (
+            {"RECRUITMENT_EMBEDDING_VERSION": "bge-m3-v2"},
+            {"RECRUITMENT_EMBEDDING_MODEL": "bge-m3-new"},
+            {"RECRUITMENT_EMBEDDING_DIMENSIONS": 4},
+            {"RAG_CHUNK_SIZE": 160},
+        ):
+            with override_settings(**changed_setting):
+                with self.assertRaises(RAGStaleIndexError):
+                    retrieve_cv_context(
+                        "Python", application_id=self.application.id, vector_store=self.store
+                    )
+
+    def test_missing_or_extra_chroma_chunks_make_index_stale(self):
+        index_candidate_cv(self.application, vector_store=self.store)
+        removed_id, removed = self.store.records.popitem()
+        with self.assertRaises(RAGStaleIndexError):
+            retrieve_cv_context("Python", application_id=self.application.id, vector_store=self.store)
+        self.store.records[removed_id] = removed
+        self.store.records["legacy"] = VectorRecord(
+            id="legacy", text="obsolete", embedding=fake_embedding("obsolete"),
+            metadata={"application_id": self.application.id},
+        )
+        with self.assertRaises(RAGStaleIndexError):
+            retrieve_cv_context("Python", application_id=self.application.id, vector_store=self.store)
+
+    def test_candidate_isolation_rejects_mismatched_application(self):
+        other = self._application("isolated", "Java Spring")
+        index_candidate_cv(self.application, vector_store=self.store)
+        index_candidate_cv(other, vector_store=self.store)
+        with self.assertRaises(RAGValidationError):
+            retrieve_cv_context(
+                "Python", application_id=self.application.id,
+                candidate_profile_id=other.candidate_profile_id, vector_store=self.store,
+            )
+
+    def test_no_result_is_an_empty_list(self):
+        index_candidate_cv(self.application, vector_store=self.store)
+        with patch.object(self.store, "query", return_value=[]):
+            self.assertEqual(
+                retrieve_cv_context(
+                    "Cobol", application_id=self.application.id, vector_store=self.store
+                ),
+                [],
+            )
+
+    def test_partial_embedding_failure_does_not_write_or_validate_index(self):
+        with patch(
+            "apps.recruitment.rag.indexer.get_or_create_embedding",
+            side_effect=[fake_embedding("first"), EmbeddingUnavailableError("offline")],
+        ):
+            with self.assertRaises(RAGEmbeddingError):
+                index_candidate_cv(self.application, vector_store=self.store)
+        self.assertEqual(self.store.upsert_calls, 0)
+        self.assertFalse(self.store.records)
+        self.assertFalse(CVRAGIndexState.objects.filter(application=self.application).exists())
+
+    def test_vector_write_failure_does_not_validate_index(self):
+        with self.assertRaises(VectorStoreError):
+            index_candidate_cv(self.application, vector_store=BrokenWriteVectorStore())
+        self.assertFalse(CVRAGIndexState.objects.filter(application=self.application).exists())
+
+    def test_cv_deletion_invalidates_state_and_deferred_cleanup_removes_chunks(self):
+        index_candidate_cv(self.application, vector_store=self.store)
+        document = self.application.documents.order_by("-uploaded_at", "-id").first()
+        with patch("apps.recruitment.rag.invalidation.get_vector_store", return_value=self.store):
+            with self.captureOnCommitCallbacks(execute=True):
+                document.delete()
+        self.assertFalse(CVRAGIndexState.objects.filter(application=self.application).exists())
+        self.assertFalse(self.store.ids({"application_id": self.application.id}))
+        with self.assertRaises(RAGStaleIndexError):
+            retrieve_cv_context("Python", application_id=self.application.id, vector_store=self.store)

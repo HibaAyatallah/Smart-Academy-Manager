@@ -10,6 +10,10 @@ class RAGIndexingError(RAGError):
     code = "rag_indexing_error"
 
 
+class RAGStaleIndexError(RAGError):
+    code = "rag_index_stale"
+
+
 class RAGEmbeddingError(RAGError):
     code = "rag_embedding_unavailable"
 
