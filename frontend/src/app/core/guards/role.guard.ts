@@ -37,7 +37,7 @@ export const roleGuard: CanActivateFn = (route) => {
     catchError(() => {
       console.error('[Auth] Profil de session invalide.');
       authService.logout(false);
-      return of(router.createUrlTree(['/login']));
+      return of(router.createUrlTree(['/connexion']));
     }),
   );
 };

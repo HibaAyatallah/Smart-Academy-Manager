@@ -8,6 +8,7 @@ import { environment } from '../../../environments/environment';
 import {
   AuthTokens,
   LoginRequest,
+  PasswordChangeResponse,
   RefreshTokenResponse,
   UserProfile,
 } from '../models/auth.models';
@@ -122,8 +123,14 @@ export class AuthService {
     );
   }
 
-  changePassword(payload: { current_password: string; new_password: string; confirmation: string }): Observable<{ detail: string }> {
-    return this.http.post<{ detail: string }>(`${this.apiBaseUrl}auth/change-password/`, payload);
+  changePassword(payload: { current_password: string; new_password: string; confirmation: string }): Observable<UserProfile> {
+    return this.http.post<PasswordChangeResponse>(`${this.apiBaseUrl}auth/change-password/`, payload).pipe(
+      tap((tokens) => {
+        this.tokenStorage.saveTokens({ access: tokens.access, refresh: tokens.refresh });
+        this.clearProfileState();
+      }),
+      switchMap(() => this.loadProfile()),
+    );
   }
 
   requestPasswordReset(email: string): Observable<{ detail: string }> {
@@ -141,10 +148,16 @@ export class AuthService {
   }
 
   logout(redirect = true): void {
+    const refresh = this.tokenStorage.refreshToken;
     this.tokenStorage.clear();
     this.clearProfileState();
+    if (refresh) {
+      this.http.post(`${this.apiBaseUrl}auth/token/blacklist/`, { refresh }).subscribe({
+        error: () => console.error('[Auth] Le serveur n’a pas pu révoquer le refresh token.'),
+      });
+    }
     if (redirect) {
-      void this.router.navigateByUrl('/login');
+      void this.router.navigateByUrl('/connexion');
     }
   }
 

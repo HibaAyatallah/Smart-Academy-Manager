@@ -23,6 +23,10 @@ export interface RefreshTokenResponse {
   refresh?: string;
 }
 
+export interface PasswordChangeResponse extends AuthTokens {
+  detail: string;
+}
+
 export interface UserProfile {
   id: number;
   email: string;
@@ -37,6 +41,7 @@ export interface UserProfile {
   created_at?: string;
   updated_at?: string;
   business_units?: Array<{ id: number; name: string; code: string }>;
+  must_change_password?: boolean;
 }
 
 export const ROLE_LABELS: Record<UserRole, string> = {

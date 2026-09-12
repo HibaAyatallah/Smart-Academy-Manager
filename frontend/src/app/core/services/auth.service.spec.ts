@@ -21,8 +21,20 @@ const profile: UserProfile = {
 describe('AuthService', () => {
   let service: AuthService;
   let httpController: HttpTestingController;
+  let tokenStorage: jasmine.SpyObj<TokenStorageService> & {
+    accessToken: string | null;
+    refreshToken: string | null;
+  };
 
   beforeEach(() => {
+    tokenStorage = Object.assign(
+      jasmine.createSpyObj<TokenStorageService>('TokenStorageService', [
+        'saveTokens',
+        'saveRefreshResponse',
+        'clear',
+      ]),
+      { accessToken: 'access-token', refreshToken: 'refresh-token' },
+    );
     TestBed.configureTestingModule({
       providers: [
         provideHttpClient(),
@@ -33,13 +45,7 @@ describe('AuthService', () => {
         },
         {
           provide: TokenStorageService,
-          useValue: {
-            accessToken: 'access-token',
-            refreshToken: 'refresh-token',
-            saveTokens: jasmine.createSpy(),
-            saveRefreshResponse: jasmine.createSpy(),
-            clear: jasmine.createSpy(),
-          },
+          useValue: tokenStorage,
         },
       ],
     });
@@ -98,5 +104,40 @@ describe('AuthService', () => {
     expect(request.request.body).toEqual({preferred_language: 'en'});
     request.flush({preferred_language: 'en'});
     expect(service.currentUserSnapshot?.preferred_language).toBe('en');
+  });
+
+  it('blacklists the refresh token and always clears the local session on logout', () => {
+    service.ensureProfile().subscribe();
+    httpController.expectOne('/api/auth/me/').flush(profile);
+
+    service.logout();
+
+    expect(tokenStorage.clear).toHaveBeenCalled();
+    expect(service.currentUserSnapshot).toBeNull();
+    const request = httpController.expectOne('/api/auth/token/blacklist/');
+    expect(request.request.method).toBe('POST');
+    expect(request.request.body).toEqual({ refresh: 'refresh-token' });
+    request.flush({}, { status: 503, statusText: 'Unavailable' });
+    expect(tokenStorage.clear).toHaveBeenCalledTimes(1);
+  });
+
+  it('stores rotated tokens and reloads the profile after a password change', () => {
+    const profiles: UserProfile[] = [];
+    service.changePassword({
+      current_password: 'TemporaryPass123!',
+      new_password: 'PermanentPass456!',
+      confirmation: 'PermanentPass456!',
+    }).subscribe((user) => profiles.push(user));
+
+    const change = httpController.expectOne('/api/auth/change-password/');
+    change.flush({ detail: 'OK', access: 'new-access', refresh: 'new-refresh' });
+    expect(tokenStorage.saveTokens).toHaveBeenCalledWith({
+      access: 'new-access', refresh: 'new-refresh',
+    });
+    httpController.expectOne('/api/auth/me/').flush({
+      ...profile,
+      must_change_password: false,
+    });
+    expect(profiles[0].must_change_password).toBeFalse();
   });
 });

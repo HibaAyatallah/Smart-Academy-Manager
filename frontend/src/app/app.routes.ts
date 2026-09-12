@@ -2,6 +2,7 @@ import { Routes } from '@angular/router';
 
 import { authGuard } from './core/guards/auth.guard';
 import { roleGuard } from './core/guards/role.guard';
+import { passwordChangeGuard } from './core/guards/password-change.guard';
 import { UserRole } from './core/models/auth.models';
 
 const dashboardRoute = (path: string, role: UserRole, title: string): Routes[number] => ({
@@ -55,6 +56,7 @@ export const routes: Routes = [
   {
     path: '',
     canActivate: [authGuard],
+    canActivateChild: [passwordChangeGuard],
     loadComponent: () => import('./layouts/main-layout/main-layout.component').then(m => m.MainLayoutComponent),
     children: [
       { path: 'espace-personnel', redirectTo: 'profile', pathMatch: 'full' },

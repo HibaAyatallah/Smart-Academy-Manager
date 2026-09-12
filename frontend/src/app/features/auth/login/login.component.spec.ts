@@ -162,6 +162,20 @@ describe('LoginComponent', () => {
     expect(router.navigateByUrl).toHaveBeenCalledOnceWith('/dashboard/hr');
   }));
 
+  it('redirects a temporary-password account to the mandatory change page', fakeAsync(() => {
+    fillValidForm();
+    authService.login.and.returnValue(of({
+      ...validProfile(),
+      must_change_password: true,
+    }));
+
+    component.onSubmit();
+    tick();
+
+    expect(authService.getDashboardUrlForRole).not.toHaveBeenCalled();
+    expect(router.navigateByUrl).toHaveBeenCalledOnceWith('/profile');
+  }));
+
   Object.entries(ROLE_DASHBOARD_PATHS).forEach(([role, dashboardUrl]) => {
     it(`redirects ${role} directly to ${dashboardUrl}`, fakeAsync(() => {
       fillValidForm();

@@ -53,7 +53,7 @@ export const authInterceptor: HttpInterceptorFn = (request, next) => {
         catchError((refreshError: unknown) => {
           console.error('[Auth] Échec du renouvellement de session.');
           authService.logout(false);
-          void router.navigateByUrl('/login');
+          void router.navigateByUrl('/connexion');
           return throwError(() => refreshError);
         }),
       );

@@ -146,7 +146,11 @@ class UserCreateSerializer(UserBusinessUnitMixin, serializers.ModelSerializer):
         business_unit_id = validated_data.pop("business_unit_id", None)
         password = validated_data.pop("password")
         with transaction.atomic():
-            user = User.objects.create_user(password=password, **validated_data)
+            user = User.objects.create_user(
+                password=password,
+                must_change_password=True,
+                **validated_data,
+            )
             from apps.business_units.services import assign_business_unit
             self.ensure_business_profile(user)
             assign_business_unit(user, business_unit_id, request=self.context.get("request"))
@@ -177,8 +181,16 @@ class MeSerializer(serializers.ModelSerializer):
             "phone_number",
             "role",
             "preferred_language",
+            "must_change_password",
         ]
-        read_only_fields = ["id", "email", "phone_number", "full_name", "role"]
+        read_only_fields = [
+            "id",
+            "email",
+            "phone_number",
+            "full_name",
+            "role",
+            "must_change_password",
+        ]
 
 
 class ContactDetailsSerializer(serializers.Serializer):
@@ -248,7 +260,8 @@ class ChangePasswordSerializer(serializers.Serializer):
     def save(self, **kwargs):
         user = self.context["request"].user
         user.set_password(self.validated_data["new_password"])
-        user.save(update_fields=["password", "updated_at"])
+        user.must_change_password = False
+        user.save(update_fields=["password", "must_change_password", "updated_at"])
         return user
 
 
@@ -284,5 +297,6 @@ class PasswordResetConfirmSerializer(serializers.Serializer):
     def save(self, **kwargs):
         user = self.validated_data["user"]
         user.set_password(self.validated_data["new_password"])
-        user.save(update_fields=["password", "updated_at"])
+        user.must_change_password = False
+        user.save(update_fields=["password", "must_change_password", "updated_at"])
         return user

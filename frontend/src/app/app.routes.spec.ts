@@ -15,6 +15,7 @@ describe('Application routes', () => {
 
   it('exposes connected routes before the wildcard', () => {
     const privateShell = routes.find((route) => route.canActivate?.length && route.children);
+    expect(privateShell?.canActivateChild?.length).toBeGreaterThan(0);
     const privatePaths = privateShell?.children?.map((route) => route.path) ?? [];
     expect(privatePaths).not.toContain('candidate/applications');
     expect(privatePaths).toContain('notifications');

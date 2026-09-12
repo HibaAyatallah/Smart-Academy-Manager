@@ -70,8 +70,10 @@ export class LoginComponent {
       )
       .subscribe({
         next: (profile) => {
-          const dashboardUrl = this.authService.getDashboardUrlForRole(profile.role);
-          void this.router.navigateByUrl(dashboardUrl);
+          const targetUrl = profile.must_change_password
+            ? '/profile'
+            : this.authService.getDashboardUrlForRole(profile.role);
+          void this.router.navigateByUrl(targetUrl);
         },
         error: (error: unknown) => {
           console.error('[Auth] Échec de connexion.');

@@ -249,7 +249,8 @@ class UserPermissionTests(APITestCase):
             format="json",
         )
         self.assertEqual(response.status_code, status.HTTP_201_CREATED)
-        self.assertTrue(User.objects.filter(email="candidate@example.com").exists())
+        created_user = User.objects.get(email="candidate@example.com")
+        self.assertTrue(created_user.must_change_password)
 
     def test_super_admin_can_create_super_admin_user(self):
         """Only Super Admin can assign the SUPER_ADMIN role."""

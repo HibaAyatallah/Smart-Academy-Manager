@@ -10,6 +10,8 @@ from rest_framework.generics import GenericAPIView, RetrieveAPIView
 from rest_framework.response import Response
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework_simplejwt.views import TokenObtainPairView
+from rest_framework_simplejwt.token_blacklist.models import BlacklistedToken, OutstandingToken
+from rest_framework_simplejwt.tokens import RefreshToken
 from django_filters.rest_framework import DjangoFilterBackend
 from django.db import transaction
 from rest_framework.filters import OrderingFilter, SearchFilter
@@ -58,12 +60,20 @@ class ChangePasswordAPIView(GenericAPIView):
     def post(self, request):
         serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)
-        user = serializer.save()
+        with transaction.atomic():
+            user = serializer.save()
+            for outstanding in OutstandingToken.objects.filter(user=user):
+                BlacklistedToken.objects.get_or_create(token=outstanding)
+            refresh = RefreshToken.for_user(user)
         AccountSecurityLog.objects.create(
             actor=user, action="PASSWORD_CHANGED", metadata={"source": "self_service"}
         )
         queue_email(recipient=user, event="password.changed", event_key=f"password-changed:{user.pk}:{user.updated_at.isoformat()}", context={"message":"Votre mot de passe vient d'être modifié."})
-        return Response({"detail": "Mot de passe modifié avec succès."})
+        return Response({
+            "detail": "Mot de passe modifié avec succès.",
+            "access": str(refresh.access_token),
+            "refresh": str(refresh),
+        })
 
 
 PASSWORD_RESET_RESPONSE = "Si cette adresse est associée à un compte, un email de réinitialisation vous a été envoyé."

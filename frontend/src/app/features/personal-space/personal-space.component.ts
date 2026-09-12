@@ -56,7 +56,7 @@ export class PersonalSpaceComponent implements OnInit {
     if(!window.confirm(this.language.translate('profile.confirmChange')))return;
     this.passwordBusy=true;
     this.auth.changePassword(value).pipe(finalize(()=>this.passwordBusy=false)).subscribe({
-      next:()=>{this.auth.logout(false);void this.router.navigateByUrl('/connexion');},
+      next:(profile)=>void this.router.navigateByUrl(this.auth.getDashboardUrlForRole(profile.role)),
       error:e=>this.passwordError=e.error?.current_password?.[0]??e.error?.new_password?.[0]??e.error?.confirmation?.[0]??this.language.translate('profile.failed'),
     });
   }

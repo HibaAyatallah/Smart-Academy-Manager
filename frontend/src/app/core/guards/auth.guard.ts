@@ -9,7 +9,7 @@ export const authGuard: CanActivateFn = (_route, state) => {
   const router = inject(Router);
 
   if (!authService.hasAccessToken) {
-    return router.createUrlTree(['/login'], {
+    return router.createUrlTree(['/connexion'], {
       queryParams: {
         returnUrl: state.url,
       },
@@ -26,7 +26,7 @@ export const authGuard: CanActivateFn = (_route, state) => {
       console.error('[Auth] Profil de session invalide.');
       authService.logout(false);
       return of(
-        router.createUrlTree(['/login'], {
+        router.createUrlTree(['/connexion'], {
           queryParams: {
             returnUrl: state.url,
           },
