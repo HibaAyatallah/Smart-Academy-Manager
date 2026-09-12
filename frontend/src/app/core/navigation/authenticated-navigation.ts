@@ -80,6 +80,7 @@ export const AUTHENTICATED_NAVIGATION: readonly NavigationSection[] = [
     labelKey: 'nav.internships',
     items: [
       item('Gestion des stagiaires', 'nav.internManagement', 'badge', '/internships', ['SUPER_ADMIN', 'BU_MANAGER']),
+      item('Mes stagiaires', 'nav.assignedInterns', 'supervisor_account', '/internships', ['EMPLOYEE', 'TRAINER_TUTOR']),
       item('Stagiaires acceptés', 'nav.acceptedInterns', 'badge', '/hr/interns', ['HR']),
       item('Collaborateurs par BU', 'nav.collaboratorsByBu', 'groups', '/hr/collaborators', ['HR']),
       item('Mon stage', 'nav.myInternship', 'badge', '/internships/me', ['INTERN']),

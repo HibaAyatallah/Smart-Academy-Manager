@@ -223,13 +223,13 @@ export const routes: Routes = [
       {
         path: 'internships/:id',
         canActivate: [roleGuard],
-        data: { roles: ['SUPER_ADMIN', 'BU_MANAGER'], title: 'Dossier de stage' },
+        data: { roles: ['SUPER_ADMIN', 'BU_MANAGER', 'EMPLOYEE', 'TRAINER_TUTOR'], title: 'Dossier de stage' },
         loadComponent: () => import('./features/internships/intern-detail/intern-detail.component').then(m => m.InternDetailComponent),
       },
       {
         path: 'internships',
         canActivate: [roleGuard],
-        data: { roles: ['SUPER_ADMIN', 'BU_MANAGER'], title: 'Stagiaires' },
+        data: { roles: ['SUPER_ADMIN', 'BU_MANAGER', 'EMPLOYEE', 'TRAINER_TUTOR'], title: 'Stagiaires' },
         loadComponent: () => import('./features/internships/intern-list/intern-list.component').then(m => m.InternListComponent),
       },
       {

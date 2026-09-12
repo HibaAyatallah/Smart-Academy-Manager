@@ -69,7 +69,10 @@ describe('Application routes', () => {
     const detail = privateShell?.children?.find((child) => child.path === 'internships/:id');
     const list = privateShell?.children?.find((child) => child.path === 'internships');
     expect(own?.data?.['roles']).toEqual(['INTERN']);
-    expect(detail?.data?.['roles']).not.toContain('EMPLOYEE');
+    expect(detail?.data?.['roles']).toContain('EMPLOYEE');
+    expect(detail?.data?.['roles']).toContain('TRAINER_TUTOR');
+    expect(list?.data?.['roles']).toContain('EMPLOYEE');
+    expect(list?.data?.['roles']).toContain('TRAINER_TUTOR');
     expect(list?.data?.['roles']).not.toContain('HR');
   });
 

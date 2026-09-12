@@ -929,7 +929,7 @@ class InternshipWorkflowTests(APITestCase):
         self.hr = User.objects.create_user(email="intern-hr@example.com", password="pwd", role=UserRole.HR)
         self.manager = User.objects.create_user(email="intern-manager@example.com", password="pwd", role=UserRole.BU_MANAGER)
         self.supervisor = User.objects.create_user(email="supervisor@example.com", password="pwd", role=UserRole.EMPLOYEE)
-        self.other_supervisor = User.objects.create_user(email="other-supervisor@example.com", password="pwd", role=UserRole.EMPLOYEE)
+        self.other_supervisor = User.objects.create_user(email="other-supervisor@example.com", password="pwd", role=UserRole.TRAINER_TUTOR)
         self.intern_user = User.objects.create_user(email="intern@example.com", password="pwd", role=UserRole.INTERN)
         self.other_intern_user = User.objects.create_user(email="other-intern@example.com", password="pwd", role=UserRole.INTERN)
         self.bu = BusinessUnit.objects.create(name="Intern BU", code="INT", manager=self.manager)
@@ -981,11 +981,16 @@ class InternshipWorkflowTests(APITestCase):
         self.assertEqual(response.data["business_unit"], self.bu.id)
         self.assertEqual(response.data["supervisor"], self.supervisor.id)
 
-    def test_employee_cannot_access_internship_management(self):
+    def test_employee_supervisor_can_access_and_update_only_assigned_intern(self):
         self.client.force_authenticate(self.supervisor)
         response = self.client.patch(f"/api/interns/{self.profile.id}/", {"progress": 45, "current_status": "ACTIVE"})
-        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
-        self.assertEqual(self.client.get("/api/interns/").status_code, status.HTTP_403_FORBIDDEN)
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.profile.refresh_from_db()
+        self.assertEqual(self.profile.progress, 45)
+        self.assertEqual(self.client.get(f"/api/interns/{self.profile.id}/").status_code, status.HTTP_200_OK)
+        self.assertEqual(self.client.get(f"/api/interns/{self.other_profile.id}/").status_code, status.HTTP_404_NOT_FOUND)
+        forbidden_field = self.client.patch(f"/api/interns/{self.profile.id}/", {"school": "Changed"})
+        self.assertEqual(forbidden_field.status_code, status.HTTP_403_FORBIDDEN)
 
     def test_intern_can_upload_and_download_own_document_only(self):
         self.client.force_authenticate(self.intern_user)
@@ -1066,18 +1071,63 @@ class InternshipWorkflowTests(APITestCase):
         self.assertFalse(document.is_validated)
         self.assertIsNone(document.validator)
 
-    def test_employee_cannot_create_intern_evaluation(self):
+    def test_supervisors_can_evaluate_only_their_assigned_interns(self):
         payload = {"intern": self.profile.id, "evaluation_type": "MIDTERM", "technical_skills": 4, "autonomy": 4, "communication": 4, "teamwork": 5, "deadline_respect": 4, "work_quality": 4, "professionalism": 5, "overall_score": 4.3, "comments": "Bon progrès"}
         self.client.force_authenticate(self.supervisor)
         response = self.client.post("/api/intern-evaluations/", payload)
-        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
-        self.assertFalse(InternEvaluation.objects.exists())
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(InternEvaluation.objects.get(pk=response.data["id"]).evaluator, self.supervisor)
 
-    def test_intern_queryset_is_scoped_and_employee_is_denied(self):
+        forbidden = self.client.post("/api/intern-evaluations/", {**payload, "intern": self.other_profile.id})
+        self.assertEqual(forbidden.status_code, status.HTTP_403_FORBIDDEN)
+
+        self.client.force_authenticate(self.other_supervisor)
+        trainer_response = self.client.post("/api/intern-evaluations/", {**payload, "intern": self.other_profile.id})
+        self.assertEqual(trainer_response.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(InternEvaluation.objects.get(pk=trainer_response.data["id"]).evaluator, self.other_supervisor)
+
+    def test_intern_and_supervisor_querysets_are_strictly_scoped(self):
         self.client.force_authenticate(self.intern_user)
         intern_list = self.client.get("/api/interns/")
         self.assertEqual(intern_list.data["count"], 1)
         self.client.force_authenticate(self.supervisor)
         supervisor_list = self.client.get("/api/interns/")
-        self.assertEqual(supervisor_list.status_code, status.HTTP_403_FORBIDDEN)
+        self.assertEqual(supervisor_list.status_code, status.HTTP_200_OK)
+        self.assertEqual(supervisor_list.data["count"], 1)
+        self.assertEqual(supervisor_list.data["results"][0]["id"], self.profile.id)
+
+        self.client.force_authenticate(self.other_supervisor)
+        trainer_list = self.client.get("/api/interns/")
+        self.assertEqual(trainer_list.status_code, status.HTTP_200_OK)
+        self.assertEqual(trainer_list.data["count"], 1)
+        self.assertEqual(trainer_list.data["results"][0]["id"], self.other_profile.id)
+
+    def test_supervisor_can_read_only_assigned_intern_documents(self):
+        own_document = InternDocument.objects.create(
+            intern=self.profile,
+            requirement=self.requirement,
+            document_type="CONVENTION",
+            file=SimpleUploadedFile("own.pdf", b"%PDF-1.4 own"),
+        )
+        other_document = InternDocument.objects.create(
+            intern=self.other_profile,
+            requirement=self.requirement,
+            document_type="CONVENTION",
+            file=SimpleUploadedFile("other.pdf", b"%PDF-1.4 other"),
+        )
+        self.client.force_authenticate(self.supervisor)
+
+        documents = self.client.get("/api/intern-documents/")
+
+        self.assertEqual(documents.status_code, status.HTTP_200_OK)
+        self.assertEqual(documents.data["count"], 1)
+        self.assertEqual(documents.data["results"][0]["id"], own_document.id)
+        self.assertEqual(self.client.get(f"/api/intern-documents/{own_document.id}/download/").status_code, status.HTTP_200_OK)
+        self.assertEqual(self.client.get(f"/api/intern-documents/{other_document.id}/download/").status_code, status.HTTP_404_NOT_FOUND)
+
+    def test_super_admin_keeps_global_internship_access(self):
+        self.client.force_authenticate(self.admin)
+        response = self.client.get("/api/interns/")
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data["count"], 2)
 

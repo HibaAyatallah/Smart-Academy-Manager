@@ -76,6 +76,14 @@ def is_employee(user) -> bool:
     return bool(user and user.is_authenticated and user.role == UserRole.EMPLOYEE)
 
 
+def is_internship_supervisor(user) -> bool:
+    return bool(
+        user
+        and user.is_authenticated
+        and user.role in {UserRole.EMPLOYEE, UserRole.TRAINER_TUTOR}
+    )
+
+
 class IsInternshipParticipant(BasePermission):
     """
     Super Admin: Full CRUD.
@@ -95,6 +103,14 @@ class IsInternshipParticipant(BasePermission):
             return request.method in SAFE_METHODS
         if is_intern(user) and view.basename == "intern-document":
             return request.method in SAFE_METHODS or request.method == "POST"
+        if is_internship_supervisor(user):
+            if view.basename == "intern":
+                return request.method in SAFE_METHODS or request.method == "PATCH"
+            if view.basename == "intern-evaluation":
+                return request.method in SAFE_METHODS or request.method in {"POST", "PATCH"}
+            if view.basename == "intern-document":
+                return request.method in SAFE_METHODS
+            return False
         return request.method in SAFE_METHODS and (
             is_bu_manager(user) or is_intern(user)
         )
@@ -121,6 +137,9 @@ class IsInternshipParticipant(BasePermission):
                 intern_profile.business_unit
                 and intern_profile.business_unit.manager_id == user.id
             )
+
+        if is_internship_supervisor(user):
+            return intern_profile.supervisor_id == user.id
 
         return False
 

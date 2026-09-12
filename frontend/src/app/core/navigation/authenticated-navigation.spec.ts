@@ -46,6 +46,8 @@ describe('authenticated navigation', () => {
   });
 
   it('separates HR consultation from internship management', () => {
+    expect(labelsFor('EMPLOYEE')).toContain('Mes stagiaires');
+    expect(labelsFor('TRAINER_TUTOR')).toContain('Mes stagiaires');
     expect(labelsFor('EMPLOYEE')).not.toContain('Gestion des stagiaires');
     expect(labelsFor('HR')).not.toContain('Gestion des stagiaires');
     expect(labelsFor('HR')).toContain('Stagiaires acceptés');

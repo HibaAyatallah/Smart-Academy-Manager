@@ -31,7 +31,7 @@ from .permissions import (
     IsInternshipParticipant,
     IsInternDocumentRequirementUser,
     is_bu_manager,
-    is_employee,
+    is_internship_supervisor,
     is_intern,
 )
 from .serializers import (
@@ -638,12 +638,13 @@ class InternProfileViewSet(viewsets.ModelViewSet):
             
         if is_intern(user):
             return queryset.filter(user_id=user.id)
-            
-        return queryset.filter(supervisor_id=user.id)
+        if is_internship_supervisor(user):
+            return queryset.filter(supervisor_id=user.id)
+        return queryset.none()
 
     def perform_update(self, serializer):
         user = self.request.user
-        if is_employee(user) and not is_recruitment_manager(user):
+        if is_internship_supervisor(user):
             forbidden = set(serializer.validated_data) - {"progress", "current_status", "final_decision"}
             if forbidden:
                 raise PermissionDenied("Le superviseur peut uniquement mettre à jour la progression et le statut.")
@@ -682,14 +683,16 @@ class InternDocumentViewSet(viewsets.ModelViewSet):
         if is_intern(user):
             return queryset.filter(intern__user_id=user.id)
             
-        return queryset.filter(intern__supervisor_id=user.id)
+        if is_internship_supervisor(user):
+            return queryset.filter(intern__supervisor_id=user.id)
+        return queryset.none()
 
     def perform_create(self, serializer):
         intern = serializer.validated_data["intern"]
         user = self.request.user
         if is_intern(user) and intern.user_id != user.id:
             raise PermissionDenied("Vous pouvez uniquement ajouter vos propres documents.")
-        if is_employee(user) and not is_recruitment_manager(user) and intern.supervisor_id != user.id:
+        if is_internship_supervisor(user) and intern.supervisor_id != user.id:
             raise PermissionDenied("Ce stagiaire ne vous est pas affecté.")
         requirement = serializer.validated_data["requirement"]
         uploaded_file = serializer.validated_data["file"]
@@ -795,19 +798,21 @@ class InternEvaluationViewSet(viewsets.ModelViewSet):
         if is_intern(user):
             return queryset.filter(intern__user_id=user.id)
             
-        return queryset.filter(intern__supervisor_id=user.id)
+        if is_internship_supervisor(user):
+            return queryset.filter(intern__supervisor_id=user.id)
+        return queryset.none()
 
     def perform_create(self, serializer):
         intern = serializer.validated_data["intern"]
         user = self.request.user
-        if is_employee(user) and not is_recruitment_manager(user) and intern.supervisor_id != user.id:
+        if is_internship_supervisor(user) and intern.supervisor_id != user.id:
             raise PermissionDenied("Ce stagiaire ne vous est pas affecté.")
         serializer.save(evaluator=user)
 
     def perform_update(self, serializer):
         evaluation = self.get_object()
         user = self.request.user
-        if is_employee(user) and not is_recruitment_manager(user) and evaluation.evaluator_id != user.id:
+        if is_internship_supervisor(user) and evaluation.evaluator_id != user.id:
             raise PermissionDenied("Vous pouvez uniquement modifier vos propres évaluations.")
         if "intern" in serializer.validated_data and serializer.validated_data["intern"].id != evaluation.intern_id:
             raise PermissionDenied("Une évaluation ne peut pas être réaffectée à un autre stagiaire.")
