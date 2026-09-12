@@ -84,8 +84,8 @@ export class TrainingWorkspaceComponent implements OnInit {
   ngOnInit(): void { this.load(); }
   load(): void {
     this.loading = true; this.error = '';
-    this.service.getTrainings(this.filters.getRawValue()).pipe(finalize(() => this.loading = false)).subscribe({
-      next: result => { this.trainings = result.results; if (this.selected) this.selected = this.trainings.find(item => item.id === this.selected?.id) ?? null; },
+    this.service.getAllTrainings(this.filters.getRawValue()).pipe(finalize(() => this.loading = false)).subscribe({
+      next: trainings => { this.trainings = trainings; if (this.selected) this.selected = this.trainings.find(item => item.id === this.selected?.id) ?? null; },
       error: () => this.error = 'Impossible de charger les formations.',
     });
   }

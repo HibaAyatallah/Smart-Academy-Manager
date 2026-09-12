@@ -19,6 +19,44 @@ describe('TrainingService', () => {
     expect(req.request.params.get('status')).toBe('PUBLISHED');
     req.flush({ count: 0, next: null, previous: null, results: [] });
   });
+  it('loads more than 20 filtered items by following next and removes page overlap', () => {
+    let result: Array<{id: number}> = [];
+    service.getAllTrainings({ status: 'PUBLISHED', search: 'angular' }).subscribe(items => result = items);
+
+    const first = http.expectOne(request => request.url === `${environment.apiBaseUrl}trainings/`);
+    expect(first.request.params.get('status')).toBe('PUBLISHED');
+    expect(first.request.params.get('search')).toBe('angular');
+    const firstPage = Array.from({length: 20}, (_, index) => ({id: index + 1}));
+    const nextUrl = `${environment.apiBaseUrl}trainings/?page=2&search=angular&status=PUBLISHED`;
+    first.flush({count: 25, next: nextUrl, previous: null, results: firstPage});
+
+    const second = http.expectOne(nextUrl);
+    second.flush({
+      count: 25,
+      next: null,
+      previous: `${environment.apiBaseUrl}trainings/?page=1&search=angular&status=PUBLISHED`,
+      results: [{id: 20}, ...Array.from({length: 5}, (_, index) => ({id: index + 21}))],
+    });
+
+    expect(result.map(item => item.id)).toEqual(Array.from({length: 25}, (_, index) => index + 1));
+  });
+  it('fails instead of looping when DRF returns an already visited next link', () => {
+    let error: Error | undefined;
+    service.getAllAttendance().subscribe({error: value => error = value});
+    const request = http.expectOne(`${environment.apiBaseUrl}attendance/`);
+    request.flush({count: 21, next: `${environment.apiBaseUrl}attendance/`, previous: null, results: []});
+    expect(error?.message).toContain('cyclique');
+  });
+  it('propagates an API error from a later page', () => {
+    let failed = false;
+    service.getAllEnrollments({session: 9}).subscribe({error: () => failed = true});
+    const first = http.expectOne(request => request.url === `${environment.apiBaseUrl}enrollments/`);
+    expect(first.request.params.get('session')).toBe('9');
+    const nextUrl = `${environment.apiBaseUrl}enrollments/?page=2&session=9`;
+    first.flush({count: 21, next: nextUrl, previous: null, results: [{id: 1}]});
+    http.expectOne(nextUrl).flush({detail: 'Erreur'}, {status: 500, statusText: 'Server Error'});
+    expect(failed).toBeTrue();
+  });
   it('requests enrollment for the selected session', () => {
     service.requestEnrollment(4, 9).subscribe();
     const req = http.expectOne(`${environment.apiBaseUrl}enrollments/`);

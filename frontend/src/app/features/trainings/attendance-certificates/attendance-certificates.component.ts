@@ -7,7 +7,7 @@ import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatIconModule } from '@angular/material/icon';
 import { MatInputModule } from '@angular/material/input';
 import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
-import { forkJoin } from 'rxjs';
+import { forkJoin, of } from 'rxjs';
 import { finalize } from 'rxjs/operators';
 import { SessionAttendance, TrainingCertificate, TrainingEnrollment } from '../../../core/models/training.models';
 import { AuthService } from '../../../core/services/auth.service';
@@ -43,14 +43,14 @@ export class AttendanceCertificatesComponent implements OnInit {
     this.loading=true; this.error='';
     const filters=this.session?{enrollment__session:this.session}:{};
     forkJoin({
-      attendance:this.service.getAttendance(filters),
-      enrollments:this.service.getEnrollments(this.session?{session:this.session}:{}),
-      certificates:this.service.getCertificates(this.session?{enrollment__session:this.session}:{}),
+      attendance:this.session?this.service.getAllAttendance(filters):of([] as SessionAttendance[]),
+      enrollments:this.session?this.service.getAllEnrollments({session:this.session}):of([] as TrainingEnrollment[]),
+      certificates:this.service.getAllCertificates(this.session?{enrollment__session:this.session}:{}),
     }).pipe(finalize(()=>this.loading=false)).subscribe({
       next:r=>{
-        this.attendances=r.attendance.results;
-        this.enrollments=r.enrollments.results.filter(item=>item.final_status==='ENROLLED'||item.final_status==='COMPLETED');
-        this.certificates=r.certificates.results;
+        this.attendances=r.attendance;
+        this.enrollments=r.enrollments.filter(item=>item.final_status==='ENROLLED'||item.final_status==='COMPLETED');
+        this.certificates=r.certificates;
         this.days=this.session&&this.enrollments.length?this.dateRange(this.enrollments[0]):[];
       },
       error:()=>this.error='Impossible de charger les présences.',

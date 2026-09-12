@@ -13,4 +13,5 @@
     <tr mat-header-row *matHeaderRowDef="columns"></tr><tr mat-row *matRowDef="let row;columns:columns"></tr>
   </table></div>
 </mat-card>
+<mat-paginator *ngIf="total>pageSize" [length]="total" [pageSize]="pageSize" [pageIndex]="pageIndex" (page)="page($event)" />
 <app-empty-state *ngIf="!loading&&!error&&!rows.length" icon="groups" title="Aucune personne inscrite" description="Aucune inscription n’est enregistrée pour le moment." />

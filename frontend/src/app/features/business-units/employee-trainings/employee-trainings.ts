@@ -51,14 +51,14 @@ export class EmployeeTrainings implements OnInit {
     this.isLoading = true;
     this.errorMessage = '';
     forkJoin({
-      enrollments: this.service.getEnrollments(),
-      attendances: this.service.getAttendance(),
+      enrollments: this.service.getAllEnrollments(),
+      attendances: this.service.getAllAttendance(),
     }).pipe(finalize(() => this.isLoading = false)).subscribe({
       next: ({ enrollments, attendances }) => {
-        this.trainings = (enrollments.results ?? []).filter(
+        this.trainings = enrollments.filter(
           item => item.final_status === 'ENROLLED' || item.final_status === 'COMPLETED',
         );
-        this.attendances = attendances.results ?? [];
+        this.attendances = attendances;
       },
       error: () => this.errorMessage = 'Impossible de charger les formations de votre Business Unit.',
     });
