@@ -62,6 +62,10 @@ class FinalRecruitmentStabilityTests(TestCase):
         data = ApplicationMatchSerializer(self.application.matches.get()).data
         self.assertTrue(data["is_stale"])
         self.assertIsNone(data["score"])
+        self.assertIsNone(data["semantic_score"])
+        self.assertEqual(data["matched_skills"], [])
+        self.assertEqual(data["missing_skills"], [])
+        self.assertIn("obsolète", data["explanation"])
         self.assertTrue(process_application_analysis(self.application).analysis_updated)
 
     def test_removed_cv_hides_existing_score(self):
@@ -92,6 +96,42 @@ class FinalRecruitmentStabilityTests(TestCase):
         update_training_recommendations(self.application, list(self.application.matches.all()))
         recommendation.refresh_from_db()
         self.assertEqual(recommendation.human_decision, "APPROVED")
+
+    def test_human_match_review_is_persisted_by_the_api(self):
+        self.cv()
+        process_application_analysis(self.application)
+        match = self.application.matches.get()
+
+        response = self.client.post(
+            f"/api/applications/{self.application.pk}/review-match/",
+            {"match_id": match.pk, "decision": "APPROVED"},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, 200)
+        match.refresh_from_db()
+        self.assertEqual(match.human_decision, "APPROVED")
+        self.assertEqual(match.reviewed_by, self.admin)
+        self.assertIsNotNone(match.reviewed_at)
+
+    def test_match_endpoint_only_returns_the_application_offer(self):
+        other_offer = Offer.objects.create(
+            title="Java", description="Services", required_skills="Java",
+            business_unit=self.bu, application_type="HIRING",
+        )
+        self.cv()
+        process_application_analysis(self.application)
+        from .intelligence import match_application
+        other_match = match_application(
+            self.application, target_offer=other_offer, include_recommendations=False,
+        )[0]
+
+        response = self.client.post(f"/api/applications/{self.application.pk}/match-offers/")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(len(response.data["matches"]), 1)
+        self.assertEqual(response.data["matches"][0]["offer"], self.offer.pk)
+        self.assertNotEqual(response.data["matches"][0]["id"], other_match.pk)
 
     def test_detached_candidate_can_still_review_cv(self):
         self.cv()

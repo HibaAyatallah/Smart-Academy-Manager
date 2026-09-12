@@ -160,24 +160,31 @@
     <mat-card-content>
       <div class="loading-inline" *ngIf="aiMatchLoading"><mat-spinner diameter="32"></mat-spinner> Calcul de la correspondance…</div>
       <p class="error-state" *ngIf="aiMatchError">{{ aiMatchError }}</p>
-      <ng-container *ngIf="aiMatch && !aiMatchLoading">
-        <div class="overall-score"><strong>{{ aiMatch.score | number:'1.0-0' }}%</strong><span>{{ aiMatch.score_breakdown['label'] }}</span></div>
-        <mat-progress-bar mode="determinate" [value]="aiMatch.score"></mat-progress-bar>
+      <p class="error-state" *ngIf="aiMatch?.is_stale">Le résultat de matching est obsolète. Les anciens scores et écarts sont masqués jusqu’au recalcul.</p>
+      <ng-container *ngIf="aiMatch && !aiMatchLoading && !aiMatch.is_stale">
+        <div class="overall-score"><strong>{{ aiMatch.score | number:'1.0-0' }}%</strong><span>{{ aiMatch.score_breakdown?.['label'] }}</span></div>
+        <mat-progress-bar mode="determinate" [value]="aiMatch.score ?? 0"></mat-progress-bar>
         <div class="score-grid">
-          <div *ngFor="let item of ['skills', 'experience', 'education']">
-            <span>{{ item === 'skills' ? 'Compétences' : item === 'experience' ? 'Expérience' : 'Formation' }}</span>
+          <div *ngFor="let item of ['skills', 'experience', 'education', 'semantic']">
+            <span>{{ item === 'skills' ? 'Compétences' : item === 'experience' ? 'Expérience' : item === 'education' ? 'Formation' : 'Similarité sémantique' }}</span>
             <strong>{{ scoreDisplay(item) }}</strong>
           </div>
         </div>
+        <p *ngIf="aiMatch.semantic_score === null"><strong>BGE-M3 :</strong> indisponible — le score final a été calculé uniquement avec les critères structurés disponibles.</p>
+        <p *ngIf="aiMatch.semantic_score !== null"><strong>Modèle sémantique :</strong> {{ aiMatch.semantic_model }}</p>
         <p *ngIf="scoreComponent('experience')?.candidate_years !== null"><strong>Expérience datée détectée :</strong> environ {{ scoreComponent('experience')?.candidate_years }} an(s). L’offre ne contient pas de minimum chiffré.</p>
         <div class="skill-groups">
           <section><h3>Compétences correspondantes</h3><mat-chip-set><mat-chip *ngFor="let skill of aiMatch.matched_skills">{{ skill }}</mat-chip></mat-chip-set><p *ngIf="!aiMatch.matched_skills.length">Aucune identifiée.</p></section>
           <section><h3>Compétences manquantes</h3><mat-chip-set><mat-chip *ngFor="let skill of aiMatch.missing_skills">{{ skill }}</mat-chip></mat-chip-set><p *ngIf="!aiMatch.missing_skills.length">Aucune.</p></section>
           <section><h3>Compétences supplémentaires</h3><mat-chip-set><mat-chip *ngFor="let skill of aiMatch.additional_skills">{{ skill }}</mat-chip></mat-chip-set><p *ngIf="!aiMatch.additional_skills.length">Aucune.</p></section>
         </div>
-        <h3>Synthèse candidat</h3><p>{{ aiMatch.candidate_summary }}</p>
-        <small>Score déterministe {{ aiMatch.algorithm_version }}. Aucun rejet automatique n’est effectué.</small>
+        <h3>Synthèse candidat</h3><p>{{ aiMatch.candidate_summary }}</p><p>{{ aiMatch.explanation }}</p>
+        <div class="actions"><button mat-flat-button color="primary" type="button" (click)="reviewAIMatch('APPROVED')" [disabled]="aiReviewRunning">Valider l’aide IA</button><button mat-stroked-button color="warn" type="button" (click)="reviewAIMatch('REJECTED')" [disabled]="aiReviewRunning">Refuser l’aide IA</button></div>
+        <p><strong>Décision humaine :</strong> {{ aiMatch.human_decision === 'APPROVED' ? 'Validée' : aiMatch.human_decision === 'REJECTED' ? 'Refusée' : 'En attente' }}</p>
+        <small>Score hybride {{ aiMatch.algorithm_version }}. L’IA assiste la revue ; aucun rejet automatique n’est effectué.</small>
       </ng-container>
+      <section *ngIf="trainingRecommendations.length"><h3>Recommandations de formation</h3><mat-card *ngFor="let recommendation of trainingRecommendations"><mat-card-title>{{ recommendation.training_title }}</mat-card-title><mat-card-content><p>Compétences ciblées : {{ recommendation.skill_gaps.join(', ') }}</p><p>{{ recommendation.explanation }}</p><strong>{{ recommendation.score | number:'1.0-0' }}%</strong></mat-card-content></mat-card></section>
+      <p *ngIf="recommendationsStale">Les recommandations précédentes sont masquées car leur matching source est obsolète.</p>
     </mat-card-content>
   </mat-card>
 

@@ -291,14 +291,19 @@ class ApplicationViewSet(viewsets.ModelViewSet):
         )
         if result.error:
             raise DRFValidationError({"detail": result.error})
-        matches = application.matches.all()
+        matches = application.matches.filter(offer_id=application.offer_id)
         match_data = ApplicationMatchSerializer(matches, many=True).data
-        recommendations = self.get_object().training_recommendations.select_related("training")
+        has_current_match = any(not item["is_stale"] for item in match_data)
+        recommendations = (
+            self.get_object().training_recommendations.select_related("training")
+            if has_current_match
+            else []
+        )
         return Response({"matches": match_data, "training_recommendations": [
             {"id": item.id, "training": item.training_id, "training_title": item.training.title,
              "score": item.score, "skill_gaps": item.skill_gaps, "explanation": item.explanation,
              "human_decision": item.human_decision} for item in recommendations
-        ]})
+        ], "recommendations_stale": not has_current_match})
 
     @action(detail=False, methods=["post"], url_path="analyze-existing")
     def analyze_existing(self, request):

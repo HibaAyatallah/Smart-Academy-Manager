@@ -12,6 +12,7 @@
     <div *ngIf="analyzing" class="state"><mat-spinner diameter="40"></mat-spinner><strong>Analyse de votre CV en cours...</strong></div>
     <p class="error" *ngIf="error">{{error}}</p><p class="success" *ngIf="success">{{success}}</p>
     <form *ngIf="analysis && !analyzing" [formGroup]="form" class="review-form">
+      <p class="warning" *ngIf="analysis.is_stale">Ce CV a été remplacé. L’analyse validée est conservée mais elle est obsolète ; relancez explicitement l’analyse pour utiliser le nouveau document.</p>
       <p class="warning" *ngFor="let warning of analysis.extraction_warnings">{{warning}}</p>
       <h3>Informations personnelles</h3><div class="grid"><mat-form-field appearance="outline"><mat-label>Prénom</mat-label><input matInput formControlName="first_name"></mat-form-field><mat-form-field appearance="outline"><mat-label>Nom</mat-label><input matInput formControlName="last_name"></mat-form-field><mat-form-field appearance="outline"><mat-label>Email</mat-label><input matInput formControlName="email"></mat-form-field><mat-form-field appearance="outline"><mat-label>Téléphone</mat-label><input matInput formControlName="phone"></mat-form-field><mat-form-field appearance="outline" class="wide"><mat-label>Localisation / adresse</mat-label><input matInput formControlName="location"></mat-form-field></div>
       <h3>Compétences</h3><mat-form-field appearance="outline" class="wide"><mat-label>Une compétence par ligne</mat-label><textarea matInput rows="5" formControlName="skills"></textarea></mat-form-field>

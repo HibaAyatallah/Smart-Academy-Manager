@@ -22,6 +22,7 @@ import {
   ApplicationConversionResponse,
   ApplicationConversionType,
   MatchScoreComponent,
+  TrainingRecommendation,
   ApplicationStatus,
   EDUCATION_LEVEL_LABELS,
 } from '../../../core/models/application.models';
@@ -82,6 +83,9 @@ export class ApplicationDetailComponent implements OnInit {
   aiMatch: ApplicationMatch | null = null;
   aiMatchLoading = false;
   aiMatchError = '';
+  trainingRecommendations: TrainingRecommendation[] = [];
+  recommendationsStale = false;
+  aiReviewRunning = false;
 
   ngOnInit(): void {
     this.loadApplication();
@@ -128,14 +132,32 @@ export class ApplicationDetailComponent implements OnInit {
     this.applicationService.matchOffers(applicationId).pipe(
       finalize(() => this.aiMatchLoading = false),
     ).subscribe({
-      next: response => this.aiMatch = response.matches[0] ?? null,
+      next: response => {
+        this.aiMatch = response.matches[0] ?? null;
+        this.trainingRecommendations = response.training_recommendations ?? [];
+        this.recommendationsStale = response.recommendations_stale;
+      },
       error: error => this.aiMatchError = error.error?.detail || 'Analyse de correspondance indisponible.',
     });
   }
 
   scoreComponent(name: string): MatchScoreComponent | null {
-    const value = this.aiMatch?.score_breakdown[name];
+    const value = this.aiMatch?.score_breakdown?.[name];
     return value && typeof value === 'object' ? value as MatchScoreComponent : null;
+  }
+
+  reviewAIMatch(decision: 'APPROVED' | 'REJECTED'): void {
+    if (!this.application || !this.aiMatch || this.aiMatch.is_stale || this.aiReviewRunning) return;
+    this.aiReviewRunning = true;
+    this.applicationService.reviewMatch(this.application.id, this.aiMatch.id, decision).pipe(
+      finalize(() => this.aiReviewRunning = false),
+    ).subscribe({
+      next: review => {
+        this.aiMatch = {...this.aiMatch!, ...review};
+        this.snackBar.open('Décision humaine enregistrée.', 'Fermer', {duration: 3000});
+      },
+      error: error => this.snackBar.open(error.error?.detail || 'Décision impossible.', 'Fermer', {duration: 4000}),
+    });
   }
 
   scoreDisplay(name: string): string {

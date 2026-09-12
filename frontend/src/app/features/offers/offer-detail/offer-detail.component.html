@@ -55,7 +55,7 @@
               </div>
               <ng-container *ngIf="row.match; else analysisFailed">
                 <span>{{ row.match.score | number:'1.0-0' }}% — {{ row.match_label }}</span>
-                <mat-progress-bar mode="determinate" [value]="row.match.score"></mat-progress-bar>
+                <mat-progress-bar mode="determinate" [value]="row.match.score ?? 0"></mat-progress-bar>
                 <details class="match-details">
                   <summary>Voir les détails</summary>
                   <div class="score-grid">

@@ -359,6 +359,9 @@ class ApplicationMatchSerializer(serializers.ModelSerializer):
         if data["is_stale"]:
             for field in ("score", "semantic_score", "score_breakdown", "candidate_summary"):
                 data[field] = None
+            for field in ("matched_skills", "missing_skills", "additional_skills"):
+                data[field] = []
+            data["explanation"] = "Ce résultat est obsolète et doit être recalculé."
         return data
 
 

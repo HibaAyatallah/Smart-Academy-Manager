@@ -67,11 +67,12 @@ describe('ApplicationDetailComponent', () => {
       'getApplication',
       'markUnderReview',
       'matchOffers',
+      'reviewMatch',
     ]);
     snackBar = jasmine.createSpyObj<MatSnackBar>('MatSnackBar', ['open']);
     dialog = jasmine.createSpyObj<MatDialog>('MatDialog', ['open']);
     applicationService.getApplication.and.returnValue(of(submittedApplication));
-    applicationService.matchOffers.and.returnValue(of({ matches: [] }));
+    applicationService.matchOffers.and.returnValue(of({ matches: [], training_recommendations: [], recommendations_stale: false }));
 
     TestBed.configureTestingModule({
       imports: [ApplicationDetailComponent],
@@ -219,5 +220,66 @@ describe('ApplicationDetailComponent', () => {
     expect(snackBar.open).toHaveBeenCalledWith(
       'Candidat converti avec succès.', 'Fermer', { duration: 3500 },
     );
+  });
+
+  it('displays hybrid semantic scoring, recommendations and human review', () => {
+    const match = {
+      id: 12, application: 7, offer: 3, offer_title: 'Backend', candidate_name: 'Jane Candidate',
+      score: 86, matched_skills: ['Python'], missing_skills: ['Docker'], additional_skills: [],
+      score_breakdown: {
+        label: 'Strong match',
+        skills: {score: 80, weight: 50, available: true},
+        experience: {score: null, weight: 25, available: false},
+        education: {score: 100, weight: 15, available: true},
+        semantic: {score: 91, weight: 30, available: true},
+      },
+      candidate_summary: 'Profil cohérent.', explanation: 'Score hybride explicable.',
+      algorithm_version: 'hybrid-v1', semantic_score: 91,
+      semantic_model: 'ollama:bge-m3@bge-m3-v1/1024d', human_decision: 'PENDING' as const,
+      reviewed_at: null, created_at: '', updated_at: '', is_stale: false,
+    };
+    applicationService.matchOffers.and.returnValue(of({
+      matches: [match],
+      training_recommendations: [{
+        id: 5, training: 8, training_title: 'Docker essentiel', score: 100,
+        skill_gaps: ['Docker'], explanation: 'Couvre Docker.', human_decision: 'PENDING',
+      }],
+      recommendations_stale: false,
+    }));
+    applicationService.reviewMatch.and.returnValue(of({id: 12, human_decision: 'APPROVED', reviewed_at: '2026-09-12T10:00:00Z'}));
+    component.application = {...submittedApplication, offer: 3};
+
+    component.loadAIMatch(7);
+    fixture.detectChanges();
+    const text = fixture.nativeElement.textContent as string;
+    expect(text).toContain('Similarité sémantique');
+    expect(text).toContain('91%');
+    expect(text).toContain('Docker essentiel');
+    expect(text).toContain('Score hybride');
+
+    component.reviewAIMatch('APPROVED');
+    expect(applicationService.reviewMatch).toHaveBeenCalledOnceWith(7, 12, 'APPROVED');
+    expect(component.aiMatch?.human_decision).toBe('APPROVED');
+  });
+
+  it('hides stale scores and recommendations', () => {
+    applicationService.matchOffers.and.returnValue(of({
+      matches: [{
+        id: 12, application: 7, offer: 3, offer_title: 'Backend', candidate_name: 'Jane Candidate',
+        score: null, matched_skills: [], missing_skills: [], additional_skills: [], score_breakdown: null,
+        candidate_summary: null, explanation: 'Ce résultat est obsolète.', algorithm_version: 'hybrid-v1',
+        semantic_score: null, semantic_model: 'ollama:bge-m3@bge-m3-v1/1024d',
+        human_decision: 'PENDING', reviewed_at: null, created_at: '', updated_at: '', is_stale: true,
+      }],
+      training_recommendations: [], recommendations_stale: true,
+    }));
+    component.application = {...submittedApplication, offer: 3};
+
+    component.loadAIMatch(7);
+    fixture.detectChanges();
+    const text = fixture.nativeElement.textContent as string;
+    expect(text).toContain('matching est obsolète');
+    expect(text).toContain('recommandations précédentes sont masquées');
+    expect(text).not.toContain('Valider l’aide IA');
   });
 });

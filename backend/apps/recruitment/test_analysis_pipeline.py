@@ -13,6 +13,7 @@ from apps.accounts.choices import UserRole
 from apps.business_units.models import BusinessUnit
 
 from .analysis_pipeline import (
+    analysis_is_stale,
     analyze_application_batch,
     process_application_analysis,
     recalculate_offer_matches,
@@ -244,6 +245,31 @@ class ApplicationAnalysisPipelineTests(TestCase):
         self.assertEqual(document._analysis_result.status, "already_complete")
         self.assertEqual(application.cv_analysis.id, analysis_id)
         self.assertEqual(application.matches.get(offer=self.offer).id, match_id)
+
+    def test_replacement_cv_preserves_human_validated_analysis_until_explicit_force(self):
+        application = self.create_application("validated-replacement")
+        self.add_cv(application, b"Skills: Python")
+        analysis = application.cv_analysis
+        analysis.skills = ["Python", "Human correction"]
+        analysis.human_validated = True
+        analysis.validated_by = self.hr
+        analysis.save(update_fields=["skills", "human_validated", "validated_by", "updated_at"])
+        original_hash = analysis.source_sha256
+
+        replacement = self.add_cv(application, b"Skills: Docker, Kubernetes")
+
+        analysis.refresh_from_db()
+        self.assertEqual(replacement._analysis_result.status, "stale_human_validated")
+        self.assertEqual(analysis.skills, ["Python", "Human correction"])
+        self.assertEqual(analysis.source_sha256, original_hash)
+        self.assertTrue(analysis.human_validated)
+        self.assertTrue(analysis_is_stale(application, analysis))
+
+        forced = process_application_analysis(application, force_analysis=True, force_matching=True)
+        analysis.refresh_from_db()
+        self.assertTrue(forced.analysis_updated)
+        self.assertFalse(analysis.human_validated)
+        self.assertNotEqual(analysis.source_sha256, original_hash)
 
     def test_manual_analysis_change_invalidates_and_updates_same_match(self):
         application = self.create_application("manual-change")

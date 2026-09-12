@@ -78,6 +78,7 @@ class EmbeddingMathTests(SimpleTestCase):
             with self.subTest(left=left, right=right), self.assertRaises(InvalidEmbeddingError):
                 cosine_similarity(left, right)
 
+    @override_settings(RECRUITMENT_EMBEDDING_DIMENSIONS=3)
     def test_ollama_provider_returns_valid_embedding(self):
         provider = OllamaEmbeddingProvider(
             base_url="http://ollama.test:11434",
@@ -85,6 +86,14 @@ class EmbeddingMathTests(SimpleTestCase):
             urlopen_func=lambda request, timeout: FakeResponse(b'{"embeddings":[[0.1,0.2,0.3]]}'),
         )
         self.assertEqual(provider.embed("Python"), [0.1, 0.2, 0.3])
+
+    @override_settings(RECRUITMENT_EMBEDDING_DIMENSIONS=1024)
+    def test_ollama_provider_rejects_an_unexpected_bge_m3_dimension(self):
+        provider = OllamaEmbeddingProvider(
+            urlopen_func=lambda request, timeout: FakeResponse(b'{"embeddings":[[0.1,0.2,0.3]]}'),
+        )
+        with self.assertRaisesRegex(InvalidEmbeddingError, "1024 attendue"):
+            provider.embed("Python")
 
     def test_ollama_unavailable_timeout_and_empty_vector_are_typed(self):
         unavailable = OllamaEmbeddingProvider(urlopen_func=lambda request, timeout: (_ for _ in ()).throw(URLError("down")))
@@ -151,6 +160,7 @@ class EmbeddingMathTests(SimpleTestCase):
     RECRUITMENT_EMBEDDING_PROVIDER="apps.recruitment.test_embeddings.CountingEmbeddingProvider",
     RECRUITMENT_EMBEDDING_MODEL="bge-m3",
     RECRUITMENT_EMBEDDING_VERSION="test-v1",
+    RECRUITMENT_EMBEDDING_DIMENSIONS=3,
 )
 class EmbeddingIntegrationTests(TestCase):
     def setUp(self):
@@ -202,7 +212,7 @@ class EmbeddingIntegrationTests(TestCase):
         same_match = match_application(self.application, include_recommendations=False)[0]
 
         self.assertIsNotNone(match.semantic_score)
-        self.assertEqual(match.semantic_model, "ollama:bge-m3@test-v1")
+        self.assertEqual(match.semantic_model, "ollama:bge-m3@test-v1/3d")
         self.assertTrue(match.score_breakdown["semantic"]["available"])
         self.assertEqual(match.score_breakdown["semantic"]["weight"], 30)
         self.assertEqual(float(match.score), 100.0)
@@ -231,7 +241,7 @@ class EmbeddingIntegrationTests(TestCase):
             match = match_application(self.application, include_recommendations=False)[0]
         self.assertTrue(match_is_stale(match, self.application, self.offer, self.analysis))
         match_application(self.application, include_recommendations=False)
-        self.assertEqual(EmbeddingCache.objects.filter(model_identifier__endswith="@test-v2").count(), 2)
+        self.assertEqual(EmbeddingCache.objects.filter(model_identifier__endswith="@test-v2/3d").count(), 2)
 
     @override_settings(RECRUITMENT_EMBEDDING_PROVIDER="apps.recruitment.test_embeddings.FailingEmbeddingProvider")
     def test_ollama_failure_falls_back_to_deterministic_matching(self):

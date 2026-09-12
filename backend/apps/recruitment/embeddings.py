@@ -78,7 +78,27 @@ def cosine_score(left, right) -> float:
 
 
 def embedding_model_identifier() -> str:
-    return f"ollama:{settings.RECRUITMENT_EMBEDDING_MODEL}@{settings.RECRUITMENT_EMBEDDING_VERSION}"
+    return (
+        f"ollama:{settings.RECRUITMENT_EMBEDDING_MODEL}"
+        f"@{settings.RECRUITMENT_EMBEDDING_VERSION}/{expected_embedding_dimensions()}d"
+    )
+
+
+def expected_embedding_dimensions() -> int:
+    dimensions = getattr(settings, "RECRUITMENT_EMBEDDING_DIMENSIONS", 1024)
+    if isinstance(dimensions, bool) or not isinstance(dimensions, int) or dimensions <= 0:
+        raise InvalidEmbeddingError("La dimension d’embedding configurée est invalide.")
+    return dimensions
+
+
+def validate_expected_dimensions(vector) -> list[float]:
+    vector = validate_embedding(vector)
+    expected = expected_embedding_dimensions()
+    if len(vector) != expected:
+        raise InvalidEmbeddingError(
+            f"Dimension d’embedding inattendue : {len(vector)} reçue, {expected} attendue."
+        )
+    return vector
 
 
 class OllamaEmbeddingProvider:
@@ -118,7 +138,7 @@ class OllamaEmbeddingProvider:
             raise InvalidEmbeddingError("La réponse Ollama est invalide.") from exc
         embeddings = payload.get("embeddings") if isinstance(payload, dict) else None
         vector = embeddings[0] if isinstance(embeddings, list) and embeddings else None
-        return validate_embedding(vector)
+        return validate_expected_dimensions(vector)
 
 
 class DisabledEmbeddingProvider:
@@ -141,12 +161,12 @@ def get_or_create_embedding(text: str) -> list[float]:
         model_identifier=model_identifier,
     ).first()
     if cached is not None:
-        vector = validate_embedding(cached.vector)
+        vector = validate_expected_dimensions(cached.vector)
         if len(vector) != cached.dimensions:
             raise InvalidEmbeddingError("La dimension du vecteur en cache est incohérente.")
         return vector
 
-    vector = validate_embedding(_provider().embed(text))
+    vector = validate_expected_dimensions(_provider().embed(text))
     try:
         with transaction.atomic():
             cached, _ = EmbeddingCache.objects.get_or_create(
@@ -159,7 +179,7 @@ def get_or_create_embedding(text: str) -> list[float]:
             representation_hash=representation_hash,
             model_identifier=model_identifier,
         )
-    return validate_embedding(cached.vector)
+    return validate_expected_dimensions(cached.vector)
 
 
 def semantic_score(candidate_text: str, offer_text: str) -> float:

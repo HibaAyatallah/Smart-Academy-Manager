@@ -86,6 +86,10 @@ def process_application_analysis(
     stale_analysis = analysis_is_stale(application, analysis)
     should_extract = analysis is None or force_analysis or stale_analysis
 
+    if analysis is not None and analysis.human_validated and stale_analysis and not force_analysis:
+        result.status = "stale_human_validated"
+        return result
+
     if should_extract:
         analysis_existed = analysis is not None
         try:
@@ -190,7 +194,7 @@ def analyze_application_batch(
             summary["without_cv"] += 1
         elif result.status == "error":
             summary["errors"] += 1
-        elif result.status in {"ignored", "analyzed_without_offer"}:
+        elif result.status in {"ignored", "analyzed_without_offer", "stale_human_validated"}:
             summary["ignored"] += 1
         summary["analyses_created"] += int(result.analysis_created)
         summary["analyses_updated"] += int(result.analysis_updated)

@@ -141,6 +141,7 @@ export interface CVAnalysis {
   skills: string[]; experiences: CVExperience[]; education: CVEducation[]; diplomas: string[]; companies: string[];
   positions: string[]; languages: string[]; certifications: string[]; extraction_method: string;
   extraction_warnings: string[]; extractor_version: string; human_validated: boolean; validated_at: string | null;
+  validated_by_email?: string | null; is_stale?: boolean;
 }
 
 export interface MatchScoreComponent {
@@ -150,12 +151,24 @@ export interface MatchScoreComponent {
 
 export interface ApplicationMatch {
   id: number; application: number; offer: number; offer_title: string; candidate_name: string;
-  score: number; matched_skills: string[]; missing_skills: string[]; additional_skills: string[];
-  score_breakdown: Record<string, MatchScoreComponent | number | string>;
-  candidate_summary: string; explanation: string; algorithm_version: string;
+  score: number | null; matched_skills: string[]; missing_skills: string[]; additional_skills: string[];
+  score_breakdown: Record<string, MatchScoreComponent | number | string> | null;
+  candidate_summary: string | null; explanation: string; algorithm_version: string;
   semantic_score: number | null; semantic_model: string;
   human_decision: 'PENDING' | 'APPROVED' | 'REJECTED'; reviewed_at: string | null;
-  created_at: string; updated_at: string;
+  created_at: string; updated_at: string; is_stale: boolean;
+}
+
+export interface TrainingRecommendation {
+  id: number; training: number; training_title: string; score: number;
+  skill_gaps: string[]; explanation: string;
+  human_decision: 'PENDING' | 'APPROVED' | 'REJECTED';
+}
+
+export interface AIMatchResponse {
+  matches: ApplicationMatch[];
+  training_recommendations: TrainingRecommendation[];
+  recommendations_stale: boolean;
 }
 
 export interface CandidateRankingRow {
