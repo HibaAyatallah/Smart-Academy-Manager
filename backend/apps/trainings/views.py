@@ -164,6 +164,7 @@ class TrainingViewSet(viewsets.ModelViewSet):
 
 
 class TrainingSessionViewSet(viewsets.ModelViewSet):
+    queryset = TrainingSession.objects.none()
     serializer_class = TrainingSessionSerializer
     permission_classes = [IsTrainingCatalogueUser, IsSuperAdminOrReadOnly]
     filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
@@ -173,6 +174,8 @@ class TrainingSessionViewSet(viewsets.ModelViewSet):
 
     def get_queryset(self):
         queryset = TrainingSession.objects.select_related("training", "trainer", "external_client")
+        if not self.request.user.is_authenticated:
+            return queryset.none()
         # Clients use the dedicated response with only public client fields.
         if self.request.user.role == UserRole.CLIENT:
             return queryset.none()

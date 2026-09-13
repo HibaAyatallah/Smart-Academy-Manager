@@ -1125,6 +1125,29 @@ class InternshipWorkflowTests(APITestCase):
         self.assertEqual(self.client.get(f"/api/intern-documents/{own_document.id}/download/").status_code, status.HTTP_200_OK)
         self.assertEqual(self.client.get(f"/api/intern-documents/{other_document.id}/download/").status_code, status.HTTP_404_NOT_FOUND)
 
+    def test_intern_documents_use_stable_newest_first_pagination(self):
+        older_document = InternDocument.objects.create(
+            intern=self.profile,
+            requirement=self.requirement,
+            document_type="CONVENTION",
+            file=SimpleUploadedFile("older.pdf", b"%PDF-1.4 older"),
+        )
+        newer_document = InternDocument.objects.create(
+            intern=self.profile,
+            requirement=self.requirement,
+            document_type="CONVENTION",
+            file=SimpleUploadedFile("newer.pdf", b"%PDF-1.4 newer"),
+        )
+        self.client.force_authenticate(self.admin)
+
+        response = self.client.get("/api/intern-documents/")
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(
+            [item["id"] for item in response.data["results"]],
+            [newer_document.id, older_document.id],
+        )
+
     def test_super_admin_keeps_global_internship_access(self):
         self.client.force_authenticate(self.admin)
         response = self.client.get("/api/interns/")

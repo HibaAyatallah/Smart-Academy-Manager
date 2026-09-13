@@ -674,7 +674,9 @@ class InternDocumentViewSet(viewsets.ModelViewSet):
     permission_classes = [IsInternshipParticipant]
     
     def get_queryset(self):
-        queryset = InternDocument.objects.select_related("intern__user", "validator")
+        queryset = InternDocument.objects.select_related(
+            "intern__user", "validator"
+        ).order_by("-uploaded_at", "-id")
         user = self.request.user
         
         if is_recruitment_manager(user):

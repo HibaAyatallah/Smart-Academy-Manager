@@ -4,6 +4,8 @@ from rest_framework import status
 from rest_framework.test import APITestCase
 
 from .choices import UserRole
+from .authentication import MandatoryPasswordChangeJWTAuthentication
+from .schema import MandatoryPasswordChangeJWTScheme
 
 
 User = get_user_model()
@@ -21,6 +23,16 @@ class SessionSecurityTests(APITestCase):
 
     def authenticate(self, access):
         self.client.credentials(HTTP_AUTHORIZATION=f"Bearer {access}")
+
+    def test_custom_jwt_authentication_is_documented_as_bearer(self):
+        extension = MandatoryPasswordChangeJWTScheme(
+            MandatoryPasswordChangeJWTAuthentication
+        )
+
+        self.assertEqual(
+            extension.get_security_definition(None),
+            {"type": "http", "scheme": "bearer", "bearerFormat": "JWT"},
+        )
 
     def test_blacklisted_refresh_token_cannot_be_reused(self):
         user = User.objects.create_user(

@@ -2,6 +2,8 @@ from .local import *  # noqa: F403
 
 # Keep production/development password security unchanged while making the
 # isolated test suite fast and deterministic.
+SECRET_KEY = "smart-academy-test-only-secret-key-not-for-production"
+
 PASSWORD_HASHERS = [
     "django.contrib.auth.hashers.MD5PasswordHasher",
 ]
