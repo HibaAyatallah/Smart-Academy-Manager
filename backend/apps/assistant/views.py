@@ -15,7 +15,14 @@ from rest_framework.views import APIView
 
 from .models import ChatMessage, Conversation
 from .serializers import AskSerializer, ChatbotErrorSerializer, ChatbotHealthSerializer, ChatMessageSerializer, ConversationSerializer
-from .services import OllamaClient, OllamaServiceError, answer_user_message, prepare_stream_answer, suggestions_for_role
+from .services import (
+    OllamaClient,
+    OllamaInvalidResponseError,
+    OllamaServiceError,
+    answer_user_message,
+    prepare_stream_answer,
+    suggestions_for_role,
+)
 
 
 class ChatThrottle(UserRateThrottle):
@@ -133,7 +140,7 @@ class ChatbotStreamView(APIView):
             conversation = Conversation.objects.create(user=request.user, language=data["language"])
         completed = ChatMessage.objects.filter(conversation=conversation, request_id=request_id, role="ASSISTANT").first()
         if completed:
-            return Response(ConversationSerializer(conversation).data)
+            return Response(ConversationSerializer(conversation, context={"request": request}).data)
         if ChatMessage.objects.filter(conversation=conversation, role="USER", request_id=request_id).exists():
             return Response({"detail": "Cette génération est déjà en cours.", "code": "generation_in_progress"}, status=409)
         history = list(reversed(list(ChatMessage.objects.filter(conversation=conversation).order_by("-created_at")[:settings.OLLAMA_MAX_HISTORY])))
@@ -153,10 +160,13 @@ class ChatbotStreamView(APIView):
                     yield event("token", {"request_id": str(request_id), "content": token})
                 content = "".join(parts).strip()
                 if not content:
-                    raise OllamaServiceError
+                    raise OllamaInvalidResponseError
                 message = ChatMessage.objects.create(conversation=conversation, role="ASSISTANT", content=content[:4000], sources=sources, request_id=request_id)
                 conversation.updated_at = timezone.now(); conversation.save(update_fields=["updated_at"])
-                yield event("done", {"request_id": str(request_id), "message": ChatMessageSerializer(message).data})
+                yield event("done", {
+                    "request_id": str(request_id),
+                    "message": ChatMessageSerializer(message, context={"request": request}).data,
+                })
             except GeneratorExit:
                 cancelled = "".join(parts).strip() or {"fr":"Génération arrêtée.","en":"Generation stopped.","ar":"تم إيقاف التوليد."}[data["language"]]
                 ChatMessage.objects.create(conversation=conversation, role="ASSISTANT", content=cancelled[:4000], sources=sources, request_id=request_id)

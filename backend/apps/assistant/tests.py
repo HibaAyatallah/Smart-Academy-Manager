@@ -100,14 +100,16 @@ class OllamaClientTests(SimpleTestCase):
 
     @patch("apps.assistant.services.HTTPConnection")
     def test_stream_payload_also_forces_cpu_and_limited_context(self, connection_class):
-        response = Mock(status=200)
-        response.readline.side_effect = [
+        health_response = Mock(status=200)
+        health_response.read.return_value = b'{"models":[{"name":"academy-model"}]}'
+        stream_response = Mock(status=200)
+        stream_response.readline.side_effect = [
             b'{"message":{"content":"2"},"done":false}\n',
             b'{"message":{"content":" utilisateurs"},"done":true}\n',
             b'',
         ]
         connection = connection_class.return_value
-        connection.getresponse.return_value = response
+        connection.getresponse.side_effect = [health_response, stream_response]
 
         tokens = list(OllamaClient().stream_chat([{"role": "user", "content": "Combien d’utilisateurs ?"}]))
 
@@ -117,6 +119,28 @@ class OllamaClientTests(SimpleTestCase):
         self.assertEqual(body["model"], "academy-model")
         self.assertEqual(body["options"]["num_gpu"], 0)
         self.assertEqual(body["options"]["num_ctx"], 2048)
+
+    @patch("apps.assistant.services.HTTPConnection")
+    def test_stream_checks_model_before_generation(self, connection_class):
+        response = Mock(status=200)
+        response.read.return_value = b'{"models":[{"name":"another-model"}]}'
+        connection_class.return_value.getresponse.return_value = response
+
+        with self.assertRaises(OllamaModelUnavailableError):
+            list(OllamaClient().stream_chat([{"role": "user", "content": "Question"}]))
+
+        self.assertEqual(connection_class.return_value.request.call_count, 1)
+
+    @patch("apps.assistant.services.HTTPConnection")
+    def test_empty_stream_is_invalid(self, connection_class):
+        health_response = Mock(status=200)
+        health_response.read.return_value = b'{"models":[{"name":"academy-model"}]}'
+        stream_response = Mock(status=200)
+        stream_response.readline.side_effect = [b'{"done":true}\n']
+        connection_class.return_value.getresponse.side_effect = [health_response, stream_response]
+
+        with self.assertRaises(OllamaInvalidResponseError):
+            list(OllamaClient().stream_chat([]))
 
     def test_timeout_is_centralized(self):
         client = OllamaClient(urlopen_func=Mock(side_effect=socket.timeout()))

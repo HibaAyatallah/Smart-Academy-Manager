@@ -315,6 +315,15 @@ class OllamaClient:
 
     def stream_chat(self, messages: list[dict[str, str]]):
         """Yield Ollama NDJSON tokens while keeping the authenticated Django boundary."""
+        health = self.health()
+        if not health.accessible:
+            if health.error_code == OllamaTimeoutError.code:
+                raise OllamaTimeoutError
+            if health.error_code == OllamaInvalidResponseError.code:
+                raise OllamaInvalidResponseError
+            raise OllamaUnavailableError
+        if not health.model_available:
+            raise OllamaModelUnavailableError
         parsed = urlparse(self.base_url)
         connection_class = HTTPSConnection if parsed.scheme == "https" else HTTPConnection
         path = f"{parsed.path.rstrip('/')}/api/chat"
@@ -330,6 +339,8 @@ class OllamaClient:
             },
         }).encode("utf-8")
         response = None
+        produced_content = False
+        completed = False
         with self._connection_lock:
             try:
                 if self._connection is None:
@@ -345,11 +356,19 @@ class OllamaClient:
                     if not line:
                         break
                     payload = json.loads(line.decode("utf-8"))
+                    if not isinstance(payload, dict):
+                        raise OllamaInvalidResponseError
                     token = payload.get("message", {}).get("content", "")
+                    if not isinstance(token, str):
+                        raise OllamaInvalidResponseError
                     if token:
+                        produced_content = True
                         yield token
                     if payload.get("done"):
+                        completed = True
                         break
+                if not produced_content or not completed:
+                    raise OllamaInvalidResponseError
             except GeneratorExit:
                 if response:
                     response.close()
@@ -360,7 +379,10 @@ class OllamaClient:
             except (TimeoutError, socket.timeout) as exc:
                 self._connection = None
                 raise OllamaTimeoutError from exc
-            except (ConnectionError, OSError, HTTPException, UnicodeDecodeError, json.JSONDecodeError) as exc:
+            except (UnicodeDecodeError, json.JSONDecodeError, AttributeError) as exc:
+                self._connection = None
+                raise OllamaInvalidResponseError from exc
+            except (ConnectionError, OSError, HTTPException) as exc:
                 self._connection = None
                 raise OllamaUnavailableError from exc
 
@@ -428,21 +450,61 @@ def build_safe_context(user) -> SafeContext:
             sources.append(AnswerSource(facts[-1], "intern_document", "Documents du stage", f"INT-DOC-{intern.pk}", intern.pk, "/internships/me"))
         suggestions = ["Quelle est ma période de stage ?", "Qui est mon encadrant ?", "Quels documents me manquent ?"]
     elif user.role in [UserRole.EMPLOYEE, UserRole.TRAINER_TUTOR]:
-        enrollments = TrainingEnrollment.objects.filter(user=user).select_related("training", "session")
+        enrollments = TrainingEnrollment.objects.filter(
+            user=user,
+            training__external_client__isnull=True,
+            session__external_client__isnull=True,
+        )
+        if user.role == UserRole.EMPLOYEE:
+            managed_scope = user.bu_memberships.filter(is_active=True).values_list(
+                "business_unit_id", flat=True
+            )
+            enrollments = enrollments.filter(training__business_unit_id__in=managed_scope)
+        enrollments = enrollments.select_related("training", "session")
         for item in enrollments:
             fact = (f"Training enrollment #{item.pk}: training={item.training.title}; session=#{item.session_id}; "
                     f"dates={item.session.start_date} to {item.session.end_date}; status={item.final_status}")
             facts.append(fact)
             sources.append(AnswerSource(fact, "training", item.training.title, f"TRN-{item.training_id}", item.training_id, "/my-business-unit/trainings"))
-        attendance = SessionAttendance.objects.filter(enrollment__user=user)
+        attendance = SessionAttendance.objects.filter(enrollment__in=enrollments)
         facts.append(f"Attendance summary: present={attendance.filter(status='PRESENT').count()}; total={attendance.count()}")
         sources.append(AnswerSource(facts[-1], "attendance", "Mes présences", "MY-ATTENDANCE", None, "/my-business-unit/trainings"))
+        if user.role == UserRole.TRAINER_TUTOR:
+            from django.db.models import Q
+            assigned_trainings = Training.objects.filter(
+                Q(trainer=user) | Q(sessions__trainer=user),
+                external_client__isnull=True,
+            ).distinct()
+            for item in assigned_trainings[:50]:
+                fact = f"Assigned training #{item.pk}: title={item.title}; status={item.get_status_display()}"
+                facts.append(fact)
+                sources.append(AnswerSource(
+                    fact, "training", item.title, f"TRN-{item.pk}", item.pk, "/trainings"
+                ))
         suggestions = ["Quelles sont mes formations ?", "Quelles sont les dates de mes sessions ?", "Quel est mon taux de présence ?"]
     elif user.role == UserRole.BU_MANAGER:
         units = BusinessUnit.objects.filter(manager=user)
-        for item in Training.objects.filter(business_unit__in=units, external_client__isnull=True).select_related("business_unit")[:50]:
+        trainings = Training.objects.filter(
+            business_unit__in=units, external_client__isnull=True
+        ).select_related("business_unit")
+        sessions = TrainingSession.objects.filter(
+            training__business_unit__in=units,
+            external_client__isnull=True,
+            training__external_client__isnull=True,
+        ).select_related("training")
+        facts.append(f"BU trainings total: {trainings.count()}")
+        sources.append(AnswerSource(
+            facts[-1], "aggregate", "Formations de ma BU", "BU_TRAININGS", None,
+            "/trainings",
+        ))
+        facts.append(f"BU training sessions total: {sessions.count()}")
+        sources.append(AnswerSource(
+            facts[-1], "aggregate", "Sessions de ma BU", "BU_TRAINING_SESSIONS", None,
+            "/trainings",
+        ))
+        for item in trainings[:50]:
             fact=f"BU training #{item.pk}: title={item.title}; status={item.get_status_display()}; BU={item.business_unit.name}";facts.append(fact);sources.append(AnswerSource(fact,"training",item.title,f"TRN-{item.pk}",item.pk,"/trainings"))
-        for item in TrainingSession.objects.filter(training__business_unit__in=units, external_client__isnull=True, training__external_client__isnull=True).select_related("training")[:50]:
+        for item in sessions[:50]:
             fact=f"BU session #{item.pk}: training={item.training.title}; dates={item.start_date} to {item.end_date}; status={item.get_status_display()}";facts.append(fact);sources.append(AnswerSource(fact,"session",item.training.title,f"SES-{item.pk}",item.pk,"/trainings"))
         for item in BusinessUnitNeed.objects.filter(business_unit__in=units).select_related("business_unit")[:50]:
             fact=f"BU need #{item.pk}: title={item.title}; status={item.get_status_display()}; BU={item.business_unit.name}";facts.append(fact);sources.append(AnswerSource(fact,"bu_need",item.title,f"NEED-{item.pk}",item.pk,f"/business-units/{item.business_unit_id}/needs/{item.pk}"))
@@ -493,7 +555,8 @@ def build_safe_context(user) -> SafeContext:
         from apps.trainings.serializers import ClientTrainingSerializer
         profile = ClientProfile.objects.filter(user=user).first()
         if profile:
-            for training in profile.reserved_trainings.prefetch_related("sessions"):
+            trainings = profile.reserved_trainings.prefetch_related("sessions")
+            for training in trainings:
                 fact = json.dumps(ClientTrainingSerializer(training, context={"user": user}).data, ensure_ascii=False, default=str)
                 facts.append(fact)
                 sources.append(AnswerSource(fact, "training", training.title, f"TRN-{training.pk}", training.pk, "/client/trainings"))
@@ -512,15 +575,23 @@ TOPIC_WORDS = {
     "internship": ["stage", "internship", "période", "period", "encadrant", "supervisor", "document"],
     "training": ["formation", "training", "cours", "session", "inscription", "enrollment"],
     "attendance": ["présence", "presence", "attendance"],
-    "bu": ["bu", "business unit", "collaborateur", "employee", "besoin", "need"],
+    "need": ["besoin", "need"],
+    "member": ["collaborateur", "employee", "membre", "member"],
+    "bu": ["bu", "business unit"],
     "user": ["utilisateur", "user", "compte", "account"],
     "global": ["combien", "how many", "statistique", "statistics", "total"],
 }
 TOPIC_PREFIXES = {
     "application": ["Application #", "Applications total"],
     "internship": ["Internship #", "Missing documents", "Interns total", "BU interns"],
-    "training": ["Training enrollment #", "BU training #", "BU session #", "Trainings total", "Training sessions total"],
+    "training": [
+        "Training enrollment #", "Assigned training #",
+        "BU training #", "BU session #", "BU trainings total", "BU training sessions total",
+        "Trainings total", "Training sessions total",
+    ],
     "attendance": ["Attendance summary"],
+    "need": ["BU need #"],
+    "member": ["BU members", "Employees total"],
     "bu": ["BU training #", "BU need #", "BU members", "BU interns", "Business units total", "Employees total"],
     "user": ["Users total"],
     "global": ["Applications total", "Interns total", "Business units total", "Trainings total"],
@@ -530,20 +601,59 @@ TOPIC_PREFIXES = {
 def select_relevant_facts(question: str, context: SafeContext) -> list[str]:
     normalized = question.casefold()
     selected = []
-    matched_specific_topic = False
-    for topic, words in TOPIC_WORDS.items():
-        if topic == "global":
-            continue
-        if any(word in normalized for word in words):
-            matched_specific_topic = True
-            selected.extend(
-                fact for fact in context.facts if any(fact.startswith(prefix) for prefix in TOPIC_PREFIXES[topic])
-            )
-    if not matched_specific_topic and any(word in normalized for word in TOPIC_WORDS["global"]):
+    matched_topics = [
+        topic for topic, words in TOPIC_WORDS.items()
+        if topic != "global" and any(word in normalized for word in words)
+    ]
+    # "ma BU" qualifies a specific request; it must not broaden a training,
+    # need, internship or member question to every fact in the BU.
+    if "bu" in matched_topics and len(matched_topics) > 1:
+        matched_topics.remove("bu")
+    for topic in matched_topics:
+        selected.extend(
+            fact for fact in context.facts
+            if any(fact.startswith(prefix) for prefix in TOPIC_PREFIXES[topic])
+        )
+    if not matched_topics and any(word in normalized for word in TOPIC_WORDS["global"]):
         selected.extend(
             fact for fact in context.facts if any(fact.startswith(prefix) for prefix in TOPIC_PREFIXES["global"])
         )
-    return list(dict.fromkeys(selected))
+    selected = list(dict.fromkeys(selected))
+    if "training" in matched_topics and not any(
+        word in normalized for word in ("session", "séance", "seance", "جلسة")
+    ):
+        selected = [
+            fact for fact in selected
+            if not fact.startswith(("BU session #", "Training sessions total", "BU training sessions total"))
+        ]
+    if any(word in normalized for word in TOPIC_WORDS["global"]):
+        aggregate_facts = [fact for fact in selected if " total:" in fact.casefold()]
+        requested_aggregate = None
+        aggregate_topics = (
+            (("session", "جلسة"), "session"),
+            (("candidature", "application", "طلب", "ترشيح"), "application"),
+            (("stagiaire", "intern", "متدرب"), "intern"),
+            (("collaborateur", "employee", "موظف"), "member"),
+            (("formation", "training", "cours", "دورة"), "training"),
+            (("utilisateur", "user", "مستخدم"), "user"),
+        )
+        for words, marker in aggregate_topics:
+            if any(word in normalized for word in words):
+                requested_aggregate = marker
+                break
+        if requested_aggregate:
+            aggregate_facts = [
+                fact for fact in aggregate_facts
+                if requested_aggregate in fact.casefold()
+                or (requested_aggregate == "member" and "employees total" in fact.casefold())
+            ]
+            if requested_aggregate == "training":
+                aggregate_facts = [
+                    fact for fact in aggregate_facts if "session" not in fact.casefold()
+                ]
+        if aggregate_facts:
+            return aggregate_facts
+    return selected
 
 
 def format_aggregate_answer(facts: list[str], language: str) -> str | None:
@@ -558,6 +668,12 @@ def format_aggregate_answer(facts: list[str], language: str) -> str | None:
         "Interns total": {"fr": "stagiaires", "en": "interns", "ar": "متدربًا"},
         "Business units total": {"fr": "Business Units", "en": "Business Units", "ar": "وحدات أعمال"},
         "Trainings total": {"fr": "formations", "en": "training courses", "ar": "دورات تدريبية"},
+        "Training sessions total": {"fr": "sessions de formation", "en": "training sessions", "ar": "جلسات تدريبية"},
+        "Employees total": {"fr": "collaborateurs", "en": "employees", "ar": "موظفًا"},
+        "BU trainings total": {"fr": "formations dans votre BU", "en": "training courses in your BU", "ar": "دورات تدريبية في وحدتك"},
+        "BU training sessions total": {"fr": "sessions dans votre BU", "en": "sessions in your BU", "ar": "جلسات في وحدتك"},
+        "BU members total": {"fr": "collaborateurs dans votre BU", "en": "employees in your BU", "ar": "موظفًا في وحدتك"},
+        "BU interns total": {"fr": "stagiaires dans votre BU", "en": "interns in your BU", "ar": "متدربًا في وحدتك"},
     }
     if internal_label not in labels:
         return None
@@ -624,10 +740,11 @@ def retrieve_authorized_context(question: str, context: SafeContext) -> SafeCont
 
     if not context.facts:
         return SafeContext([], context.suggestions, [])
+    candidate_facts = select_relevant_facts(question, context) or context.facts
     try:
         question_vector = get_or_create_embedding(question)
         ranked = []
-        for fact in context.facts:
+        for fact in candidate_facts:
             for passage in chunk_text(fact, size=settings.RAG_CHUNK_SIZE, overlap=settings.RAG_CHUNK_OVERLAP):
                 similarity = cosine_similarity(question_vector, get_or_create_embedding(passage))
                 if similarity >= settings.ASSISTANT_RAG_MIN_SIMILARITY:
@@ -679,6 +796,13 @@ def answer_user_message(user, question: str, language: str, history=None, metric
         metrics["sources"] = sources_for_facts(context, selected_facts)
     aggregate_answer = format_aggregate_answer(selected_facts, language)
     if aggregate_answer is not None:
+        if metrics is not None:
+            metrics.update({
+                "django_db_ms": database_timer.seconds * 1000,
+                "context_ms": max(0.0, context_total - database_timer.seconds) * 1000,
+                "ollama_ms": 0.0,
+                "total_ms": (perf_counter() - started) * 1000,
+            })
         return aggregate_answer
     ollama_started = perf_counter()
     provider = get_provider()
